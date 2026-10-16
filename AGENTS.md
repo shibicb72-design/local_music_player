@@ -32,6 +32,8 @@ After every task, append an entry below: `- [task] what went wrong -> new rule`.
 
 - [ticket B] Was unsure whether `AudioRecordingCallback.onRecordingConfigChanged` takes `List` or `MutableList`; guessed `MutableList` for the platform-type override and it compiled on the first try -> for platform-type overrides, pick the idiomatic Kotlin type and let the compiler confirm, never inspect SDK caches.
 
+- [ticket D2] Used the one-arg `AcceptedResultBuilder(MediaSession)`, which emitted a new deprecation warning and would have failed the "no new warnings" bar -> build `AcceptedResultBuilder(session, controller)` to start from per-controller defaults; after any media3 API call, re-run the build and grep the compiler output for `w:`.
+
 ## 6. Lessons learned
 - androidx.mediarouter's `MediaRouteChooserDialog` extends `androidx.appcompat.app.AppCompatDialog`, and mediarouter does not expose appcompat at compile time. Using mediarouter dialog classes requires `implementation(libs.androidx.appcompat)` in app/build.gradle.kts (catalog alias `androidx-appcompat`).
 - You cannot read the Gradle cache (~/.gradle/caches): OpenCode denies external directories and the run aborts. Do not try. Verify an API by compiling (gradlew.bat assembleDebug) instead.

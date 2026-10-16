@@ -4,6 +4,7 @@ import android.app.PendingIntent
 import android.content.Intent
 import android.media.AudioManager
 import android.media.AudioRecordingConfiguration
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import androidx.media3.common.AudioAttributes
@@ -13,10 +14,15 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
+import androidx.media3.session.SessionCommand
+import androidx.media3.session.SessionResult
+import com.google.common.util.concurrent.Futures
+import com.google.common.util.concurrent.ListenableFuture
 import com.shibi.musicplayer.MainActivity
 import com.shibi.musicplayer.R
 
 class PlaybackService : MediaSessionService() {
+    private lateinit var player: ExoPlayer
     private var mediaSession: MediaSession? = null
     private var audioRecordingCallback: AudioManager.AudioRecordingCallback? = null
     private val micAutoPauseLogic = MicAutoPauseLogic()
@@ -32,7 +38,7 @@ class PlaybackService : MediaSessionService() {
                 .also { provider -> provider.setSmallIcon(R.drawable.ic_notification) },
         )
 
-        val player = ExoPlayer.Builder(this)
+        player = ExoPlayer.Builder(this)
             .setAudioAttributes(
                 AudioAttributes.Builder()
                     .setUsage(C.USAGE_MEDIA)
@@ -57,6 +63,43 @@ class PlaybackService : MediaSessionService() {
         mediaSession = MediaSession.Builder(this, player)
             .setId(SESSION_ID)
             .setSessionActivity(sessionActivity)
+            .setCallback(
+                object : MediaSession.Callback {
+                    override fun onConnect(
+                        session: MediaSession,
+                        controller: MediaSession.ControllerInfo,
+                    ): MediaSession.ConnectionResult =
+                        MediaSession.ConnectionResult.AcceptedResultBuilder(session, controller)
+                            .setAvailableSessionCommands(
+                                MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS
+                                    .buildUpon()
+                                    .add(OutputCommands.SET_OUTPUT)
+                                    .build(),
+                            )
+                            .build()
+
+                    override fun onCustomCommand(
+                        session: MediaSession,
+                        controller: MediaSession.ControllerInfo,
+                        customCommand: SessionCommand,
+                        args: Bundle,
+                    ): ListenableFuture<SessionResult> {
+                        if (customCommand.customAction == OutputCommands.ACTION_SET_OUTPUT) {
+                            val id = args.getInt(OutputCommands.EXTRA_DEVICE_ID, -1)
+                            val device = if (id == -1) {
+                                null
+                            } else {
+                                getSystemService(AudioManager::class.java)
+                                    .getDevices(AudioManager.GET_DEVICES_OUTPUTS)
+                                    .firstOrNull { it.id == id }
+                            }
+                            player.setPreferredAudioDevice(device)
+                            return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+                        }
+                        return super.onCustomCommand(session, controller, customCommand, args)
+                    }
+                },
+            )
             .build()
 
         player.addListener(
