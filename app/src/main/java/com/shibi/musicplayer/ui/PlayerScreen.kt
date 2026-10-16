@@ -140,6 +140,7 @@ fun PlayerScreen(
                 AlbumArtwork(
                     albumArtUri = state.albumArtUri,
                     shape = artShape,
+                    title = state.title,
                     modifier = Modifier
                         .fillMaxWidth()
                         .aspectRatio(1f)

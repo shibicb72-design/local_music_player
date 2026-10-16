@@ -263,6 +263,7 @@ private fun TrackRow(track: Track, isPlaying: Boolean, onClick: () -> Unit) {
             albumArtUri = track.albumArtUri,
             modifier = Modifier.size(52.dp),
             shape = RoundedCornerShape(12.dp),
+            title = track.title,
         )
         Column(
             modifier = Modifier
@@ -395,6 +396,7 @@ private fun NowPlayingBar(
                     albumArtUri = state.albumArtUri,
                     modifier = Modifier.size(44.dp),
                     shape = RoundedCornerShape(10.dp),
+                    title = state.title,
                 )
                 Column(
                     modifier = Modifier
