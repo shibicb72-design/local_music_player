@@ -74,6 +74,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -224,6 +225,7 @@ fun PlayerScreen(
                             text = titleText,
                             style = MaterialTheme.typography.headlineSmall,
                             color = colorScheme.onBackground,
+                            textAlign = TextAlign.Start,
                             modifier = Modifier.fillMaxWidth(),
                         )
                     } else {
@@ -234,21 +236,24 @@ fun PlayerScreen(
                             maxLines = 1,
                             softWrap = false,
                             overflow = TextOverflow.Ellipsis,
+                            textAlign = TextAlign.Start,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .basicMarquee(),
                         )
                     }
                     Spacer(Modifier.height(4.dp))
-                    TrackDisplay.artist(state.artist)?.let { artist ->
-                        Text(
-                            text = artist,
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
+                    val artist = TrackDisplay.artist(state.artist)
+                    Text(
+                        text = artist ?: "\u00A0",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = if (artist == null) Color.Transparent else colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        minLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Start,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                     Spacer(Modifier.height(if (compact) 12.dp else 20.dp))
                     SeekControl(
                         positionMs = state.positionMs,

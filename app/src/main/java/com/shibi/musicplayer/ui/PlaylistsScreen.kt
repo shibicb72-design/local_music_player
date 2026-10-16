@@ -4,6 +4,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -31,6 +32,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.MusicNote
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -144,19 +146,55 @@ internal fun PlaylistsContent(
                 )
             }
         } else {
-            LazyVerticalGrid(
-                columns = GridCells.Adaptive(minSize = 156.dp),
-                modifier = Modifier.weight(1f),
-                contentPadding = PaddingValues(
-                    start = 20.dp,
-                    end = 20.dp,
-                    bottom = contentBottomPadding,
-                ),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                items(cards, key = { it.id }) { card ->
-                    PlaylistCard(card = card, onClick = { onOpen(card.id) })
+            BoxWithConstraints(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                val columns = if (maxWidth >= 520.dp) 3 else 2
+                val rows = (cards.size + columns - 1) / columns
+                if (rows <= 3) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(start = 20.dp, end = 20.dp, bottom = contentBottomPadding),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        cards.chunked(columns).forEach { rowCards ->
+                            Row(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                rowCards.forEach { card ->
+                                    PlaylistCard(
+                                        card = card,
+                                        onClick = { onOpen(card.id) },
+                                        expand = true,
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .fillMaxHeight(),
+                                    )
+                                }
+                                repeat(columns - rowCards.size) {
+                                    Spacer(Modifier.weight(1f).fillMaxHeight())
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(columns),
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(
+                            start = 20.dp,
+                            end = 20.dp,
+                            bottom = contentBottomPadding,
+                        ),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        items(cards, key = { it.id }) { card ->
+                            PlaylistCard(card = card, onClick = { onOpen(card.id) })
+                        }
+                    }
                 }
             }
         }
@@ -189,7 +227,10 @@ private fun PlaylistHeader(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        TextButton(onClick = onCreate) {
+        TextButton(
+            onClick = onCreate,
+            colors = ButtonDefaults.textButtonColors(contentColor = Secondary),
+        ) {
             Icon(
                 imageVector = Icons.Rounded.Add,
                 contentDescription = null,
@@ -211,20 +252,33 @@ private fun PlaylistHeader(
 private fun PlaylistCard(
     card: PlaylistCardUi,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    expand: Boolean = false,
 ) {
     Surface(
         onClick = onClick,
+        modifier = modifier,
         shape = RoundedCornerShape(20.dp),
         color = MaterialTheme.colorScheme.surfaceContainer,
         contentColor = TextHigh,
         border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
     ) {
-        Column(modifier = Modifier.padding(10.dp)) {
+        Column(
+            modifier = Modifier
+                .padding(10.dp)
+                .then(if (expand) Modifier.fillMaxHeight() else Modifier),
+        ) {
             ArtCollage(
                 titles = card.coverTitles,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(1f),
+                modifier = if (expand) {
+                    Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                } else {
+                    Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(1f)
+                },
             )
             Spacer(Modifier.height(10.dp))
             TrackTitle(

@@ -168,7 +168,11 @@ internal fun OutputPickerContent(
                     Text(
                         text = stringResource(outputSubtitle(output.kind)),
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = if (selected) {
+                            Color.White.copy(alpha = 0.82f)
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
                     )
                 }
                 if (selected) {

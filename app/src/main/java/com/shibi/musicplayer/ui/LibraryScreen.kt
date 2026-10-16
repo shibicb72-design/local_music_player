@@ -37,6 +37,8 @@ import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -74,6 +76,7 @@ import com.shibi.musicplayer.domain.Track
 import com.shibi.musicplayer.domain.TrackDisplay
 import com.shibi.musicplayer.library.LibraryViewModel
 import com.shibi.musicplayer.playback.PlayerUiState
+import com.shibi.musicplayer.ui.theme.Secondary
 import com.shibi.musicplayer.ui.theme.Spacing
 
 @Composable
@@ -84,6 +87,8 @@ fun LibraryScreen(
     onOpenPlayer: () -> Unit,
     onTogglePlayPause: () -> Unit,
     onAddToPlaylist: (Track) -> Unit = {},
+    favoriteIds: Set<Long> = emptySet(),
+    onToggleFavorite: (Track) -> Unit = {},
     showMiniPlayer: Boolean = true,
     contentBottomPadding: Dp = 120.dp,
     modifier: Modifier = Modifier,
@@ -190,6 +195,8 @@ fun LibraryScreen(
             onOpenPlayer = onOpenPlayer,
             onTogglePlayPause = onTogglePlayPause,
             onAddToPlaylist = onAddToPlaylist,
+            favoriteIds = favoriteIds,
+            onToggleFavorite = onToggleFavorite,
             contentBottomPadding = contentBottomPadding,
             modifier = modifier,
         )
@@ -205,6 +212,8 @@ fun LibraryContent(
     onOpenPlayer: () -> Unit,
     onTogglePlayPause: () -> Unit,
     onAddToPlaylist: (Track) -> Unit = {},
+    favoriteIds: Set<Long> = emptySet(),
+    onToggleFavorite: (Track) -> Unit = {},
     contentBottomPadding: Dp = 120.dp,
     modifier: Modifier = Modifier,
 ) {
@@ -244,30 +253,17 @@ fun LibraryContent(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            if (tracks.isEmpty()) {
-                MessagePane(
-                    message = stringResource(R.string.empty_library),
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                        .padding(horizontal = 24.dp),
-                )
-            } else {
-                LazyColumn(
-                    modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(bottom = contentBottomPadding),
-                ) {
-                    items(tracks, key = { it.id }) { track ->
-                        TrackRow(
-                            track = track,
-                            isPlaying = nowPlaying.currentMediaId == track.id.toString(),
-                            onClick = { onTrackSelected(tracks, track.id) },
-                            onAddToPlaylist = { onAddToPlaylist(track) },
-                            modifier = Modifier.animateItem(),
-                        )
-                    }
-                }
-            }
+            SongColumn(
+                tracks = tracks,
+                nowPlaying = nowPlaying,
+                favoriteIds = favoriteIds,
+                onTrackSelected = onTrackSelected,
+                onToggleFavorite = onToggleFavorite,
+                onAddToPlaylist = onAddToPlaylist,
+                contentBottomPadding = contentBottomPadding,
+                emptyMessage = stringResource(R.string.empty_library),
+                modifier = Modifier.weight(1f),
+            )
         }
     }
 }
@@ -298,11 +294,52 @@ private fun LibraryScaffold(
 }
 
 @Composable
-private fun TrackRow(
+internal fun SongColumn(
+    tracks: List<Track>,
+    nowPlaying: PlayerUiState,
+    favoriteIds: Set<Long>,
+    onTrackSelected: (List<Track>, Long) -> Unit,
+    onToggleFavorite: (Track) -> Unit,
+    onAddToPlaylist: (Track) -> Unit,
+    contentBottomPadding: Dp,
+    emptyMessage: String,
+    modifier: Modifier = Modifier,
+) {
+    if (tracks.isEmpty()) {
+        MessagePane(
+            message = emptyMessage,
+            modifier = modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp),
+        )
+    } else {
+        LazyColumn(
+            modifier = modifier,
+            contentPadding = PaddingValues(bottom = contentBottomPadding),
+        ) {
+            items(tracks, key = { it.id }) { track ->
+                TrackRow(
+                    track = track,
+                    isPlaying = nowPlaying.currentMediaId == track.id.toString(),
+                    isFavorite = track.id in favoriteIds,
+                    onClick = { onTrackSelected(tracks, track.id) },
+                    onAddToPlaylist = { onAddToPlaylist(track) },
+                    onToggleFavorite = { onToggleFavorite(track) },
+                    modifier = Modifier.animateItem(),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+internal fun TrackRow(
     track: Track,
     isPlaying: Boolean,
+    isFavorite: Boolean,
     onClick: () -> Unit,
     onAddToPlaylist: () -> Unit,
+    onToggleFavorite: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val title = TrackDisplay.title(track.title)
@@ -361,6 +398,15 @@ private fun TrackRow(
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        IconButton(onClick = onToggleFavorite) {
+            Icon(
+                imageVector = if (isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                contentDescription = stringResource(
+                    if (isFavorite) R.string.unfavorite else R.string.favorite,
+                ),
+                tint = if (isFavorite) Secondary else MaterialTheme.colorScheme.onSurface,
+            )
+        }
         Box {
             IconButton(onClick = { menuOpen = true }) {
                 Icon(

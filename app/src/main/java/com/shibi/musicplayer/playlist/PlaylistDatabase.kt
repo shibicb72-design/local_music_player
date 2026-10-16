@@ -4,10 +4,18 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [PlaylistEntity::class, PlaylistSongEntity::class],
-    version = 1,
+    entities = [
+        PlaylistEntity::class,
+        PlaylistSongEntity::class,
+        FavoriteEntity::class,
+        RecentPlayEntity::class,
+        AppSettingsEntity::class,
+    ],
+    version = 2,
     exportSchema = false,
 )
 abstract class PlaylistDatabase : RoomDatabase() {
@@ -17,13 +25,39 @@ abstract class PlaylistDatabase : RoomDatabase() {
         @Volatile
         private var instance: PlaylistDatabase? = null
 
+        private val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `favorites` (" +
+                        "`trackId` INTEGER NOT NULL, " +
+                        "`favorite` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`trackId`))",
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `recent_plays` (" +
+                        "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`trackId` INTEGER NOT NULL, " +
+                        "`playedAt` INTEGER NOT NULL)",
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `app_settings` (" +
+                        "`id` INTEGER NOT NULL, " +
+                        "`darkTheme` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`id`))",
+                )
+                db.execSQL("INSERT INTO app_settings (id, darkTheme) VALUES (1, 1)")
+            }
+        }
+
         fun get(context: Context): PlaylistDatabase {
             return instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
                     context.applicationContext,
                     PlaylistDatabase::class.java,
                     "playlists.db",
-                ).build().also { instance = it }
+                ).addMigrations(MIGRATION_1_2)
+                    .build()
+                    .also { instance = it }
             }
         }
     }

@@ -23,6 +23,15 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
             PlaylistsUiState(),
         )
 
+    val favoriteIds: StateFlow<Set<Long>> = repository.favoriteIds
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
+
+    val recentTrackIds: StateFlow<List<Long>> = repository.recentTrackIds
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    val darkTheme: StateFlow<Boolean> = repository.darkTheme
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
+
     fun playlist(id: Long): Flow<PlaylistDetail?> = repository.playlist(id)
 
     fun create(name: String, onCreated: (Long) -> Unit = {}) {
@@ -59,6 +68,25 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
     fun reorder(playlistId: Long, trackIds: List<Long>) {
         viewModelScope.launch {
             repository.reorder(playlistId, trackIds)
+        }
+    }
+
+    fun toggleFavorite(trackId: Long) {
+        viewModelScope.launch {
+            val favorite = trackId in favoriteIds.value
+            repository.setFavorite(trackId, !favorite)
+        }
+    }
+
+    fun recordPlay(trackId: Long) {
+        viewModelScope.launch {
+            repository.recordPlay(trackId)
+        }
+    }
+
+    fun setDarkTheme(dark: Boolean) {
+        viewModelScope.launch {
+            repository.setDarkTheme(dark)
         }
     }
 }

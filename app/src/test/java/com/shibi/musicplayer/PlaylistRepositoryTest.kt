@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
@@ -149,5 +150,40 @@ class PlaylistRepositoryTest {
 
         assertEquals(5, summary.songCount)
         assertEquals(listOf(10L, 20L, 30L, 40L), summary.coverTrackIds)
+    }
+
+    @Test
+    fun favoriteIsABooleanThatCanBeTurnedOff() = runBlocking {
+        assertTrue(repository.favoriteIds.first().isEmpty())
+        repository.setFavorite(8L, true)
+        assertEquals(setOf(8L), repository.favoriteIds.first())
+        repository.setFavorite(8L, false)
+        assertFalse(repository.favoriteIds.first().contains(8L))
+    }
+
+    @Test
+    fun recentPlaysKeepsTheNewestFiftyDistinctSongs() = runBlocking {
+        repeat(55) { index ->
+            now = 1_000L + index
+            repository.recordPlay(index.toLong())
+        }
+        val ids = repository.recentTrackIds.first()
+        assertEquals(50, ids.size)
+        assertEquals(54L, ids.first())
+        assertEquals(5L, ids.last())
+
+        now += 1
+        repository.recordPlay(10L)
+        val bumped = repository.recentTrackIds.first()
+        assertEquals(50, bumped.size)
+        assertEquals(10L, bumped.first())
+        assertEquals(1, bumped.count { it == 10L })
+    }
+
+    @Test
+    fun darkThemeDefaultsOnAndCanBeSwitched() = runBlocking {
+        assertTrue(repository.darkTheme.first())
+        repository.setDarkTheme(false)
+        assertFalse(repository.darkTheme.first())
     }
 }

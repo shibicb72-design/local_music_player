@@ -12,6 +12,13 @@ class PlaylistRepository(
         rows.map { it.toSummary() }
     }
 
+    val favoriteIds: Flow<Set<Long>> = dao.observeFavoriteIds().map { it.toSet() }
+
+    val recentTrackIds: Flow<List<Long>> = dao.observeRecentIds()
+
+    val darkTheme: Flow<Boolean> =
+        dao.observeSettings(AppSettingsEntity.SETTINGS_ID).map { it?.darkTheme ?: true }
+
     fun playlist(id: Long): Flow<PlaylistDetail?> = dao.observeAll().map { rows ->
         rows.firstOrNull { it.playlist.id == id }?.toDetail()
     }
@@ -66,6 +73,20 @@ class PlaylistRepository(
         dao.reorder(playlistId, trackIds)
     }
 
+    suspend fun setFavorite(trackId: Long, favorite: Boolean) {
+        dao.upsertFavorite(FavoriteEntity(trackId = trackId, favorite = favorite))
+    }
+
+    suspend fun recordPlay(trackId: Long) {
+        dao.deleteRecentForTrack(trackId)
+        dao.insertRecent(RecentPlayEntity(trackId = trackId, playedAt = now()))
+        dao.trimRecent(RECENT_LIMIT)
+    }
+
+    suspend fun setDarkTheme(dark: Boolean) {
+        dao.upsertSettings(AppSettingsEntity(darkTheme = dark))
+    }
+
     private fun PlaylistWithSongs.toSummary(): PlaylistSummary {
         val ordered = songs.sortedBy { it.position }
         return PlaylistSummary(
@@ -87,5 +108,6 @@ class PlaylistRepository(
 
     private companion object {
         const val COVER_LIMIT = 4
+        const val RECENT_LIMIT = 50
     }
 }

@@ -3,6 +3,7 @@ package com.shibi.musicplayer.playlist
 import androidx.room.Dao
 import androidx.room.Embedded
 import androidx.room.Insert
+import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Relation
 import androidx.room.Transaction
@@ -68,4 +69,31 @@ interface PlaylistDao {
             updatePosition(playlistId, trackId, index)
         }
     }
+
+    @Query("SELECT trackId FROM favorites WHERE favorite = 1")
+    fun observeFavoriteIds(): Flow<List<Long>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertFavorite(favorite: FavoriteEntity)
+
+    @Query("SELECT trackId FROM recent_plays ORDER BY playedAt DESC, id DESC")
+    fun observeRecentIds(): Flow<List<Long>>
+
+    @Query("DELETE FROM recent_plays WHERE trackId = :trackId")
+    suspend fun deleteRecentForTrack(trackId: Long)
+
+    @Insert
+    suspend fun insertRecent(play: RecentPlayEntity)
+
+    @Query(
+        "DELETE FROM recent_plays WHERE id NOT IN " +
+            "(SELECT id FROM recent_plays ORDER BY playedAt DESC, id DESC LIMIT :keep)",
+    )
+    suspend fun trimRecent(keep: Int)
+
+    @Query("SELECT * FROM app_settings WHERE id = :id")
+    fun observeSettings(id: Int): Flow<AppSettingsEntity?>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertSettings(settings: AppSettingsEntity)
 }

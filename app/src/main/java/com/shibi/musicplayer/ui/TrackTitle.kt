@@ -11,6 +11,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.material3.Text
@@ -31,6 +32,7 @@ fun TrackTitle(
     color: Color,
     modifier: Modifier = Modifier,
     fontWeight: FontWeight? = null,
+    textAlign: TextAlign? = null,
 ) {
     val tamil = containsTamil(text)
     if (!tamil) {
@@ -40,6 +42,7 @@ fun TrackTitle(
             style = style,
             color = color,
             fontWeight = fontWeight,
+            textAlign = textAlign,
             maxLines = 1,
             softWrap = false,
             overflow = TextOverflow.Ellipsis,
@@ -54,6 +57,7 @@ fun TrackTitle(
         style = style,
         color = color,
         fontWeight = fontWeight,
+        textAlign = textAlign,
         fontFamily = if (limit >= text.length) NotoTamil else null,
         maxLines = 1,
         softWrap = false,

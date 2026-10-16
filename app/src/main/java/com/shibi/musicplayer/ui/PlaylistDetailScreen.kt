@@ -415,7 +415,7 @@ private fun PlaylistSongLine(
         Icon(
             imageVector = Icons.Rounded.DragIndicator,
             contentDescription = stringResource(R.string.reorder),
-            tint = TextMed,
+            tint = TextHigh,
             modifier = handleModifier
                 .size(48.dp)
                 .padding(13.dp),

@@ -7,7 +7,7 @@
 - `library/`: `MusicRepository` (MediaStore) and `LibraryViewModel`.
 - `playlist/`: Room playlists (`PlaylistDatabase`, `PlaylistDao`, `PlaylistRepository`, `PlaylistViewModel`). Schema version 1, database name `playlists.db`.
 - `playback/`: `PlaybackService` (MediaSessionService), `PlayerViewModel`, `PlayerUiState`, `TrackMediaItems`, `OutputCommands`.
-- `ui/`: `MusicApp` (navigation), `LibraryScreen`, `PlaylistsScreen`, `PlaylistDetailScreen`, `AddToPlaylistSheet`, `NavWheel` (rotating bottom dial), `PlayerScreen`, `AlbumArtwork`, `AudioPermission`, `OutputPickerSheet` (audio output picker), `theme/Theme.kt`.
+- `ui/`: `MusicApp` (navigation), `LibraryScreen`, `PlaylistsScreen`, `PlaylistDetailScreen`, `AddToPlaylistSheet`, `NavCarousel` (3D ring, `CarouselMath`), `BrowseScreens` (Favorites, Recent, Search, Settings), `PlayerScreen`, `AlbumArtwork`, `AudioPermission`, `OutputPickerSheet` (audio output picker), `theme/Theme.kt`.
 - Tests: `app/src/test/java/com/shibi/musicplayer/` (plain JUnit 4). Room DAO tests and Roborazzi screenshots use Robolectric. Screenshot PNGs are recorded to `app/build/outputs/roborazzi/` by `recordRoborazziDebug` (plain `test` does not write them).
 - Libraries (gradle/libs.versions.toml): AGP 9.4.0, Kotlin 2.4.10, core-ktx 1.18.0, activity-compose 1.13.0, lifecycle 2.10.0, Compose BOM 2026.06.01, navigation 2.9.8, media3 1.11.1, coil 3.5.0, coroutines 1.11.0, room 2.8.5, ksp 2.3.12, junit 4.13.2.
 - Style: 4-space indent, trailing commas, one composable per concern, private helper composables, user-facing text in `res/values/strings.xml` via `stringResource`, dependencies only through the version catalog (`libs.*`).
@@ -95,6 +95,8 @@ After every task, append an entry below: `- [task] what went wrong -> new rule`.
 
 - [playlists and wheel review] A stroked circle with icons sitting on the stroke still read as a bar, and Noto Tamil plus `TextOverflow.Ellipsis` drew two ellipsis marks -> draw a filled disc, put icons on an inner orbit, rotate rim ticks with `rimOffsetDegrees`, and append a single Jakarta ellipsis after measuring the line.
 
+- [carousel] Replaced the flat dial with a perspective ring. `graphicsLayer` translation moves icons; `rotationY` pivots around each icon, so the layout slot stays at the ring center and translation is applied in the layer. Back-half alpha is 0 (`CarouselMath.HIDDEN_DEPTH`). Drag is 1:1 along the arc (`dragItems`), then `animateDecay` and a spring snap. Haptic fires when that snap settles, not on every detent. Room favorites, recent plays, and the theme flag are schema version 2 with `MIGRATION_1_2`.
+
 ## 6. Lessons learned
 - androidx.mediarouter's `MediaRouteChooserDialog` extends `androidx.appcompat.app.AppCompatDialog`, and mediarouter does not expose appcompat at compile time. Using mediarouter dialog classes requires `implementation(libs.androidx.appcompat)` in app/build.gradle.kts (catalog alias `androidx-appcompat`).
 - You cannot read the Gradle cache (~/.gradle/caches): OpenCode denies external directories and the run aborts. Do not try. Verify an API by compiling (gradlew.bat assembleDebug) instead.
@@ -106,4 +108,4 @@ After every task, append an entry below: `- [task] what went wrong -> new rule`.
 - `NavHost` destination `route` is the pattern string (`playlist/{playlistId}`), not the filled path.
 - A decorative stroke on `#0E0E12` needs about 40% white to reach ~3:1. White at 14% disappears.
 - Noto Sans Tamil has no ellipsis glyph. `TextOverflow.Ellipsis` on that family draws the mark twice. Measure the line and append one Jakarta `\u2026`, with `softWrap = false`.
-- Dial items sit on an inner orbit, inside the disc. A ring stroke through the icon centers reads as holes, not a knob. Rim ticks use `NavWheelMath.rimOffsetDegrees` so they spin with the drag.
+- The bottom nav is a 3D carousel (`CarouselMath` + `NavCarousel`), not a flat dial. Eight sections, front of the ring visible, back half alpha 0. Keep the carousel body plus its 12dp bottom pad and the mini player within 25% of an 891dp phone. `graphicsLayer.density` is a Float; capture `LocalDensity.current.density` before the layer lambda.
