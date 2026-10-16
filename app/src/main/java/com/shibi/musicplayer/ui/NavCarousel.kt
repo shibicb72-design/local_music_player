@@ -196,17 +196,16 @@ fun NavCarousel(
             val layoutState = rememberUpdatedState(layout)
             val pivotFraction = layout.tileRadius / layout.columnHeight
 
-            Canvas(modifier = Modifier.fillMaxSize().zIndex(0f)) {
-                val floorY = layout.centerY + layout.verticalRadius + layout.tileRadius * 0.72f
-                val rx = layout.radius * 0.85f
-                val ry = 11.dp.toPx()
+            Canvas(modifier = Modifier.fillMaxSize().zIndex(0.4f)) {
+                // Hang the bright core below the front tile so the wings read as a floor.
+                val floorY = layout.centerY + layout.verticalRadius + layout.tileRadius * 0.92f
+                val rx = layout.radius * 1.45f
+                val ry = 20.dp.toPx()
                 drawOval(
                     brush = Brush.radialGradient(
-                        colors = listOf(
-                            Color.White.copy(alpha = 0.16f),
-                            SelectedFill.copy(alpha = 0.10f),
-                            Color.Transparent,
-                        ),
+                        0f to Color.White.copy(alpha = 0.28f),
+                        0.42f to SelectedFill.copy(alpha = 0.24f),
+                        1f to Color.Transparent,
                         center = Offset(layout.centerX, floorY),
                         radius = rx,
                     ),
@@ -420,23 +419,6 @@ fun NavCarousel(
             )
         }
         Box(modifier = Modifier.height(NavCarouselBottomPadding))
-    }
-}
-
-@Composable
-internal fun ListBottomFade(modifier: Modifier = Modifier) {
-    val background = MaterialTheme.colorScheme.background
-    Column(modifier = modifier.fillMaxWidth()) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(16.dp)
-                .background(
-                    Brush.verticalGradient(
-                        listOf(Color.Transparent, background),
-                    ),
-                ),
-        )
     }
 }
 

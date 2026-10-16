@@ -41,7 +41,6 @@ import com.shibi.musicplayer.playback.PlayerUiState
 import com.shibi.musicplayer.ui.AddToPlaylistContent
 import com.shibi.musicplayer.ui.FavoritesContent
 import com.shibi.musicplayer.ui.LibraryContent
-import com.shibi.musicplayer.ui.ListBottomFade
 import com.shibi.musicplayer.ui.NavCarousel
 import com.shibi.musicplayer.ui.NavSection
 import com.shibi.musicplayer.ui.NowPlayingBar
@@ -203,7 +202,6 @@ class ScreenshotTest {
                                 contentBottomPadding = SongListBottomPadding,
                                 modifier = Modifier.fillMaxSize(),
                             )
-                            ListBottomFade(modifier = Modifier.align(Alignment.BottomCenter))
                         }
                         NavCarousel(
                             selected = NavSection.Songs,
@@ -254,7 +252,6 @@ class ScreenshotTest {
                             contentBottomPadding = PlaylistListBottomPadding,
                             modifier = Modifier.fillMaxSize(),
                         )
-                        ListBottomFade(modifier = Modifier.align(Alignment.BottomCenter))
                     }
                     NavCarousel(
                         selected = NavSection.Playlists,
@@ -285,7 +282,6 @@ class ScreenshotTest {
                             contentBottomPadding = SongListBottomPadding,
                             modifier = Modifier.fillMaxSize(),
                         )
-                        ListBottomFade(modifier = Modifier.align(Alignment.BottomCenter))
                     }
                     NavCarousel(
                         selected = NavSection.Playlists,
@@ -367,7 +363,6 @@ class ScreenshotTest {
                             contentBottomPadding = SongListBottomPadding,
                             modifier = Modifier.fillMaxSize(),
                         )
-                        ListBottomFade(modifier = Modifier.align(Alignment.BottomCenter))
                     }
                     NavCarousel(
                         selected = NavSection.Favorites,
@@ -420,7 +415,6 @@ class ScreenshotTest {
                     contentBottomPadding = SongListBottomPadding,
                     modifier = Modifier.fillMaxSize(),
                 )
-                ListBottomFade(modifier = Modifier.align(Alignment.BottomCenter))
             }
             if (library.isNotEmpty()) {
                 NowPlayingBar(
