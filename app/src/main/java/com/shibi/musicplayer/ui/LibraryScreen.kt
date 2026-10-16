@@ -515,10 +515,18 @@ internal fun NowPlayingBar(
     } else {
         0f
     }
-    val deviceTint = if (route.icon == RouteIcon.PHONE) {
+    val phoneLabel = stringResource(R.string.output_this_phone)
+    val connectName = route.deviceName.ifBlank { phoneLabel }
+    val connectMuted = route.icon == RouteIcon.PHONE
+    val connectColor = if (connectMuted) {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    } else {
+        DeviceGreen.copy(alpha = 0.7f)
+    }
+    val deviceTint = if (connectMuted) {
         MaterialTheme.colorScheme.onSurface
     } else {
-        DeviceGreen
+        DeviceGreen.copy(alpha = 0.82f)
     }
     Box(
         modifier = Modifier
@@ -566,41 +574,37 @@ internal fun NowPlayingBar(
                             color = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.fillMaxWidth(),
                         )
-                        TrackDisplay.subtitle(state.artist, state.album)?.let { subtitle ->
+                        Text(
+                            text = TrackDisplay.subtitle(state.artist, state.album) ?: "\u00A0",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            if (route.showBluetoothGlyph) {
+                                Icon(
+                                    imageVector = Icons.Filled.Bluetooth,
+                                    contentDescription = null,
+                                    tint = connectColor,
+                                    modifier = Modifier.size(12.dp),
+                                )
+                                Spacer(Modifier.width(4.dp))
+                            }
                             Text(
-                                text = subtitle,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                text = connectName,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = connectColor,
                                 maxLines = 1,
                                 softWrap = false,
                                 overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier.weight(1f),
                             )
-                        }
-                        if (route.showDeviceName) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                if (route.showBluetoothGlyph) {
-                                    Icon(
-                                        imageVector = Icons.Filled.Bluetooth,
-                                        contentDescription = null,
-                                        tint = DeviceGreen,
-                                        modifier = Modifier.size(12.dp),
-                                    )
-                                    Spacer(Modifier.width(4.dp))
-                                }
-                                Text(
-                                    text = route.deviceName,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = DeviceGreen,
-                                    maxLines = 1,
-                                    softWrap = false,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.weight(1f),
-                                )
-                            }
                         }
                     }
                     Box(

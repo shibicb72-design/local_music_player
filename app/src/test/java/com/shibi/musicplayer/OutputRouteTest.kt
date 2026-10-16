@@ -224,13 +224,14 @@ class OutputRouteTest {
     }
 
     @Test
-    fun phoneHidesTheDeviceName() {
+    fun phoneShowsTheDeviceNameWithoutABluetoothGlyph() {
         val presentation = OutputRoute.present(
             RouteInput(AudioOutputs.TYPE_BUILTIN_SPEAKER, "This phone"),
         )
         assertEquals(RouteIcon.PHONE, presentation.icon)
-        assertFalse(presentation.showDeviceName)
+        assertTrue(presentation.showDeviceName)
         assertFalse(presentation.showBluetoothGlyph)
+        assertEquals("This phone", presentation.deviceName)
     }
 
     @Test

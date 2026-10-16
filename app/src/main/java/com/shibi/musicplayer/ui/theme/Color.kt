@@ -19,5 +19,5 @@ val Secondary = Color(0xFFB9A8FF)
 val OnSecondary = Color(0xFF1B1240)
 val Error = Color(0xFFFF6B7A)
 
-/** Device name and route icon on the mini player. About 8:1 on the bar. */
+/** Device name and route icon on the mini player. Drawn at ~0.7 alpha so it does not compete with the selected carousel tile. */
 val DeviceGreen = Color(0xFF1ED760)

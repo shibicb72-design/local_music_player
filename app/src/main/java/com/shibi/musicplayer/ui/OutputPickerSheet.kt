@@ -207,12 +207,8 @@ private val SelectedDeviceFill = Color(0xFF6E4EF0)
 
 internal fun effectiveOutput(outputs: List<AudioOutput>, selectedId: Int?): AudioOutput? =
     outputs.firstOrNull { it.id == AudioOutputs.selectedId(outputs, selectedId) }
-        ?: outputs.firstOrNull {
-            it.kind == OutputKind.BLUETOOTH ||
-                it.kind == OutputKind.WIRED ||
-                it.kind == OutputKind.USB
-        }
         ?: outputs.firstOrNull { it.kind == OutputKind.PHONE_SPEAKER }
+        ?: outputs.firstOrNull()
 
 private fun iconFor(kind: OutputKind): ImageVector = when (kind) {
     OutputKind.PHONE_SPEAKER -> Icons.Filled.Smartphone

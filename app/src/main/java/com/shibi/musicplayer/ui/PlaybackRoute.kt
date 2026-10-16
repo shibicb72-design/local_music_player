@@ -22,29 +22,38 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.shibi.musicplayer.R
+import com.shibi.musicplayer.domain.AudioOutputs
 import com.shibi.musicplayer.domain.BondedClass
 import com.shibi.musicplayer.domain.ListedDevice
 import com.shibi.musicplayer.domain.OutputRoute
 import com.shibi.musicplayer.domain.RouteInput
 import com.shibi.musicplayer.domain.RoutePresentation
 
+data class PlaybackRouteUi(
+    val presentation: RoutePresentation,
+    val activeDeviceId: Int?,
+)
+
 @Composable
-fun rememberPlaybackRoute(preferredDeviceId: Int?): State<RoutePresentation> {
+fun rememberPlaybackRoute(preferredDeviceId: Int?): State<PlaybackRouteUi> {
     val context = LocalContext.current
+    val phoneLabel = stringResource(R.string.output_this_phone)
     val lifecycleOwner = LocalLifecycleOwner.current
     val audioManager = remember(context) {
         context.getSystemService(AudioManager::class.java)
     }
-    val state = remember(audioManager) {
-        mutableStateOf(readPlaybackRoute(context, audioManager, preferredDeviceId))
+    val state = remember(audioManager, phoneLabel) {
+        mutableStateOf(readPlaybackRoute(context, audioManager, preferredDeviceId, phoneLabel))
     }
-    DisposableEffect(audioManager, preferredDeviceId, lifecycleOwner) {
+    DisposableEffect(audioManager, preferredDeviceId, phoneLabel, lifecycleOwner) {
         fun refresh() {
-            state.value = readPlaybackRoute(context, audioManager, preferredDeviceId)
+            state.value = readPlaybackRoute(context, audioManager, preferredDeviceId, phoneLabel)
         }
         val callback = object : AudioDeviceCallback() {
             override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>) = refresh()
@@ -86,7 +95,8 @@ internal fun readPlaybackRoute(
     context: Context,
     audioManager: AudioManager,
     preferredDeviceId: Int?,
-): RoutePresentation {
+    phoneLabel: String,
+): PlaybackRouteUi {
     val devices = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS).map { device ->
         ListedDevice(
             id = device.id,
@@ -98,17 +108,25 @@ internal fun readPlaybackRoute(
         devices = devices,
         preferredId = preferredDeviceId,
         routedIds = routedDeviceIds(audioManager),
-    ) ?: return RoutePresentation.phone()
+    ) ?: return PlaybackRouteUi(RoutePresentation.phone(phoneLabel), null)
     val granted = bluetoothConnectGranted(context)
     val bonded = if (granted) bondedClasses(context) else null
-    return OutputRoute.present(
-        RouteInput(
-            deviceType = active.type,
-            productName = active.productName,
-            bonded = bonded.orEmpty(),
-            carMode = carMode(context),
-            bluetoothConnectGranted = granted && bonded != null,
+    val productName = if (active.type == AudioOutputs.TYPE_BUILTIN_SPEAKER) {
+        phoneLabel
+    } else {
+        active.productName
+    }
+    return PlaybackRouteUi(
+        presentation = OutputRoute.present(
+            RouteInput(
+                deviceType = active.type,
+                productName = productName,
+                bonded = bonded.orEmpty(),
+                carMode = carMode(context),
+                bluetoothConnectGranted = granted && bonded != null,
+            ),
         ),
+        activeDeviceId = active.id,
     )
 }
 

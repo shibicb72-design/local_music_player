@@ -83,6 +83,15 @@ class TrackDisplayTest {
     }
 
     @Test
+    fun ellipsisEnd_dropsATrailingSpaceBeforeTheMark() {
+        val text = "\u0B8E\u0BA9\u0BCD\u0BA9\u0BC8 \u0B95\u0BCA\u0B9E\u0BCD\u0B9A\u0BAE\u0BCD"
+        val space = text.indexOf(' ')
+        assertEquals(space, TrackDisplay.ellipsisEnd(text, space + 1))
+        assertEquals(text.length, TrackDisplay.ellipsisEnd(text, text.length))
+        assertEquals(0, TrackDisplay.ellipsisEnd("  ", 2))
+    }
+
+    @Test
     fun tamilEllipsisCut_keepsAClusterThatAlreadyEndsOnTheBoundary() {
         val cluster = "\u0B95\u0BCA"
         assertEquals(0, TrackDisplay.tamilEllipsisCut(cluster, 1))

@@ -34,10 +34,10 @@ data class RoutePresentation(
     val showBluetoothGlyph: Boolean,
 ) {
     companion object {
-        fun phone(): RoutePresentation = RoutePresentation(
+        fun phone(label: String = ""): RoutePresentation = RoutePresentation(
             icon = RouteIcon.PHONE,
-            deviceName = "",
-            showDeviceName = false,
+            deviceName = label,
+            showDeviceName = true,
             showBluetoothGlyph = false,
         )
     }
@@ -66,13 +66,12 @@ object OutputRoute {
     fun present(input: RouteInput): RoutePresentation {
         val icon = classify(input)
         val name = input.productName.trim()
-        val showName = icon != RouteIcon.PHONE && name.isNotEmpty()
-        val glyph = showName && isBluetoothTransport(input.deviceType)
+        val bluetooth = isBluetoothTransport(input.deviceType)
         return RoutePresentation(
             icon = icon,
             deviceName = name,
-            showDeviceName = showName,
-            showBluetoothGlyph = glyph,
+            showDeviceName = true,
+            showBluetoothGlyph = bluetooth && icon != RouteIcon.PHONE,
         )
     }
 

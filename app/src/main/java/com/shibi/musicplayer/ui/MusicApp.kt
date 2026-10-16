@@ -1,6 +1,8 @@
 package com.shibi.musicplayer.ui
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
@@ -11,6 +13,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -32,6 +35,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.shibi.musicplayer.domain.Track
 import com.shibi.musicplayer.library.LibraryViewModel
+import com.shibi.musicplayer.playback.PlayerUiState
 import com.shibi.musicplayer.playback.PlayerViewModel
 import com.shibi.musicplayer.playlist.PlaylistViewModel
 
@@ -90,8 +94,9 @@ fun MusicApp(
                 navController.popBackStack()
             }
         }
-        val nowPlayingInRightPane = wide
-        val showMini = playerState.hasMedia && route != PlayerRoute && !nowPlayingInRightPane
+        val showMini = playerState.hasMedia && route != PlayerRoute
+        val showCarousel = wide || route != PlayerRoute
+        val activeOutputId = playbackRoute.activeDeviceId
 
         fun playQueue(tracks: List<Track>, startId: Long) {
             if (tracks.isEmpty()) return
@@ -132,189 +137,165 @@ fun MusicApp(
             }
         }
 
-        Row(modifier = Modifier.fillMaxSize()) {
-            val showCarousel = wide || route != PlayerRoute
-            SectionScaffold(
+        val miniBar: @Composable () -> Unit = {
+            NowPlayingBar(
+                state = playerState,
+                onOpen = {
+                    section = NavSection.NowPlaying
+                    navController.openPlayer()
+                },
+                onTogglePlayPause = playerViewModel::togglePlayPause,
+                route = playbackRoute.presentation,
+                isFavorite = playingIsFavorite,
+                onToggleFavorite = {
+                    playingTrackId?.let(playlistViewModel::toggleFavorite)
+                },
+                onOpenDevices = { showDevices = true },
+                padForNavigationBars = false,
+                bottomPadding = MiniPlayerCarouselGap,
+            )
+        }
+        val carouselBar: @Composable (Modifier) -> Unit = { carouselModifier ->
+            NavCarousel(
+                selected = section,
+                onSelect = { destination -> onSection(destination) },
+                modifier = carouselModifier.windowInsetsPadding(
+                    WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal),
+                ),
+            )
+        }
+        val playerPane: @Composable (Dp) -> Unit = { extraBottom ->
+            PlayerScreen(
+                state = playerState,
+                onBack = {},
+                onTogglePlayPause = playerViewModel::togglePlayPause,
+                onNext = playerViewModel::skipNext,
+                onPrevious = playerViewModel::skipPrevious,
+                onSeek = playerViewModel::seekTo,
+                selectedOutputId = activeOutputId,
+                onSelectOutput = playerViewModel::setOutputDevice,
+                showBack = false,
+                includeNavigationBars = false,
                 modifier = Modifier
-                    .weight(if (wide) 0.42f else 1f)
-                    .fillMaxHeight(),
+                    .fillMaxHeight()
+                    .padding(start = 8.dp, top = 16.dp, end = 16.dp, bottom = extraBottom)
+                    .clip(RoundedCornerShape(28.dp)),
+            )
+        }
+
+        if (!wide) {
+            SectionScaffold(
+                modifier = Modifier.fillMaxSize(),
                 showMiniPlayer = showMini,
                 showCarousel = showCarousel,
                 contentBottomPadding = SongListBottomPadding,
-                miniPlayer = {
-                    NowPlayingBar(
-                        state = playerState,
-                        onOpen = {
-                            section = NavSection.NowPlaying
-                            navController.openPlayer()
-                        },
-                        onTogglePlayPause = playerViewModel::togglePlayPause,
-                        route = playbackRoute,
-                        isFavorite = playingIsFavorite,
-                        onToggleFavorite = {
-                            playingTrackId?.let(playlistViewModel::toggleFavorite)
-                        },
-                        onOpenDevices = { showDevices = true },
-                        padForNavigationBars = false,
-                        bottomPadding = MiniPlayerCarouselGap,
-                    )
-                },
-                carousel = {
-                    NavCarousel(
-                        selected = section,
-                        onSelect = { destination -> onSection(destination) },
-                        modifier = Modifier
-                            .windowInsetsPadding(
-                                WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal),
-                            )
-                            .then(
-                                if (wide) {
-                                    Modifier.padding(
-                                        top = TwoPaneCarouselPadding,
-                                        bottom = TwoPaneCarouselPadding,
-                                    )
-                                } else {
-                                    Modifier
-                                },
-                            ),
-                    )
-                },
+                miniPlayer = miniBar,
+                carousel = { carouselBar(Modifier) },
             ) { bottomPadding ->
-                NavHost(
+                AppNavHost(
                     navController = navController,
-                    startDestination = SongsRoute,
+                    libraryViewModel = libraryViewModel,
+                    playerViewModel = playerViewModel,
+                    playlistViewModel = playlistViewModel,
+                    playerState = playerState,
+                    favoriteIds = favoriteIds,
+                    libraryTracks = libraryState.tracks,
+                    tracksById = tracksById,
+                    recentTracks = recentTracks,
+                    recentSearches = recentSearches,
+                    darkTheme = darkTheme,
+                    wide = false,
+                    contentBottomPadding = bottomPadding,
+                    activeOutputId = activeOutputId,
+                    onPlayQueue = { tracks, startId -> playQueue(tracks, startId) },
+                    onOpenPlayer = {
+                        section = NavSection.NowPlaying
+                        navController.openPlayer()
+                    },
+                    onAddToPlaylist = { pendingTrack = it },
                     modifier = Modifier.fillMaxSize(),
-                ) {
-                        composable(SongsRoute) {
-                            LibraryScreen(
-                                viewModel = libraryViewModel,
-                                nowPlaying = playerState,
-                                onTrackSelected = { tracks, trackId -> playQueue(tracks, trackId) },
-                                onOpenPlayer = {
-                                    if (!wide) {
-                                        section = NavSection.NowPlaying
-                                        navController.openPlayer()
-                                    }
-                                },
-                                onTogglePlayPause = playerViewModel::togglePlayPause,
-                                onAddToPlaylist = { pendingTrack = it },
-                                favoriteIds = favoriteIds,
-                                onToggleFavorite = { playlistViewModel.toggleFavorite(it.id) },
-                                showMiniPlayer = false,
-                                contentBottomPadding = bottomPadding,
-                                modifier = Modifier.fillMaxSize(),
-                            )
-                        }
-                        composable(PlaylistsRoute) {
-                            PlaylistsScreen(
-                                viewModel = playlistViewModel,
-                                tracksById = tracksById,
-                                onOpen = { id ->
-                                    navController.navigate("playlist/$id") { launchSingleTop = true }
-                                },
-                                contentBottomPadding = bottomPadding,
-                                modifier = Modifier.fillMaxSize(),
-                            )
-                        }
-                        composable(
-                            route = PlaylistDetailRoute,
-                            arguments = listOf(navArgument(PlaylistIdArg) { type = NavType.LongType }),
-                        ) { entry ->
-                            val playlistId = entry.arguments?.getLong(PlaylistIdArg) ?: return@composable
-                            PlaylistDetailScreen(
-                                playlistId = playlistId,
-                                viewModel = playlistViewModel,
-                                tracksById = tracksById,
-                                onBack = { navController.popBackStack() },
-                                onPlay = { tracks, startId -> playQueue(tracks, startId) },
-                                onShuffle = { tracks ->
-                                    val shuffled = tracks.shuffled()
-                                    shuffled.firstOrNull()?.let { playQueue(shuffled, it.id) }
-                                },
-                                contentBottomPadding = bottomPadding,
-                                modifier = Modifier.fillMaxSize(),
-                            )
-                        }
-                        composable(FavoritesRoute) {
-                            FavoritesScreen(
-                                tracks = libraryState.tracks,
-                                favoriteIds = favoriteIds,
-                                nowPlaying = playerState,
-                                onTrackSelected = { tracks, trackId -> playQueue(tracks, trackId) },
-                                onToggleFavorite = { playlistViewModel.toggleFavorite(it.id) },
-                                onAddToPlaylist = { pendingTrack = it },
-                                contentBottomPadding = bottomPadding,
-                                modifier = Modifier.fillMaxSize(),
-                            )
-                        }
-                        composable(RecentRoute) {
-                            RecentScreen(
-                                tracks = recentTracks,
-                                favoriteIds = favoriteIds,
-                                nowPlaying = playerState,
-                                onTrackSelected = { tracks, trackId -> playQueue(tracks, trackId) },
-                                onToggleFavorite = { playlistViewModel.toggleFavorite(it.id) },
-                                onAddToPlaylist = { pendingTrack = it },
-                                contentBottomPadding = bottomPadding,
-                                modifier = Modifier.fillMaxSize(),
-                            )
-                        }
-                        composable(SearchRoute) {
-                            SearchScreen(
-                                tracks = libraryState.tracks,
-                                favoriteIds = favoriteIds,
-                                nowPlaying = playerState,
-                                onTrackSelected = { tracks, trackId -> playQueue(tracks, trackId) },
-                                onToggleFavorite = { playlistViewModel.toggleFavorite(it.id) },
-                                onAddToPlaylist = { pendingTrack = it },
-                                recentSearches = recentSearches,
-                                onSearchCommitted = playlistViewModel::recordSearch,
-                                contentBottomPadding = bottomPadding,
-                                modifier = Modifier.fillMaxSize(),
-                            )
-                        }
-                        composable(SettingsRoute) {
-                            SettingsScreen(
-                                darkTheme = darkTheme,
-                                onDarkThemeChange = playlistViewModel::setDarkTheme,
-                                contentBottomPadding = bottomPadding,
-                                modifier = Modifier.fillMaxSize(),
-                            )
-                        }
-                        composable(PlayerRoute) {
-                            if (!wide) {
-                                PlayerScreen(
-                                    state = playerState,
-                                    onBack = { navController.popBackStack() },
-                                    onTogglePlayPause = playerViewModel::togglePlayPause,
-                                    onNext = playerViewModel::skipNext,
-                                    onPrevious = playerViewModel::skipPrevious,
-                                    onSeek = playerViewModel::seekTo,
-                                    selectedOutputId = selectedOutputId,
-                                    onSelectOutput = playerViewModel::setOutputDevice,
-                                )
-                            }
-                        }
-                    }
+                )
             }
-            if (wide) {
-                PlayerScreen(
-                    state = playerState,
-                    onBack = {},
-                    onTogglePlayPause = playerViewModel::togglePlayPause,
-                    onNext = playerViewModel::skipNext,
-                    onPrevious = playerViewModel::skipPrevious,
-                    onSeek = playerViewModel::seekTo,
-                    selectedOutputId = selectedOutputId,
-                    onSelectOutput = playerViewModel::setOutputDevice,
-                    showBack = false,
-                    includeNavigationBars = false,
+        } else if (showMini) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxSize(),
+                ) {
+                    AppNavHost(
+                        navController = navController,
+                        libraryViewModel = libraryViewModel,
+                        playerViewModel = playerViewModel,
+                        playlistViewModel = playlistViewModel,
+                        playerState = playerState,
+                        favoriteIds = favoriteIds,
+                        libraryTracks = libraryState.tracks,
+                        tracksById = tracksById,
+                        recentTracks = recentTracks,
+                        recentSearches = recentSearches,
+                        darkTheme = darkTheme,
+                        wide = true,
+                        contentBottomPadding = SongListBottomPadding,
+                        activeOutputId = activeOutputId,
+                        onPlayQueue = { tracks, startId -> playQueue(tracks, startId) },
+                        onOpenPlayer = {},
+                        onAddToPlaylist = { pendingTrack = it },
+                        modifier = Modifier
+                            .weight(0.42f)
+                            .fillMaxHeight(),
+                    )
+                    Box(modifier = Modifier.weight(0.58f).fillMaxHeight()) {
+                        playerPane(SongListBottomPadding)
+                    }
+                }
+                miniBar()
+                if (showCarousel) carouselBar(Modifier)
+            }
+        } else {
+            Row(modifier = Modifier.fillMaxSize()) {
+                Column(
+                    modifier = Modifier
+                        .weight(0.42f)
+                        .fillMaxHeight(),
+                ) {
+                    AppNavHost(
+                        navController = navController,
+                        libraryViewModel = libraryViewModel,
+                        playerViewModel = playerViewModel,
+                        playlistViewModel = playlistViewModel,
+                        playerState = playerState,
+                        favoriteIds = favoriteIds,
+                        libraryTracks = libraryState.tracks,
+                        tracksById = tracksById,
+                        recentTracks = recentTracks,
+                        recentSearches = recentSearches,
+                        darkTheme = darkTheme,
+                        wide = true,
+                        contentBottomPadding = SongListBottomPadding,
+                        activeOutputId = activeOutputId,
+                        onPlayQueue = { tracks, startId -> playQueue(tracks, startId) },
+                        onOpenPlayer = {},
+                        onAddToPlaylist = { pendingTrack = it },
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxSize(),
+                    )
+                    carouselBar(
+                        Modifier.padding(
+                            top = TwoPaneCarouselPadding,
+                            bottom = TwoPaneCarouselPadding,
+                        ),
+                    )
+                }
+                Box(
                     modifier = Modifier
                         .weight(0.58f)
-                        .navigationBarsPadding()
-                        .padding(start = 8.dp, top = 16.dp, end = 16.dp, bottom = TwoPanePlayerBottomPadding)
-                        .clip(RoundedCornerShape(28.dp)),
-                )
+                        .fillMaxHeight()
+                        .navigationBarsPadding(),
+                ) {
+                    playerPane(TwoPanePlayerBottomPadding)
+                }
             }
         }
     }
@@ -322,7 +303,7 @@ fun MusicApp(
     if (showDevices) {
         OutputPickerSheet(
             outputs = outputs,
-            selectedId = selectedOutputId,
+            selectedId = playbackRoute.activeDeviceId,
             onSelect = { deviceId -> playerViewModel.setOutputDevice(deviceId) },
             onDismiss = {
                 showDevices = false
@@ -347,6 +328,140 @@ fun MusicApp(
             },
             onDismiss = { pendingTrack = null },
         )
+    }
+}
+
+@Composable
+private fun AppNavHost(
+    navController: NavHostController,
+    libraryViewModel: LibraryViewModel,
+    playerViewModel: PlayerViewModel,
+    playlistViewModel: PlaylistViewModel,
+    playerState: PlayerUiState,
+    favoriteIds: Set<Long>,
+    libraryTracks: List<Track>,
+    tracksById: Map<Long, Track>,
+    recentTracks: List<Track>,
+    recentSearches: List<String>,
+    darkTheme: Boolean,
+    wide: Boolean,
+    contentBottomPadding: Dp,
+    activeOutputId: Int?,
+    onPlayQueue: (List<Track>, Long) -> Unit,
+    onOpenPlayer: () -> Unit,
+    onAddToPlaylist: (Track) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    NavHost(
+        navController = navController,
+        startDestination = SongsRoute,
+        modifier = modifier,
+    ) {
+        composable(SongsRoute) {
+            LibraryScreen(
+                viewModel = libraryViewModel,
+                nowPlaying = playerState,
+                onTrackSelected = { tracks, trackId -> onPlayQueue(tracks, trackId) },
+                onOpenPlayer = onOpenPlayer,
+                onTogglePlayPause = playerViewModel::togglePlayPause,
+                onAddToPlaylist = onAddToPlaylist,
+                favoriteIds = favoriteIds,
+                onToggleFavorite = { playlistViewModel.toggleFavorite(it.id) },
+                showMiniPlayer = false,
+                contentBottomPadding = contentBottomPadding,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+        composable(PlaylistsRoute) {
+            PlaylistsScreen(
+                viewModel = playlistViewModel,
+                tracksById = tracksById,
+                onOpen = { id ->
+                    navController.navigate("playlist/$id") { launchSingleTop = true }
+                },
+                contentBottomPadding = contentBottomPadding,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+        composable(
+            route = PlaylistDetailRoute,
+            arguments = listOf(navArgument(PlaylistIdArg) { type = NavType.LongType }),
+        ) { entry ->
+            val playlistId = entry.arguments?.getLong(PlaylistIdArg) ?: return@composable
+            PlaylistDetailScreen(
+                playlistId = playlistId,
+                viewModel = playlistViewModel,
+                tracksById = tracksById,
+                onBack = { navController.popBackStack() },
+                onPlay = onPlayQueue,
+                onShuffle = { tracks ->
+                    val shuffled = tracks.shuffled()
+                    shuffled.firstOrNull()?.let { onPlayQueue(shuffled, it.id) }
+                },
+                contentBottomPadding = contentBottomPadding,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+        composable(FavoritesRoute) {
+            FavoritesScreen(
+                tracks = libraryTracks,
+                favoriteIds = favoriteIds,
+                nowPlaying = playerState,
+                onTrackSelected = onPlayQueue,
+                onToggleFavorite = { playlistViewModel.toggleFavorite(it.id) },
+                onAddToPlaylist = onAddToPlaylist,
+                contentBottomPadding = contentBottomPadding,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+        composable(RecentRoute) {
+            RecentScreen(
+                tracks = recentTracks,
+                favoriteIds = favoriteIds,
+                nowPlaying = playerState,
+                onTrackSelected = onPlayQueue,
+                onToggleFavorite = { playlistViewModel.toggleFavorite(it.id) },
+                onAddToPlaylist = onAddToPlaylist,
+                contentBottomPadding = contentBottomPadding,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+        composable(SearchRoute) {
+            SearchScreen(
+                tracks = libraryTracks,
+                favoriteIds = favoriteIds,
+                nowPlaying = playerState,
+                onTrackSelected = onPlayQueue,
+                onToggleFavorite = { playlistViewModel.toggleFavorite(it.id) },
+                onAddToPlaylist = onAddToPlaylist,
+                recentSearches = recentSearches,
+                onSearchCommitted = playlistViewModel::recordSearch,
+                contentBottomPadding = contentBottomPadding,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+        composable(SettingsRoute) {
+            SettingsScreen(
+                darkTheme = darkTheme,
+                onDarkThemeChange = playlistViewModel::setDarkTheme,
+                contentBottomPadding = contentBottomPadding,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+        composable(PlayerRoute) {
+            if (!wide) {
+                PlayerScreen(
+                    state = playerState,
+                    onBack = { navController.popBackStack() },
+                    onTogglePlayPause = playerViewModel::togglePlayPause,
+                    onNext = playerViewModel::skipNext,
+                    onPrevious = playerViewModel::skipPrevious,
+                    onSeek = playerViewModel::seekTo,
+                    selectedOutputId = activeOutputId,
+                    onSelectOutput = playerViewModel::setOutputDevice,
+                )
+            }
+        }
     }
 }
 

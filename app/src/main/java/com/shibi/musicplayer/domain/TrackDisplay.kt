@@ -44,6 +44,18 @@ object TrackDisplay {
     }
 
     /**
+     * Grapheme-aligned end index that does not leave a trailing space before
+     * an ellipsis. Compose's own ellipsis can keep the space in a narrow pane.
+     */
+    fun ellipsisEnd(text: String, visibleEnd: Int): Int {
+        var end = tamilEllipsisCut(text, visibleEnd)
+        while (end > 0 && text[end - 1].isWhitespace()) {
+            end = tamilEllipsisCut(text, end - 1)
+        }
+        return end
+    }
+
+    /**
      * Largest grapheme-aligned end index that fits.
      *
      * [fits] is asked about [text].length for the full string, then about each
