@@ -1,8 +1,11 @@
 package com.shibi.musicplayer
 
 import com.shibi.musicplayer.domain.TrackDisplay
+import com.shibi.musicplayer.domain.containsTamil
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class TrackDisplayTest {
@@ -52,5 +55,27 @@ class TrackDisplayTest {
     @Test
     fun artist_returnsTrimmedValue() {
         assertEquals("Artist", TrackDisplay.artist("  Artist  "))
+    }
+
+    @Test
+    fun containsTamil_trueForTamilTitle() {
+        assertTrue(containsTamil("\u0B8E\u0BA9\u0BCD\u0BA9\u0BC8 \u0B95\u0BCA\u0B9E\u0BCD\u0B9A\u0BAE\u0BCD"))
+    }
+
+    @Test
+    fun containsTamil_trueWhenTamilAnywhere() {
+        assertTrue(containsTamil("Track \u0B95\u0BCA\u0B9E\u0BCD\u0B9A\u0BAE\u0BCD mix"))
+    }
+
+    @Test
+    fun containsTamil_falseForEnglish() {
+        assertFalse(containsTamil("Midnight Drive"))
+        assertFalse(containsTamil(""))
+    }
+
+    @Test
+    fun containsTamil_falseForTamilBlockEdges() {
+        assertFalse(containsTamil("\u0B7F"))
+        assertFalse(containsTamil("\u0C00"))
     }
 }

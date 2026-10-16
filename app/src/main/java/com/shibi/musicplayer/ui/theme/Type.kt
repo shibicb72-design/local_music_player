@@ -33,6 +33,20 @@ val Jakarta = FontFamily(
     ),
 )
 
+@OptIn(ExperimentalTextApi::class)
+val NotoTamil = FontFamily(
+    Font(
+        R.font.noto_sans_tamil,
+        FontWeight.Bold,
+        variationSettings = FontVariation.Settings(FontVariation.weight(700)),
+    ),
+    Font(
+        R.font.noto_sans_tamil,
+        FontWeight.Medium,
+        variationSettings = FontVariation.Settings(FontVariation.weight(500)),
+    ),
+)
+
 val AppTypography = Typography().run {
     copy(
         displayLarge = displayLarge.copy(fontFamily = Jakarta),

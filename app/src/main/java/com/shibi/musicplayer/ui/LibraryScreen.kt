@@ -5,6 +5,8 @@ import android.content.pm.PackageManager
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -22,26 +24,24 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Button
-import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ElevatedCard
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -51,7 +51,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -63,8 +66,10 @@ import com.shibi.musicplayer.R
 import com.shibi.musicplayer.domain.PlaybackTime
 import com.shibi.musicplayer.domain.Track
 import com.shibi.musicplayer.domain.TrackDisplay
+import com.shibi.musicplayer.domain.containsTamil
 import com.shibi.musicplayer.library.LibraryViewModel
 import com.shibi.musicplayer.playback.PlayerUiState
+import com.shibi.musicplayer.ui.theme.NotoTamil
 import com.shibi.musicplayer.ui.theme.Spacing
 
 @Composable
@@ -207,20 +212,43 @@ fun LibraryContent(
                 .windowInsetsPadding(
                     WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal),
                 ),
-            contentPadding = PaddingValues(vertical = 8.dp),
+            contentPadding = PaddingValues(bottom = 120.dp),
         ) {
+            item {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .statusBarsPadding()
+                        .padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 8.dp),
+                ) {
+                    Text(
+                        text = stringResource(R.string.library_title),
+                        style = MaterialTheme.typography.headlineMedium,
+                        color = MaterialTheme.colorScheme.onBackground,
+                    )
+                    Text(
+                        text = pluralStringResource(
+                            R.plurals.song_count,
+                            tracks.size,
+                            tracks.size,
+                        ),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
             items(tracks, key = { it.id }) { track ->
                 TrackRow(
                     track = track,
                     isPlaying = nowPlaying.currentMediaId == track.id.toString(),
                     onClick = { onTrackSelected(tracks, track.id) },
+                    modifier = Modifier.animateItem(),
                 )
             }
         }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun LibraryScaffold(
     nowPlaying: PlayerUiState,
@@ -232,11 +260,7 @@ private fun LibraryScaffold(
 ) {
     Scaffold(
         modifier = modifier,
-        topBar = {
-            CenterAlignedTopAppBar(
-                title = { Text(stringResource(R.string.library_title)) },
-            )
-        },
+        contentWindowInsets = WindowInsets(0),
         bottomBar = {
             if (showMiniPlayer && nowPlaying.hasMedia) {
                 NowPlayingBar(
@@ -251,12 +275,23 @@ private fun LibraryScaffold(
 }
 
 @Composable
-private fun TrackRow(track: Track, isPlaying: Boolean, onClick: () -> Unit) {
+private fun TrackRow(
+    track: Track,
+    isPlaying: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val title = TrackDisplay.title(track.title)
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
+            .padding(horizontal = 8.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(
+                if (isPlaying) Color(0xFF7C5CFF).copy(alpha = 0.12f) else Color.Transparent,
+            )
             .clickable(onClick = onClick)
-            .padding(horizontal = Spacing.md, vertical = Spacing.sm),
+            .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         AlbumArtwork(
@@ -271,11 +306,12 @@ private fun TrackRow(track: Track, isPlaying: Boolean, onClick: () -> Unit) {
                 .padding(horizontal = Spacing.md),
         ) {
             Text(
-                text = TrackDisplay.title(track.title),
+                text = title,
                 style = MaterialTheme.typography.titleMedium,
+                fontFamily = if (containsTamil(title)) NotoTamil else null,
                 fontWeight = FontWeight.SemiBold,
                 color = if (isPlaying) {
-                    MaterialTheme.colorScheme.primary
+                    Color(0xFFB9A8FF)
                 } else {
                     MaterialTheme.colorScheme.onSurface
                 },
@@ -294,7 +330,7 @@ private fun TrackRow(track: Track, isPlaying: Boolean, onClick: () -> Unit) {
             Icon(
                 imageVector = Icons.Filled.GraphicEq,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
+                tint = Color(0xFFB9A8FF),
                 modifier = Modifier.size(18.dp),
             )
             Spacer(Modifier.width(Spacing.sm))
@@ -374,57 +410,81 @@ private fun NowPlayingBar(
             .navigationBarsPadding()
             .padding(start = Spacing.sm, end = Spacing.sm, bottom = Spacing.sm),
     ) {
-        ElevatedCard(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onOpen),
-            shape = RoundedCornerShape(20.dp),
+        Surface(
+            onClick = onOpen,
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(22.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.88f),
+            contentColor = MaterialTheme.colorScheme.onSurface,
+            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
+            shadowElevation = 12.dp,
         ) {
-            LinearProgressIndicator(
-                progress = { progress },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(2.dp),
-            )
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = Spacing.sm, vertical = Spacing.sm),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                AlbumArtwork(
-                    albumArtUri = state.albumArtUri,
-                    modifier = Modifier.size(44.dp),
-                    shape = RoundedCornerShape(10.dp),
-                    title = state.title,
-                )
-                Column(
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Box(
                     modifier = Modifier
-                        .weight(1f)
-                        .padding(horizontal = Spacing.sm),
+                        .padding(horizontal = 16.dp)
+                        .fillMaxWidth()
+                        .height(2.dp)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.12f)),
                 ) {
-                    Text(
-                        text = TrackDisplay.title(state.title)
-                            .ifBlank { stringResource(R.string.nothing_playing) },
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        text = TrackDisplay.artist(state.artist)
-                            ?: stringResource(R.string.missing_artist),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(progress)
+                            .height(2.dp)
+                            .background(Color.White),
                     )
                 }
-                IconButton(onClick = onTogglePlayPause) {
-                    Icon(
-                        imageVector = if (state.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                        contentDescription = stringResource(if (state.isPlaying) R.string.pause else R.string.play),
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = Spacing.sm, vertical = Spacing.sm),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    AlbumArtwork(
+                        albumArtUri = state.albumArtUri,
+                        modifier = Modifier.size(46.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        title = state.title,
                     )
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(horizontal = Spacing.sm),
+                    ) {
+                        val title = TrackDisplay.title(state.title)
+                            .ifBlank { stringResource(R.string.nothing_playing) }
+                        Text(
+                            text = title,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontFamily = if (containsTamil(title)) NotoTamil else null,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            text = TrackDisplay.artist(state.artist)
+                                ?: stringResource(R.string.missing_artist),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .background(Color.White, CircleShape)
+                            .clickable(onClick = onTogglePlayPause),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = if (state.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                            contentDescription = stringResource(if (state.isPlaying) R.string.pause else R.string.play),
+                            tint = Color(0xFF0E0E12),
+                            modifier = Modifier.size(24.dp),
+                        )
+                    }
                 }
             }
         }

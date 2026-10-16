@@ -6,21 +6,27 @@ import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.os.Handler
 import android.os.Looper
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bluetooth
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.Smartphone
 import androidx.compose.material.icons.filled.Usb
+import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
@@ -30,7 +36,9 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -82,6 +90,7 @@ fun OutputPickerSheet(
         sheetState = sheetState,
         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         contentColor = MaterialTheme.colorScheme.onSurface,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
     ) {
         OutputPickerContent(
             outputs = outputs,
@@ -102,45 +111,83 @@ internal fun OutputPickerContent(
     modifier: Modifier = Modifier,
 ) {
     val effective = effectiveOutput(outputs, selectedId)
-    Column(modifier = modifier.fillMaxWidth()) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+    ) {
         Text(
-            text = stringResource(R.string.choose_output),
+            text = stringResource(R.string.play_on),
             style = MaterialTheme.typography.titleLarge,
-            modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
+            modifier = Modifier.padding(start = 8.dp, bottom = 12.dp),
         )
-        outputs.forEach { output ->
+        outputs.forEachIndexed { index, output ->
             val selected = output.id == effective?.id
-            ListItem(
-                headlineContent = {
-                    Text(
-                        text = output.name,
-                        color = if (selected) OutputAccent else Color.Unspecified,
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(
+                        if (selected) {
+                            Color(0xFF7C5CFF).copy(alpha = 0.16f)
+                        } else {
+                            Color.Transparent
+                        },
                     )
-                },
-                leadingContent = {
+                    .clickable { onSelect(output.id) }
+                    .padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .background(
+                            if (selected) Color(0xFF7C5CFF) else Color.White.copy(alpha = 0.08f),
+                            CircleShape,
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
                     Icon(
                         imageVector = iconFor(output.kind),
                         contentDescription = null,
+                        tint = if (selected) Color.White else MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.size(22.dp),
                     )
-                },
-                trailingContent = if (selected) {
-                    {
-                        Icon(
-                            imageVector = Icons.Filled.Check,
-                            contentDescription = null,
-                            tint = OutputAccent,
-                        )
-                    }
-                } else {
-                    null
-                },
-                modifier = Modifier.clickable {
-                    onSelect(output.id)
-                },
-            )
+                }
+                Spacer(Modifier.width(14.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = output.name,
+                        style = MaterialTheme.typography.titleSmall,
+                        color = if (selected) OutputAccent else MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text = stringResource(outputSubtitle(output.kind)),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                if (selected) {
+                    Icon(
+                        imageVector = Icons.Rounded.CheckCircle,
+                        contentDescription = null,
+                        tint = OutputAccent,
+                    )
+                }
+            }
+            if (index != outputs.lastIndex) {
+                Spacer(Modifier.height(8.dp))
+            }
         }
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(8.dp))
     }
+}
+
+private fun outputSubtitle(kind: OutputKind): Int = when (kind) {
+    OutputKind.PHONE_SPEAKER -> R.string.output_kind_phone
+    OutputKind.WIRED -> R.string.output_kind_wired
+    OutputKind.USB -> R.string.output_kind_usb
+    OutputKind.BLUETOOTH -> R.string.output_kind_bluetooth
 }
 
 internal val OutputAccent = Color(0xFFB9A8FF)

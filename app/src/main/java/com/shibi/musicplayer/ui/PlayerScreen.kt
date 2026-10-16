@@ -14,20 +14,18 @@ import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Bluetooth
 import androidx.compose.material.icons.rounded.Headphones
@@ -77,7 +75,9 @@ import com.shibi.musicplayer.domain.ArtTile
 import com.shibi.musicplayer.domain.OutputKind
 import com.shibi.musicplayer.domain.PlaybackTime
 import com.shibi.musicplayer.domain.TrackDisplay
+import com.shibi.musicplayer.domain.containsTamil
 import com.shibi.musicplayer.playback.PlayerUiState
+import com.shibi.musicplayer.ui.theme.NotoTamil
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -149,6 +149,7 @@ fun PlayerScreen(
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = Color.Transparent,
+                        scrolledContainerColor = Color.Transparent,
                         navigationIconContentColor = colorScheme.onBackground,
                     ),
                     navigationIcon = {
@@ -165,99 +166,115 @@ fun PlayerScreen(
                 )
             },
         ) { padding ->
-            Column(
+            BoxWithConstraints(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(padding)
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 28.dp),
-                horizontalAlignment = Alignment.Start,
+                    .padding(padding),
             ) {
-                Spacer(Modifier.height(8.dp))
-                Box(
-                    modifier = Modifier.fillMaxWidth(),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    AlbumArtwork(
-                        albumArtUri = state.albumArtUri,
-                        title = state.title,
-                        shape = RoundedCornerShape(28.dp),
-                        modifier = Modifier
-                            .fillMaxWidth(0.85f)
-                            .aspectRatio(1f)
-                            .shadow(
-                                elevation = 36.dp,
-                                shape = RoundedCornerShape(28.dp),
-                                ambientColor = glow,
-                                spotColor = glow,
-                            ),
-                    )
-                }
-                Spacer(Modifier.height(36.dp))
-                Text(
-                    text = TrackDisplay.title(state.title)
-                        .ifBlank { stringResource(R.string.nothing_playing) },
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = colorScheme.onBackground,
-                    maxLines = 1,
+                val artSize = minOf(maxWidth * 0.85f, maxHeight * 0.48f)
+                Column(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .basicMarquee(),
-                )
-                Spacer(Modifier.height(4.dp))
-                TrackDisplay.artist(state.artist)?.let { artist ->
-                    Text(
-                        text = artist,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-                Spacer(Modifier.height(28.dp))
-                SeekControl(
-                    positionMs = state.positionMs,
-                    durationMs = state.durationMs,
-                    enabled = state.hasMedia && state.durationMs > 0L,
-                    onSeek = onSeek,
-                )
-                Spacer(Modifier.height(20.dp))
-                TransportControls(
-                    isPlaying = state.isPlaying,
-                    hasMedia = state.hasMedia,
-                    hasNext = state.hasNext,
-                    hasPrevious = state.hasPrevious,
-                    onTogglePlayPause = onTogglePlayPause,
-                    onNext = onNext,
-                    onPrevious = onPrevious,
-                )
-                Spacer(Modifier.height(28.dp))
-                Surface(
-                    onClick = { showSheet = true },
-                    shape = CircleShape,
-                    color = Color.White.copy(alpha = 0.10f),
-                    contentColor = colorScheme.onBackground,
-                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f)),
+                        .fillMaxSize()
+                        .padding(horizontal = 28.dp),
+                    verticalArrangement = Arrangement.SpaceBetween,
+                    horizontalAlignment = Alignment.Start,
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.Start,
                     ) {
-                        Icon(
-                            imageVector = outputIcon(effective?.kind),
-                            contentDescription = null,
-                            tint = OutputAccent,
-                            modifier = Modifier.size(18.dp),
-                        )
-                        Spacer(Modifier.width(8.dp))
+                        Spacer(Modifier.height(8.dp))
+                        Box(
+                            modifier = Modifier.fillMaxWidth(),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            AlbumArtwork(
+                                albumArtUri = state.albumArtUri,
+                                title = state.title,
+                                shape = RoundedCornerShape(28.dp),
+                                modifier = Modifier
+                                    .size(artSize)
+                                    .shadow(
+                                        elevation = 36.dp,
+                                        shape = RoundedCornerShape(28.dp),
+                                        ambientColor = glow,
+                                        spotColor = glow,
+                                    ),
+                            )
+                        }
+                        Spacer(Modifier.height(28.dp))
+                        val titleText = TrackDisplay.title(state.title)
+                            .ifBlank { stringResource(R.string.nothing_playing) }
                         Text(
-                            text = effective?.name
-                                ?: stringResource(R.string.output_this_phone),
-                            style = MaterialTheme.typography.labelLarge,
+                            text = titleText,
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontFamily = if (containsTamil(titleText)) NotoTamil else null,
+                            color = colorScheme.onBackground,
+                            maxLines = 1,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .basicMarquee(),
                         )
+                        Spacer(Modifier.height(4.dp))
+                        TrackDisplay.artist(state.artist)?.let { artist ->
+                            Text(
+                                text = artist,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.Start,
+                    ) {
+                        SeekControl(
+                            positionMs = state.positionMs,
+                            durationMs = state.durationMs,
+                            enabled = state.hasMedia && state.durationMs > 0L,
+                            onSeek = onSeek,
+                        )
+                        Spacer(Modifier.height(20.dp))
+                        TransportControls(
+                            isPlaying = state.isPlaying,
+                            hasMedia = state.hasMedia,
+                            hasNext = state.hasNext,
+                            hasPrevious = state.hasPrevious,
+                            onTogglePlayPause = onTogglePlayPause,
+                            onNext = onNext,
+                            onPrevious = onPrevious,
+                        )
+                        Spacer(Modifier.height(24.dp))
+                        Surface(
+                            onClick = { showSheet = true },
+                            shape = CircleShape,
+                            color = Color.White.copy(alpha = 0.10f),
+                            contentColor = colorScheme.onBackground,
+                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f)),
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Icon(
+                                    imageVector = outputIcon(effective?.kind),
+                                    contentDescription = null,
+                                    tint = OutputAccent,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    text = effective?.name
+                                        ?: stringResource(R.string.output_this_phone),
+                                    style = MaterialTheme.typography.labelLarge,
+                                )
+                            }
+                        }
+                        Spacer(Modifier.height(24.dp))
                     }
                 }
-                Spacer(Modifier.height(24.dp))
             }
         }
     }
@@ -377,12 +394,12 @@ private fun TransportControls(
             Icon(
                 imageVector = Icons.Rounded.SkipPrevious,
                 contentDescription = stringResource(R.string.previous),
-                modifier = Modifier.size(40.dp),
+                modifier = Modifier.size(44.dp),
             )
         }
         Box(
             modifier = Modifier
-                .size(76.dp)
+                .size(80.dp)
                 .shadow(16.dp, CircleShape, spotColor = colorScheme.primary)
                 .background(colorScheme.primary, CircleShape)
                 .clip(CircleShape)
@@ -402,7 +419,7 @@ private fun TransportControls(
                         if (playing) R.string.pause else R.string.play,
                     ),
                     tint = colorScheme.onPrimary,
-                    modifier = Modifier.size(40.dp),
+                    modifier = Modifier.size(42.dp),
                 )
             }
         }
@@ -418,7 +435,7 @@ private fun TransportControls(
             Icon(
                 imageVector = Icons.Rounded.SkipNext,
                 contentDescription = stringResource(R.string.next),
-                modifier = Modifier.size(40.dp),
+                modifier = Modifier.size(44.dp),
             )
         }
     }

@@ -31,3 +31,5 @@ object TrackDisplay {
         return trimmed
     }
 }
+
+fun containsTamil(text: String): Boolean = text.any { it.code in 0x0B80..0x0BFF }

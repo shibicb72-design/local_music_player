@@ -5,12 +5,28 @@ import android.graphics.Canvas
 import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Shader
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.BottomSheetDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import coil3.annotation.ExperimentalCoilApi
 import coil3.asImage
@@ -30,7 +46,7 @@ import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
-@OptIn(ExperimentalTestApi::class, ExperimentalCoilApi::class)
+@OptIn(ExperimentalTestApi::class, ExperimentalCoilApi::class, ExperimentalMaterial3Api::class)
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35], qualifiers = "w411dp-h891dp-xxhdpi")
@@ -134,11 +150,45 @@ class ScreenshotTest {
     fun deviceSheet() {
         captureRoboImage("build/outputs/roborazzi/device_sheet.png") {
             MusicPlayerTheme {
-                OutputPickerContent(
-                    outputs = outputs,
-                    selectedId = MAJOR_V_ID,
-                    onSelect = {},
-                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black),
+                ) {
+                    PlayerScreen(
+                        state = englishState,
+                        onBack = {},
+                        onTogglePlayPause = {},
+                        onNext = {},
+                        onPrevious = {},
+                        onSeek = {},
+                        selectedOutputId = null,
+                        onSelectOutput = {},
+                        modifier = Modifier.graphicsLayer { alpha = 0.4f },
+                    )
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .align(Alignment.BottomCenter),
+                        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .navigationBarsPadding(),
+                        ) {
+                            BottomSheetDefaults.DragHandle(
+                                modifier = Modifier.align(Alignment.CenterHorizontally),
+                            )
+                            OutputPickerContent(
+                                outputs = outputs,
+                                selectedId = MAJOR_V_ID,
+                                onSelect = {},
+                            )
+                        }
+                    }
+                }
             }
         }
     }
@@ -156,7 +206,7 @@ class ScreenshotTest {
                         onTrackSelected = { _, _ -> },
                         onOpenPlayer = {},
                         onTogglePlayPause = {},
-                        modifier = Modifier.weight(0.45f),
+                        modifier = Modifier.weight(0.42f),
                     )
                     PlayerScreen(
                         state = playingState,
@@ -168,7 +218,10 @@ class ScreenshotTest {
                         selectedOutputId = null,
                         onSelectOutput = {},
                         showBack = false,
-                        modifier = Modifier.weight(0.55f),
+                        modifier = Modifier
+                            .weight(0.58f)
+                            .padding(12.dp)
+                            .clip(RoundedCornerShape(28.dp)),
                     )
                 }
             }

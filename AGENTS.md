@@ -72,6 +72,12 @@ After every task, append an entry below: `- [task] what went wrong -> new rule`.
 
 - [ticket V4] `SliderDefaults.Track` in material3 1.4.0 does expose `thumbTrackGapSize` and `drawStopIndicator`, so the ticket's fallback ("drop just those parameters") was never needed -> write the ticket's exact call and let the compiler confirm, rather than pre-emptively omitting parameters.
 
+- [ticket V5] Removing `CenterAlignedTopAppBar` from `LibraryScaffold` left the file's `@OptIn(ExperimentalMaterial3Api::class)` and its `CenterAlignedTopAppBar`/`ElevatedCard`/`LinearProgressIndicator` imports dangling; deleting an annotation/import as the last step of a rewrite is easy to forget -> after replacing a top-level composable, sweep the file for the deleted symbols' imports before building.
+
+- [ticket V5] `Modifier.animateItem()` is a `LazyItemScope` member, not a plain `Modifier` extension, so it only resolves inside the `items { }` lambda; passing it through as the row's `modifier` parameter keeps `TrackRow` reusable outside a lazy list -> apply list-item modifiers at the call site, not inside the child composable.
+
+- [ticket V5] `captureRoboImage("build/outputs/roborazzi/x.png")` from `app/src/test` writes to `app/build/outputs/roborazzi/x.png`, so the acceptance check must look in the module's `build/`, not the repo root's `build/` -> verify screenshot artifacts at `app\build\outputs\roborazzi\`.
+
 ## 6. Lessons learned
 - androidx.mediarouter's `MediaRouteChooserDialog` extends `androidx.appcompat.app.AppCompatDialog`, and mediarouter does not expose appcompat at compile time. Using mediarouter dialog classes requires `implementation(libs.androidx.appcompat)` in app/build.gradle.kts (catalog alias `androidx-appcompat`).
 - You cannot read the Gradle cache (~/.gradle/caches): OpenCode denies external directories and the run aborts. Do not try. Verify an API by compiling (gradlew.bat assembleDebug) instead.

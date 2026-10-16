@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Music Player</string>
-    <string name="library_title">Music</string>
+    <string name="library_title">Your music</string>
     <string name="player_title">Now playing</string>
     <string name="play">Play</string>
     <string name="pause">Pause</string>
@@ -24,4 +24,13 @@
     <string name="back">Back</string>
     <string name="choose_output">Choose audio output</string>
     <string name="output_this_phone">This phone</string>
+    <string name="play_on">Play on</string>
+    <string name="output_kind_phone">Phone speaker</string>
+    <string name="output_kind_wired">Wired</string>
+    <string name="output_kind_usb">USB</string>
+    <string name="output_kind_bluetooth">Bluetooth</string>
+    <plurals name="song_count">
+        <item quantity="one">%d song</item>
+        <item quantity="other">%d songs</item>
+    </plurals>
 </resources>

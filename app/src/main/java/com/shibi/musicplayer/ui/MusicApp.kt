@@ -3,10 +3,12 @@ package com.shibi.musicplayer.ui
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.VerticalDivider
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -40,9 +42,8 @@ fun MusicApp(
                     onOpenPlayer = {},
                     onTogglePlayPause = playerViewModel::togglePlayPause,
                     showMiniPlayer = false,
-                    modifier = Modifier.weight(0.45f),
+                    modifier = Modifier.weight(0.42f),
                 )
-                VerticalDivider()
                 PlayerScreen(
                     state = playerState,
                     onBack = {},
@@ -53,7 +54,10 @@ fun MusicApp(
                     selectedOutputId = selectedOutputId,
                     onSelectOutput = playerViewModel::setOutputDevice,
                     showBack = false,
-                    modifier = Modifier.weight(0.55f),
+                    modifier = Modifier
+                        .weight(0.58f)
+                        .padding(12.dp)
+                        .clip(RoundedCornerShape(28.dp)),
                 )
             }
         } else {
