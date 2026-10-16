@@ -3,12 +3,12 @@
 ## 1. Project map
 - Single module `:app`, package `com.shibi.musicplayer` (minSdk 26, targetSdk 36). Kotlin + Jetpack Compose (Material 3) + Media3.
 - `MainActivity.kt`: entry point, `setContent { MusicPlayerTheme { MusicApp() } }`.
-- `domain/`: pure Kotlin logic (`PlaybackQueue`, `PlaybackTime`, `Track`), unit-tested.
+- `domain/`: pure Kotlin logic (`PlaybackQueue`, `PlaybackTime`, `Track`, `AudioOutputs`), unit-tested.
 - `library/`: `MusicRepository` (MediaStore) and `LibraryViewModel`.
-- `playback/`: `PlaybackService` (MediaSessionService), `PlayerViewModel`, `PlayerUiState`, `TrackMediaItems`, `OutputSwitcher` (audio output picker).
-- `ui/`: `MusicApp` (navigation), `LibraryScreen`, `PlayerScreen`, `AlbumArtwork`, `AudioPermission`, `theme/Theme.kt`.
+- `playback/`: `PlaybackService` (MediaSessionService), `PlayerViewModel`, `PlayerUiState`, `TrackMediaItems`, `OutputCommands`.
+- `ui/`: `MusicApp` (navigation), `LibraryScreen`, `PlayerScreen`, `AlbumArtwork`, `AudioPermission`, `OutputPickerSheet` (audio output picker), `theme/Theme.kt`.
 - Tests: `app/src/test/java/com/shibi/musicplayer/` (plain JUnit 4, no Robolectric).
-- Libraries (gradle/libs.versions.toml): AGP 9.4.0, Kotlin 2.4.10, core-ktx 1.18.0, appcompat 1.7.1, activity-compose 1.13.0, lifecycle 2.10.0, Compose BOM 2026.06.01, navigation 2.9.8, media3 1.11.1, mediarouter 1.8.1, coil 3.5.0, coroutines 1.11.0, junit 4.13.2.
+- Libraries (gradle/libs.versions.toml): AGP 9.4.0, Kotlin 2.4.10, core-ktx 1.18.0, activity-compose 1.13.0, lifecycle 2.10.0, Compose BOM 2026.06.01, navigation 2.9.8, media3 1.11.1, coil 3.5.0, coroutines 1.11.0, junit 4.13.2.
 - Style: 4-space indent, trailing commas, one composable per concern, private helper composables, user-facing text in `res/values/strings.xml` via `stringResource`, dependencies only through the version catalog (`libs.*`).
 
 ## 2. Definition of done
@@ -37,6 +37,8 @@ After every task, append an entry below: `- [task] what went wrong -> new rule`.
 - [ticket D3] Assumed the callback was the nested `AudioManager.AudioDeviceCallback`, but compileSdk 36 exposes `android.media.AudioDeviceCallback` as a top-level class and the first build failed -> resolve the exact FQN of any framework class with `javap -classpath $ANDROID_HOME/platforms/<sdk>/android.jar` before referencing it.
 
 - [ticket D3] Wrote `AudioManager.AudioDeviceCallback`; first local build failed -> `AudioDeviceCallback` is top-level `android.media.AudioDeviceCallback`.
+
+- [ticket D4] Removed the mediarouter/appcompat catalog entries only after `rg` confirmed no remaining `androidx.mediarouter`/`androidx.appcompat` imports in app/src; `assembleDebug test` stayed green with zero `w:` -> delete a dependency only after an import sweep plus a full build, never on the assumption the last user was the obvious one.
 
 ## 6. Lessons learned
 - androidx.mediarouter's `MediaRouteChooserDialog` extends `androidx.appcompat.app.AppCompatDialog`, and mediarouter does not expose appcompat at compile time. Using mediarouter dialog classes requires `implementation(libs.androidx.appcompat)` in app/build.gradle.kts (catalog alias `androidx-appcompat`).
