@@ -72,10 +72,8 @@ import com.shibi.musicplayer.R
 import com.shibi.musicplayer.domain.PlaybackTime
 import com.shibi.musicplayer.domain.Track
 import com.shibi.musicplayer.domain.TrackDisplay
-import com.shibi.musicplayer.domain.containsTamil
 import com.shibi.musicplayer.library.LibraryViewModel
 import com.shibi.musicplayer.playback.PlayerUiState
-import com.shibi.musicplayer.ui.theme.NotoTamil
 import com.shibi.musicplayer.ui.theme.Spacing
 
 @Composable
@@ -217,46 +215,58 @@ fun LibraryContent(
         onTogglePlayPause = onTogglePlayPause,
         modifier = modifier,
     ) { padding ->
-        LazyColumn(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
                 .windowInsetsPadding(
                     WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal),
                 ),
-            contentPadding = PaddingValues(bottom = contentBottomPadding),
         ) {
-            item {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .statusBarsPadding()
-                        .padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 8.dp),
-                ) {
-                    Text(
-                        text = stringResource(R.string.library_title),
-                        style = MaterialTheme.typography.headlineMedium,
-                        color = MaterialTheme.colorScheme.onBackground,
-                    )
-                    Text(
-                        text = pluralStringResource(
-                            R.plurals.song_count,
-                            tracks.size,
-                            tracks.size,
-                        ),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-            items(tracks, key = { it.id }) { track ->
-                TrackRow(
-                    track = track,
-                    isPlaying = nowPlaying.currentMediaId == track.id.toString(),
-                    onClick = { onTrackSelected(tracks, track.id) },
-                    onAddToPlaylist = { onAddToPlaylist(track) },
-                    modifier = Modifier.animateItem(),
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 8.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.library_title),
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = MaterialTheme.colorScheme.onBackground,
                 )
+                Text(
+                    text = pluralStringResource(
+                        R.plurals.song_count,
+                        tracks.size,
+                        tracks.size,
+                    ),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (tracks.isEmpty()) {
+                MessagePane(
+                    message = stringResource(R.string.empty_library),
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp),
+                )
+            } else {
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(bottom = contentBottomPadding),
+                ) {
+                    items(tracks, key = { it.id }) { track ->
+                        TrackRow(
+                            track = track,
+                            isPlaying = nowPlaying.currentMediaId == track.id.toString(),
+                            onClick = { onTrackSelected(tracks, track.id) },
+                            onAddToPlaylist = { onAddToPlaylist(track) },
+                            modifier = Modifier.animateItem(),
+                        )
+                    }
+                }
             }
         }
     }
@@ -323,18 +333,11 @@ private fun TrackRow(
                 .weight(1f)
                 .padding(horizontal = Spacing.md),
         ) {
-            Text(
+            TrackTitle(
                 text = title,
                 style = MaterialTheme.typography.titleMedium,
-                fontFamily = if (containsTamil(title)) NotoTamil else null,
                 fontWeight = FontWeight.SemiBold,
-                color = if (isPlaying) {
-                    Color(0xFFB9A8FF)
-                } else {
-                    MaterialTheme.colorScheme.onSurface
-                },
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+                color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
                 text = TrackDisplay.artist(track.artist) ?: stringResource(R.string.missing_artist),
@@ -435,6 +438,7 @@ internal fun NowPlayingBar(
     onOpen: () -> Unit,
     onTogglePlayPause: () -> Unit,
     padForNavigationBars: Boolean = true,
+    bottomPadding: Dp = Spacing.sm,
 ) {
     val progress = if (state.durationMs > 0L) {
         (state.positionMs.toFloat() / state.durationMs).coerceIn(0f, 1f)
@@ -448,7 +452,7 @@ internal fun NowPlayingBar(
                 WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal),
             )
             .then(if (padForNavigationBars) Modifier.navigationBarsPadding() else Modifier)
-            .padding(start = Spacing.sm, end = Spacing.sm, bottom = Spacing.sm),
+            .padding(start = Spacing.sm, end = Spacing.sm, bottom = bottomPadding),
     ) {
         Surface(
             onClick = onOpen,
@@ -494,13 +498,11 @@ internal fun NowPlayingBar(
                     ) {
                         val title = TrackDisplay.title(state.title)
                             .ifBlank { stringResource(R.string.nothing_playing) }
-                        Text(
+                        TrackTitle(
                             text = title,
                             style = MaterialTheme.typography.titleSmall,
-                            fontFamily = if (containsTamil(title)) NotoTamil else null,
                             fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
+                            color = MaterialTheme.colorScheme.onSurface,
                         )
                         Text(
                             text = TrackDisplay.artist(state.artist)

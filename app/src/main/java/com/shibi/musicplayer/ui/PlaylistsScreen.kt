@@ -12,9 +12,11 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -28,6 +30,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -41,6 +44,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -50,11 +54,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.shibi.musicplayer.R
 import com.shibi.musicplayer.domain.Track
-import com.shibi.musicplayer.domain.containsTamil
 import com.shibi.musicplayer.playlist.PlaylistSummary
 import com.shibi.musicplayer.playlist.PlaylistViewModel
-import com.shibi.musicplayer.ui.theme.Base4
-import com.shibi.musicplayer.ui.theme.NotoTamil
 import com.shibi.musicplayer.ui.theme.Secondary
 import com.shibi.musicplayer.ui.theme.TextHigh
 
@@ -226,13 +227,10 @@ private fun PlaylistCard(
                     .aspectRatio(1f),
             )
             Spacer(Modifier.height(10.dp))
-            Text(
+            TrackTitle(
                 text = card.name,
                 style = MaterialTheme.typography.titleSmall,
-                fontFamily = if (containsTamil(card.name)) NotoTamil else null,
                 color = TextHigh,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
             )
             Text(
                 text = pluralStringResource(R.plurals.song_count, card.songCount, card.songCount),
@@ -249,35 +247,65 @@ internal fun ArtCollage(
     titles: List<String>,
     modifier: Modifier = Modifier,
 ) {
-    Column(
+    val shown = titles.filter { it.isNotBlank() }
+    Box(
         modifier = modifier.clip(RoundedCornerShape(14.dp)),
     ) {
-        repeat(2) { row ->
-            Row(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
-            ) {
-                repeat(2) { column ->
-                    val title = titles.getOrNull(row * 2 + column)
-                    if (title.isNullOrBlank()) {
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxSize()
-                                .background(Base4),
-                        )
-                    } else {
-                        GeneratedArtTile(
-                            title = title,
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxSize(),
-                        )
+        when (shown.size) {
+            0 -> EmptyPlaylistCover(Modifier.fillMaxSize())
+            1 -> GeneratedArtTile(shown[0], Modifier.fillMaxSize())
+            2 -> Row(modifier = Modifier.fillMaxSize()) {
+                GeneratedArtTile(shown[0], Modifier.weight(1f).fillMaxHeight())
+                GeneratedArtTile(
+                    shown[1],
+                    Modifier.weight(1f).fillMaxHeight().offset(x = (-1).dp),
+                )
+            }
+            3 -> Row(modifier = Modifier.fillMaxSize()) {
+                GeneratedArtTile(shown[0], Modifier.weight(1f).fillMaxHeight())
+                Column(modifier = Modifier.weight(1f).fillMaxHeight().offset(x = (-1).dp)) {
+                    GeneratedArtTile(shown[1], Modifier.weight(1f).fillMaxWidth())
+                    GeneratedArtTile(
+                        shown[2],
+                        Modifier.weight(1f).fillMaxWidth().offset(y = (-1).dp),
+                    )
+                }
+            }
+            else -> Column(modifier = Modifier.fillMaxSize()) {
+                repeat(2) { row ->
+                    Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                        repeat(2) { column ->
+                            GeneratedArtTile(
+                                title = shown[row * 2 + column],
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight()
+                                    .offset(x = if (column == 1) (-1).dp else 0.dp, y = if (row == 1) (-1).dp else 0.dp),
+                            )
+                        }
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun EmptyPlaylistCover(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier.background(
+            Brush.linearGradient(
+                colors = listOf(Color(0xFF6E4EF0), Color(0xFF2A2158)),
+            ),
+        ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = Icons.Rounded.MusicNote,
+            contentDescription = null,
+            tint = Color.White,
+            modifier = Modifier.fillMaxSize(0.36f),
+        )
     }
 }
 

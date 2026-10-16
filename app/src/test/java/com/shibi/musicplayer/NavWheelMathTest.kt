@@ -93,6 +93,22 @@ class NavWheelMathTest {
     }
 
     @Test
+    fun rimMarksRotateWithTheWheelAndMatchItemOrder() {
+        assertEquals(0f, math.rimOffsetDegrees(0, 60, 0f), 0.001f)
+        assertEquals(6f, math.rimOffsetDegrees(1, 60, 0f), 0.001f)
+        assertEquals(-90f, math.rimOffsetDegrees(0, 60, 1f), 0.001f)
+        assertEquals(math.offsetDegrees(0, 0.5f), math.rimOffsetDegrees(0, 4, 0.5f), 0.001f)
+        assertEquals(math.offsetDegrees(2, 0.25f), math.rimOffsetDegrees(2, 4, 0.25f), 0.001f)
+    }
+
+    @Test
+    fun rimMarksRejectAnEmptyRim() {
+        assertThrows(IllegalArgumentException::class.java) {
+            math.rimOffsetDegrees(0, 0, 0f)
+        }
+    }
+
+    @Test
     fun positionPutsZeroDegreesAtTheTopAndPositiveDegreesClockwise() {
         val top = math.position(0f, 100f)
         val right = math.position(90f, 100f)

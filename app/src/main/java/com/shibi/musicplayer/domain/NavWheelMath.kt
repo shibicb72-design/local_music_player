@@ -69,6 +69,19 @@ class NavWheelMath(val itemCount: Int) {
         return 1f - eased * (1f - MIN_ALPHA)
     }
 
+    /**
+     * Degrees of rim mark [index] out of [count], spinning with [rotation] the same
+     * way the items do. Index 0 sits at the top when [rotation] is 0.
+     */
+    fun rimOffsetDegrees(index: Int, count: Int, rotation: Float): Float {
+        require(count >= 1) { "A rim needs at least one mark" }
+        var degrees = index * (360f / count) - rotation * stepDegrees
+        degrees %= 360f
+        if (degrees > 180f) degrees -= 360f
+        if (degrees <= -180f) degrees += 360f
+        return degrees
+    }
+
     fun position(offsetDegrees: Float, radius: Float): WheelPoint {
         val radians = offsetDegrees * (PI.toFloat() / 180f)
         return WheelPoint(
@@ -89,8 +102,8 @@ class NavWheelMath(val itemCount: Int) {
     }
 
     companion object {
-        const val MIN_SCALE = 0.62f
-        const val MIN_ALPHA = 0.40f
+        const val MIN_SCALE = 0.70f
+        const val MIN_ALPHA = 0.75f
         const val MAX_FLING_ITEMS = 2.5f
         const val FLING_COAST_SECONDS = 0.25f
     }

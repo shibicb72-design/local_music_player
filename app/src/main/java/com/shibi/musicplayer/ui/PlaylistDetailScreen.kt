@@ -1,5 +1,6 @@
 package com.shibi.musicplayer.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -69,13 +70,10 @@ import com.shibi.musicplayer.R
 import com.shibi.musicplayer.domain.PlaylistOrder
 import com.shibi.musicplayer.domain.Track
 import com.shibi.musicplayer.domain.TrackDisplay
-import com.shibi.musicplayer.domain.containsTamil
 import com.shibi.musicplayer.playlist.PlaylistViewModel
 import com.shibi.musicplayer.ui.theme.Base0
 import com.shibi.musicplayer.ui.theme.Base3
 import com.shibi.musicplayer.ui.theme.Error
-import com.shibi.musicplayer.ui.theme.NotoTamil
-import com.shibi.musicplayer.ui.theme.Secondary
 import com.shibi.musicplayer.ui.theme.TextHigh
 import com.shibi.musicplayer.ui.theme.TextMed
 import kotlin.math.abs
@@ -234,13 +232,10 @@ internal fun PlaylistDetailContent(
                 )
             }
             Column(modifier = Modifier.weight(1f)) {
-                Text(
+                TrackTitle(
                     text = name,
                     style = MaterialTheme.typography.headlineSmall,
-                    fontFamily = if (containsTamil(name)) NotoTamil else null,
                     color = TextHigh,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
                 )
                 Text(
                     text = pluralStringResource(R.plurals.song_count, songs.size, songs.size),
@@ -308,6 +303,7 @@ internal fun PlaylistDetailContent(
                 enabled = canPlay,
                 modifier = Modifier.weight(1f),
                 shape = CircleShape,
+                border = BorderStroke(1.5.dp, Color.White.copy(alpha = 0.72f)),
                 colors = ButtonDefaults.outlinedButtonColors(
                     contentColor = TextHigh,
                     disabledContentColor = TextMed,
@@ -444,14 +440,11 @@ private fun PlaylistSongLine(
                     .weight(1f)
                     .padding(horizontal = 12.dp),
             ) {
-                Text(
-                    text = song.title,
+                TrackTitle(
+                    text = TrackDisplay.title(song.title),
                     style = MaterialTheme.typography.titleMedium,
-                    fontFamily = if (containsTamil(song.title)) NotoTamil else null,
                     fontWeight = FontWeight.SemiBold,
                     color = if (song.missing) TextMed else TextHigh,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
                 )
                 Text(
                     text = song.artist,

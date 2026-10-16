@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -90,6 +91,7 @@ fun OutputPickerSheet(
         sheetState = sheetState,
         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         contentColor = MaterialTheme.colorScheme.onSurface,
+        scrimColor = Color.Black.copy(alpha = 0.45f),
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
     ) {
         OutputPickerContent(
@@ -114,7 +116,9 @@ internal fun OutputPickerContent(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .navigationBarsPadding()
+            .padding(horizontal = 16.dp)
+            .padding(top = 8.dp, bottom = 24.dp),
     ) {
         Text(
             text = stringResource(R.string.play_on),
@@ -159,7 +163,7 @@ internal fun OutputPickerContent(
                     Text(
                         text = output.name,
                         style = MaterialTheme.typography.titleSmall,
-                        color = if (selected) OutputAccent else MaterialTheme.colorScheme.onSurface,
+                        color = if (selected) Color.White else MaterialTheme.colorScheme.onSurface,
                     )
                     Text(
                         text = stringResource(outputSubtitle(output.kind)),

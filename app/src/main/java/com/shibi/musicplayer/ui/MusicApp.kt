@@ -1,9 +1,12 @@
 package com.shibi.musicplayer.ui
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -20,9 +23,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.shibi.musicplayer.ui.theme.Base0
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
@@ -43,7 +50,7 @@ private const val PlayerRoute = "player"
 private const val PlaylistDetailRoute = "playlist/{playlistId}"
 private const val PlaylistIdArg = "playlistId"
 private val TwoPaneBreakpoint = 600.dp
-private val ListBottomPadding = 16.dp
+private val ListBottomPadding = 28.dp
 
 @Composable
 fun MusicApp(
@@ -113,12 +120,16 @@ fun MusicApp(
                     .weight(if (wide) 0.42f else 1f)
                     .fillMaxHeight(),
             ) {
-                NavHost(
-                    navController = navController,
-                    startDestination = SongsRoute,
+                val showWheel = wide || route != PlayerRoute
+                Box(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth(),
+                ) {
+                NavHost(
+                    navController = navController,
+                    startDestination = SongsRoute,
+                    modifier = Modifier.fillMaxSize(),
                 ) {
                     composable(SongsRoute) {
                         LibraryScreen(
@@ -179,10 +190,21 @@ fun MusicApp(
                                 onSeek = playerViewModel::seekTo,
                                 selectedOutputId = selectedOutputId,
                                 onSelectOutput = playerViewModel::setOutputDevice,
-                                includeNavigationBars = false,
                             )
                         }
                     }
+                }
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .height(36.dp)
+                            .background(
+                                Brush.verticalGradient(
+                                    listOf(Color.Transparent, Base0),
+                                ),
+                            ),
+                    )
                 }
                 if (showMini) {
                     NowPlayingBar(
@@ -193,18 +215,21 @@ fun MusicApp(
                         },
                         onTogglePlayPause = playerViewModel::togglePlayPause,
                         padForNavigationBars = false,
+                        bottomPadding = 16.dp,
                     )
                 }
-                NavWheel(
-                    selected = wheelSelection,
-                    onSelect = { destination -> onWheel(destination) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .windowInsetsPadding(
-                            WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal),
-                        )
-                        .navigationBarsPadding(),
-                )
+                if (showWheel) {
+                    NavWheel(
+                        selected = wheelSelection,
+                        onSelect = { destination -> onWheel(destination) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .windowInsetsPadding(
+                                WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal),
+                            )
+                            .navigationBarsPadding(),
+                    )
+                }
             }
             if (wide) {
                 PlayerScreen(
@@ -219,7 +244,7 @@ fun MusicApp(
                     showBack = false,
                     modifier = Modifier
                         .weight(0.58f)
-                        .padding(12.dp)
+                        .padding(16.dp)
                         .clip(RoundedCornerShape(28.dp)),
                 )
             }

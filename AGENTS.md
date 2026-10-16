@@ -93,6 +93,8 @@ After every task, append an entry below: `- [task] what went wrong -> new rule`.
 
 - [playlists and wheel] The dial stroke was white at 14% on `#0E0E12` (~1.5:1) and the viewport ended at the ±90° icons, so screenshots read as a bottom bar -> keep the ring near 3:1 (white ~42%, about 2.5dp) and leave arc below those icons so the circle curves back inward before the clip.
 
+- [playlists and wheel review] A stroked circle with icons sitting on the stroke still read as a bar, and Noto Tamil plus `TextOverflow.Ellipsis` drew two ellipsis marks -> draw a filled disc, put icons on an inner orbit, rotate rim ticks with `rimOffsetDegrees`, and append a single Jakarta ellipsis after measuring the line.
+
 ## 6. Lessons learned
 - androidx.mediarouter's `MediaRouteChooserDialog` extends `androidx.appcompat.app.AppCompatDialog`, and mediarouter does not expose appcompat at compile time. Using mediarouter dialog classes requires `implementation(libs.androidx.appcompat)` in app/build.gradle.kts (catalog alias `androidx-appcompat`).
 - You cannot read the Gradle cache (~/.gradle/caches): OpenCode denies external directories and the run aborts. Do not try. Verify an API by compiling (gradlew.bat assembleDebug) instead.
@@ -103,3 +105,5 @@ After every task, append an entry below: `- [task] what went wrong -> new rule`.
 - Room 2.8: `implementation(libs.androidx.room.runtime)` and `ksp(libs.androidx.room.compiler)`. Do not add `room-ktx`. KSP plugin: `com.google.devtools.ksp` version `2.3.12`.
 - `NavHost` destination `route` is the pattern string (`playlist/{playlistId}`), not the filled path.
 - A decorative stroke on `#0E0E12` needs about 40% white to reach ~3:1. White at 14% disappears.
+- Noto Sans Tamil has no ellipsis glyph. `TextOverflow.Ellipsis` on that family draws the mark twice. Measure the line and append one Jakarta `\u2026`, with `softWrap = false`.
+- Dial items sit on an inner orbit, inside the disc. A ring stroke through the icon centers reads as holes, not a knob. Rim ticks use `NavWheelMath.rimOffsetDegrees` so they spin with the drag.

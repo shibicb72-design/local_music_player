@@ -8,12 +8,10 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -38,6 +36,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -57,14 +56,12 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.shibi.musicplayer.R
 import com.shibi.musicplayer.domain.NavWheelMath
-import com.shibi.musicplayer.ui.theme.Accent
-import com.shibi.musicplayer.ui.theme.Base0
-import com.shibi.musicplayer.ui.theme.Secondary
 import com.shibi.musicplayer.ui.theme.TextHigh
 import com.shibi.musicplayer.ui.theme.TextMed
 import kotlin.math.PI
@@ -83,12 +80,14 @@ enum class WheelDestination(
     Devices(R.string.nav_devices, Icons.Rounded.Speaker),
 }
 
-internal val NavWheelHeight = 196.dp
+internal val NavWheelHeight = 228.dp
 
-private val IconSize = 52.dp
-private val IconCenterFromTop = 40.dp
-private val PreferredRadius = 92.dp
-private val RingStroke = 2.5.dp
+private val SelectedIconSize = 48.dp
+private val PreferredDiscRadius = 100.dp
+private val BottomMargin = 8.dp
+private val TopClearance = 16.dp
+private val RimTicks = 60
+private val SelectedFill = Color(0xFF6E4EF0)
 private val WheelSpring = spring<Float>(
     dampingRatio = Spring.DampingRatioLowBouncy,
     stiffness = Spring.StiffnessMedium,
@@ -97,7 +96,8 @@ private val WheelSpring = spring<Float>(
 private data class WheelLayout(
     val centerX: Float,
     val centerY: Float,
-    val radius: Float,
+    val discRadius: Float,
+    val itemRadius: Float,
     val iconRadius: Float,
     val arcPixels: Float,
 )
@@ -149,39 +149,98 @@ fun NavWheel(
         val density = LocalDensity.current
         val layout = with(density) {
             val widthPx = constraints.maxWidth.toFloat()
-            val iconRadius = IconSize.toPx() / 2f
-            val sideMargin = 16.dp.toPx()
-            val maxRadius = (widthPx / 2f - sideMargin - iconRadius).coerceAtLeast(iconRadius)
-            val radius = PreferredRadius.toPx().coerceAtMost(maxRadius)
-            val centerY = IconCenterFromTop.toPx() + radius
+            val heightPx = constraints.maxHeight.toFloat()
+            val iconRadius = SelectedIconSize.toPx() / 2f
+            val sideMargin = 18.dp.toPx()
+            val maxByWidth = (widthPx / 2f - sideMargin).coerceAtLeast(iconRadius * 2f)
+            val maxByHeight = (
+                (heightPx - TopClearance.toPx() - BottomMargin.toPx()) / 2f
+                ).coerceAtLeast(iconRadius * 2f)
+            val discRadius = PreferredDiscRadius.toPx().coerceAtMost(minOf(maxByWidth, maxByHeight))
+            val centerY = heightPx - BottomMargin.toPx() - discRadius
+            val itemRadius = discRadius * 0.70f
             WheelLayout(
                 centerX = widthPx / 2f,
                 centerY = centerY,
-                radius = radius,
+                discRadius = discRadius,
+                itemRadius = itemRadius,
                 iconRadius = iconRadius,
-                arcPixels = radius * (math.stepDegrees * PI.toFloat() / 180f),
+                arcPixels = itemRadius * (math.stepDegrees * PI.toFloat() / 180f),
             )
         }
         val layoutState = rememberUpdatedState(layout)
+        val labelWidth = with(density) { (layout.itemRadius * 1.35f).toDp() }
+        val labelTop = with(density) {
+            val rest = math.position(0f, layout.itemRadius)
+            (layout.centerY + rest.y + layout.iconRadius).toDp() + 6.dp
+        }
 
         Canvas(modifier = Modifier.fillMaxSize()) {
             val center = Offset(layout.centerX, layout.centerY)
             drawCircle(
-                color = Color.White.copy(alpha = 0.06f),
-                radius = layout.radius,
+                brush = Brush.radialGradient(
+                    colorStops = arrayOf(
+                        0f to Color(0xFF3A3A48),
+                        0.62f to Color(0xFF22222C),
+                        1f to Color(0xFF121218),
+                    ),
+                    center = Offset(center.x, center.y - layout.discRadius * 0.22f),
+                    radius = layout.discRadius * 1.15f,
+                ),
+                radius = layout.discRadius,
                 center = center,
             )
             drawCircle(
-                color = Color.White.copy(alpha = 0.42f),
-                radius = layout.radius,
+                brush = Brush.radialGradient(
+                    colorStops = arrayOf(
+                        0.62f to Color.Transparent,
+                        0.88f to Color.Black.copy(alpha = 0.18f),
+                        1f to Color.Black.copy(alpha = 0.62f),
+                    ),
+                    center = center,
+                    radius = layout.discRadius,
+                ),
+                radius = layout.discRadius,
                 center = center,
-                style = Stroke(width = RingStroke.toPx(), cap = StrokeCap.Round),
+            )
+            repeat(RimTicks) { index ->
+                val degrees = math.rimOffsetDegrees(index, RimTicks, rotationValue)
+                val major = index % 5 == 0
+                val inner = layout.discRadius * if (major) 0.86f else 0.91f
+                val outer = layout.discRadius * 0.97f
+                val start = math.position(degrees, inner)
+                val end = math.position(degrees, outer)
+                drawLine(
+                    color = Color.White.copy(alpha = if (major) 0.62f else 0.30f),
+                    start = Offset(center.x + start.x, center.y + start.y),
+                    end = Offset(center.x + end.x, center.y + end.y),
+                    strokeWidth = if (major) 2.dp.toPx() else 1.25.dp.toPx(),
+                    cap = StrokeCap.Round,
+                )
+            }
+            drawCircle(
+                color = Color.White.copy(alpha = 0.22f),
+                radius = layout.discRadius,
+                center = center,
+                style = Stroke(width = 1.5.dp.toPx()),
+            )
+            val marker = math.position(0f, layout.discRadius * 0.995f)
+            val markerCenter = Offset(center.x + marker.x, center.y + marker.y)
+            drawCircle(
+                color = SelectedFill.copy(alpha = 0.45f),
+                radius = 11.dp.toPx(),
+                center = markerCenter,
+            )
+            drawCircle(
+                color = Color.White,
+                radius = 4.dp.toPx(),
+                center = markerCenter,
             )
         }
 
         WheelDestination.entries.forEachIndexed { index, destination ->
             val offsetDegrees = math.offsetDegrees(index, rotationValue)
-            val point = math.position(offsetDegrees, layout.radius)
+            val point = math.position(offsetDegrees, layout.itemRadius)
             val scale = math.scale(offsetDegrees)
             val itemAlpha = math.alpha(offsetDegrees)
             val centered = index == selectedIndex
@@ -197,11 +256,11 @@ fun NavWheel(
                             (y - half).roundToInt(),
                         )
                     }
-                    .size(IconSize)
+                    .size(SelectedIconSize)
                     .graphicsLayer {
-                        scaleX = scale
-                        scaleY = scale
-                        alpha = itemAlpha
+                        scaleX = if (centered) 1f else scale
+                        scaleY = if (centered) 1f else scale
+                        alpha = if (centered) 1f else itemAlpha
                     }
                     .clip(CircleShape)
                     .semantics {
@@ -222,45 +281,34 @@ fun NavWheel(
                     },
                 contentAlignment = Alignment.Center,
             ) {
-                Canvas(modifier = Modifier.fillMaxSize()) {
-                    drawCircle(color = Base0)
-                    if (centered) drawCircle(color = Accent.copy(alpha = 0.22f))
+                if (centered) {
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        drawCircle(color = SelectedFill)
+                    }
                 }
                 Icon(
                     imageVector = destination.icon,
                     contentDescription = null,
-                    tint = if (centered) Secondary else TextMed,
-                    modifier = Modifier.size(26.dp),
+                    tint = if (centered) Color.White else TextMed,
+                    modifier = Modifier.size(if (centered) 26.dp else 22.dp),
                 )
             }
         }
 
-        Column(
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = TextHigh,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center,
             modifier = Modifier
                 .align(Alignment.TopCenter)
-                .padding(top = IconCenterFromTop + IconSize / 2 + 6.dp)
-                .padding(horizontal = 72.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = TextHigh,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Box(
-                modifier = Modifier
-                    .padding(top = 4.dp)
-                    .size(width = 22.dp, height = 3.dp)
-                    .clip(CircleShape),
-            ) {
-                Canvas(modifier = Modifier.fillMaxSize()) {
-                    drawRect(Secondary)
-                }
-            }
-        }
+                .offset(y = labelTop)
+                .size(width = labelWidth, height = 22.dp),
+        )
 
         Box(
             modifier = Modifier
@@ -350,7 +398,7 @@ private fun hitTest(
     var bestDistance = Float.MAX_VALUE
     val reach = layout.iconRadius * 1.45f
     for (index in 0 until math.itemCount) {
-        val point = math.position(math.offsetDegrees(index, rotation), layout.radius)
+        val point = math.position(math.offsetDegrees(index, rotation), layout.itemRadius)
         val distance = hypot(
             position.x - (layout.centerX + point.x),
             position.y - (layout.centerY + point.y),

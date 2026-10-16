@@ -84,7 +84,7 @@ import com.shibi.musicplayer.domain.PlaybackTime
 import com.shibi.musicplayer.domain.TrackDisplay
 import com.shibi.musicplayer.domain.containsTamil
 import com.shibi.musicplayer.playback.PlayerUiState
-import com.shibi.musicplayer.ui.theme.NotoTamil
+import com.shibi.musicplayer.ui.theme.TextHigh
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -136,8 +136,8 @@ fun PlayerScreen(
                 .fillMaxSize()
                 .background(
                     Brush.verticalGradient(
-                        0f to colorScheme.background.copy(alpha = 0.30f),
-                        0.45f to colorScheme.background.copy(alpha = 0.70f),
+                        0f to colorScheme.background.copy(alpha = 0.72f),
+                        0.45f to colorScheme.background.copy(alpha = 0.78f),
                         1f to colorScheme.background,
                     ),
                 ),
@@ -159,7 +159,7 @@ fun PlayerScreen(
                             text = stringResource(R.string.player_title).uppercase(),
                             style = MaterialTheme.typography.labelMedium,
                             letterSpacing = 2.sp,
-                            color = colorScheme.onSurfaceVariant,
+                            color = TextHigh,
                         )
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
@@ -195,7 +195,7 @@ fun PlayerScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(horizontal = 28.dp),
-                    horizontalAlignment = Alignment.Start,
+                    horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Spacer(Modifier.weight(1f))
                     Box(
@@ -219,16 +219,26 @@ fun PlayerScreen(
                     Spacer(Modifier.weight(1f))
                     val titleText = TrackDisplay.title(state.title)
                         .ifBlank { stringResource(R.string.nothing_playing) }
-                    Text(
-                        text = titleText,
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontFamily = if (containsTamil(titleText)) NotoTamil else null,
-                        color = colorScheme.onBackground,
-                        maxLines = 1,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .basicMarquee(),
-                    )
+                    if (containsTamil(titleText)) {
+                        TrackTitle(
+                            text = titleText,
+                            style = MaterialTheme.typography.headlineSmall,
+                            color = colorScheme.onBackground,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    } else {
+                        Text(
+                            text = titleText,
+                            style = MaterialTheme.typography.headlineSmall,
+                            color = colorScheme.onBackground,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .basicMarquee(),
+                        )
+                    }
                     Spacer(Modifier.height(4.dp))
                     TrackDisplay.artist(state.artist)?.let { artist ->
                         Text(
@@ -365,12 +375,12 @@ private fun SeekControl(
             Text(
                 text = PlaybackTime.format(shownPosition),
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = TextHigh,
             )
             Text(
                 text = PlaybackTime.format(durationMs),
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = TextHigh,
             )
         }
     }
@@ -393,7 +403,7 @@ private fun TransportControls(
     val skipButtonSize = if (compact) 36.dp else 44.dp
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceEvenly,
+        horizontalArrangement = Arrangement.spacedBy(28.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         IconButton(

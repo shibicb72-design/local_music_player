@@ -7,16 +7,20 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -37,13 +41,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.shibi.musicplayer.R
-import com.shibi.musicplayer.domain.containsTamil
 import com.shibi.musicplayer.ui.theme.Accent
-import com.shibi.musicplayer.ui.theme.Base0
-import com.shibi.musicplayer.ui.theme.NotoTamil
+import com.shibi.musicplayer.ui.theme.AccentContainer
+import com.shibi.musicplayer.ui.theme.Base4
+import com.shibi.musicplayer.ui.theme.OnAccentContainer
 import com.shibi.musicplayer.ui.theme.Outline
 import com.shibi.musicplayer.ui.theme.Secondary
 import com.shibi.musicplayer.ui.theme.TextHigh
@@ -66,6 +69,7 @@ fun AddToPlaylistSheet(
         sheetState = sheetState,
         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         contentColor = TextHigh,
+        scrimColor = Color.Black.copy(alpha = 0.72f),
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
     ) {
         AddToPlaylistContent(
@@ -104,7 +108,11 @@ internal fun AddToPlaylistContent(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .heightIn(max = 520.dp)
+            .verticalScroll(rememberScrollState())
+            .navigationBarsPadding()
+            .padding(horizontal = 16.dp)
+            .padding(top = 8.dp, bottom = 24.dp),
     ) {
         Text(
             text = stringResource(R.string.add_to_playlist),
@@ -112,13 +120,10 @@ internal fun AddToPlaylistContent(
             color = TextHigh,
             modifier = Modifier.padding(start = 8.dp),
         )
-        Text(
+        TrackTitle(
             text = trackTitle,
             style = MaterialTheme.typography.bodyMedium,
-            fontFamily = if (containsTamil(trackTitle)) NotoTamil else null,
             color = TextMed,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(start = 8.dp, top = 4.dp, bottom = 12.dp),
         )
         if (creating) {
@@ -126,7 +131,7 @@ internal fun AddToPlaylistContent(
                 value = draftName,
                 onValueChange = onDraftChange,
                 singleLine = true,
-                label = { Text(stringResource(R.string.playlist_name)) },
+                placeholder = { Text(stringResource(R.string.playlist_name)) },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 8.dp),
@@ -136,8 +141,8 @@ internal fun AddToPlaylistContent(
                     focusedBorderColor = Accent,
                     unfocusedBorderColor = Outline,
                     cursorColor = Secondary,
-                    focusedLabelColor = Secondary,
-                    unfocusedLabelColor = TextMed,
+                    focusedPlaceholderColor = TextMed,
+                    unfocusedPlaceholderColor = TextMed,
                 ),
             )
             Spacer(Modifier.height(12.dp))
@@ -145,13 +150,13 @@ internal fun AddToPlaylistContent(
                 onClick = onConfirmCreate,
                 enabled = draftName.isNotBlank(),
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp),
+                    .align(Alignment.End)
+                    .padding(end = 8.dp),
                 shape = CircleShape,
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = Color.White,
-                    contentColor = Base0,
-                    disabledContainerColor = Color.White.copy(alpha = 0.12f),
+                    containerColor = AccentContainer,
+                    contentColor = OnAccentContainer,
+                    disabledContainerColor = Base4,
                     disabledContentColor = TextMed,
                 ),
             ) {
@@ -195,16 +200,16 @@ internal fun AddToPlaylistContent(
                     .padding(12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                IconBadge(icon = Icons.AutoMirrored.Rounded.QueueMusic, filled = false)
+                ArtCollage(
+                    titles = playlist.coverTitles,
+                    modifier = Modifier.size(44.dp),
+                )
                 Spacer(Modifier.width(14.dp))
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
+                    TrackTitle(
                         text = playlist.name,
                         style = MaterialTheme.typography.titleSmall,
-                        fontFamily = if (containsTamil(playlist.name)) NotoTamil else null,
                         color = TextHigh,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
                     )
                     Text(
                         text = pluralStringResource(
@@ -218,7 +223,6 @@ internal fun AddToPlaylistContent(
                 }
             }
         }
-        Spacer(Modifier.height(8.dp))
     }
 }
 
