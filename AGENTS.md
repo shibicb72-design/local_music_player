@@ -30,6 +30,8 @@ After every task, append an entry below: `- [task] what went wrong -> new rule`.
 
 - [ticket A, ticket B] Tried to unzip media3 jars from the Gradle cache to check APIs; permission denied ended the run with no code written -> use the compiler, not the cache, to confirm APIs.
 
+- [ticket B] Was unsure whether `AudioRecordingCallback.onRecordingConfigChanged` takes `List` or `MutableList`; guessed `MutableList` for the platform-type override and it compiled on the first try -> for platform-type overrides, pick the idiomatic Kotlin type and let the compiler confirm, never inspect SDK caches.
+
 ## 6. Lessons learned
 - androidx.mediarouter's `MediaRouteChooserDialog` extends `androidx.appcompat.app.AppCompatDialog`, and mediarouter does not expose appcompat at compile time. Using mediarouter dialog classes requires `implementation(libs.androidx.appcompat)` in app/build.gradle.kts (catalog alias `androidx-appcompat`).
 - You cannot read the Gradle cache (~/.gradle/caches): OpenCode denies external directories and the run aborts. Do not try. Verify an API by compiling (gradlew.bat assembleDebug) instead.

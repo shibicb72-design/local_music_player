@@ -2,6 +2,10 @@ package com.shibi.musicplayer.playback
 
 import android.app.PendingIntent
 import android.content.Intent
+import android.media.AudioManager
+import android.media.AudioRecordingConfiguration
+import android.os.Handler
+import android.os.Looper
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.Player
@@ -14,6 +18,9 @@ import com.shibi.musicplayer.R
 
 class PlaybackService : MediaSessionService() {
     private var mediaSession: MediaSession? = null
+    private var audioRecordingCallback: AudioManager.AudioRecordingCallback? = null
+    private val micAutoPauseLogic = MicAutoPauseLogic()
+    private var micAutoPauseGuard = false
 
     override fun onCreate() {
         super.onCreate()
@@ -51,6 +58,30 @@ class PlaybackService : MediaSessionService() {
             .setId(SESSION_ID)
             .setSessionActivity(sessionActivity)
             .build()
+
+        player.addListener(
+            object : Player.Listener {
+                override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                    if (!micAutoPauseGuard && reason == Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST) {
+                        micAutoPauseLogic.onUserPlayPauseIntent()
+                    }
+                }
+            },
+        )
+
+        val callback = object : AudioManager.AudioRecordingCallback() {
+            override fun onRecordingConfigChanged(configs: MutableList<AudioRecordingConfiguration>) {
+                val activePlayer = mediaSession?.player ?: return
+                when (micAutoPauseLogic.onRecordingChanged(configs.isNotEmpty(), activePlayer.isPlaying)) {
+                    MicAutoPauseLogic.Action.PAUSE -> applyMicAutoPauseGuard { activePlayer.pause() }
+                    MicAutoPauseLogic.Action.RESUME -> applyMicAutoPauseGuard { activePlayer.play() }
+                    MicAutoPauseLogic.Action.NONE -> Unit
+                }
+            }
+        }
+        audioRecordingCallback = callback
+        getSystemService(AudioManager::class.java)
+            .registerAudioRecordingCallback(callback, Handler(Looper.getMainLooper()))
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = mediaSession
@@ -63,12 +94,25 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        audioRecordingCallback?.let { callback ->
+            getSystemService(AudioManager::class.java).unregisterAudioRecordingCallback(callback)
+        }
+        audioRecordingCallback = null
         mediaSession?.run {
             player.release()
             release()
         }
         mediaSession = null
         super.onDestroy()
+    }
+
+    private inline fun applyMicAutoPauseGuard(action: () -> Unit) {
+        micAutoPauseGuard = true
+        try {
+            action()
+        } finally {
+            micAutoPauseGuard = false
+        }
     }
 
     private companion object {
