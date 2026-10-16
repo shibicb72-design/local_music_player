@@ -1,6 +1,7 @@
 package com.shibi.musicplayer.playback
 
 data class PlayerUiState(
+    val currentMediaId: String? = null,
     val title: String = "",
     val artist: String = "",
     val albumArtUri: String? = null,

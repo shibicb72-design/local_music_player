@@ -12,6 +12,7 @@
     <string name="nothing_playing">Nothing playing</string>
     <string name="unknown_title">Unknown title</string>
     <string name="unknown_artist">Unknown artist</string>
+    <string name="missing_artist">—</string>
     <string name="unknown_album">Unknown album</string>
     <string name="permission_title">Music access needed</string>
     <string name="permission_body">Allow access to audio files so this player can list the music stored on this device.</string>

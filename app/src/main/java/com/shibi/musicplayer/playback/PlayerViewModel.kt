@@ -162,6 +162,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         val count = player.mediaItemCount
         val metadata = player.mediaMetadata
         _uiState.value = PlayerUiState(
+            currentMediaId = player.currentMediaItem?.mediaId,
             title = metadata.title?.toString().orEmpty(),
             artist = metadata.artist?.toString().orEmpty(),
             albumArtUri = metadata.artworkUri?.toString(),

@@ -42,6 +42,8 @@ After every task, append an entry below: `- [task] what went wrong -> new rule`.
 
 - [ticket F] Redirected build output to $env:TEMP and then could not read it (external directory denied) -> keep build logs inside the repo's build/ folder or read the console output directly.
 
+- [ticket E2] First `assembleDebug test` printed no `w:` because Kotlin compile was partly UP-TO-DATE, so an incremental run cannot prove the warning bar -> after UI/API changes run `clean assembleDebug test` and grep the console for `^w:` before reporting "zero warnings".
+
 ## 6. Lessons learned
 - androidx.mediarouter's `MediaRouteChooserDialog` extends `androidx.appcompat.app.AppCompatDialog`, and mediarouter does not expose appcompat at compile time. Using mediarouter dialog classes requires `implementation(libs.androidx.appcompat)` in app/build.gradle.kts (catalog alias `androidx-appcompat`).
 - You cannot read the Gradle cache (~/.gradle/caches): OpenCode denies external directories and the run aborts. Do not try. Verify an API by compiling (gradlew.bat assembleDebug) instead.
