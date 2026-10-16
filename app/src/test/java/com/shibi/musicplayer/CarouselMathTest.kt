@@ -2,6 +2,7 @@ package com.shibi.musicplayer
 
 import com.shibi.musicplayer.domain.CarouselMath
 import kotlin.math.PI
+import kotlin.math.cos
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
@@ -90,19 +91,25 @@ class CarouselMathTest {
         assertEquals(1f, math.scale(front), 0.001f)
         assertEquals(1f, math.alpha(front), 0.001f)
         assertEquals(0f, math.shade(front), 0.001f)
+        assertEquals(0f, math.translationY(front, 10f), 0.001f)
 
         for (step in 0 until math.itemCount) {
             val right = math.offsetRadians(step, 0f)
             val left = math.offsetRadians(Math.floorMod(-step, math.itemCount), 0f)
             assertEquals(math.scale(right), math.scale(left), 0.001f)
             assertEquals(math.alpha(right), math.alpha(left), 0.001f)
+            assertEquals(math.translationY(right, 10f), math.translationY(left, 10f), 0.001f)
             assertEquals(
                 -math.translationX(right, radius),
                 math.translationX(left, radius),
                 0.01f,
             )
-            assertEquals(-math.rotationYDegrees(right), math.rotationYDegrees(left), 0.01f)
-            if (math.scale(right) < CarouselMath.VISIBLE_MIN_SCALE) {
+            if (step == 0 || step * 2 == math.itemCount) {
+                assertEquals(math.rotationYDegrees(right), math.rotationYDegrees(left), 0.01f)
+            } else {
+                assertEquals(-math.rotationYDegrees(right), math.rotationYDegrees(left), 0.01f)
+            }
+            if (cos(right) < CarouselMath.BACK_COS) {
                 assertEquals(0f, math.alpha(right), 0.001f)
                 assertEquals(0f, math.alpha(left), 0.001f)
             }
@@ -110,31 +117,38 @@ class CarouselMathTest {
 
         val right = math.offsetRadians(1, 0f)
         val left = math.offsetRadians(math.itemCount - 1, 0f)
-        assertTrue(math.scale(right) >= CarouselMath.VISIBLE_MIN_SCALE)
+        val side = (PI / 2.0).toFloat()
+        val expectedNeighborScale = 0.62f + 0.38f * ((cos(right) + 1f) / 2f)
+        assertEquals(expectedNeighborScale, math.scale(right), 0.001f)
         assertEquals(math.alpha(right), math.alpha(left), 0.001f)
-        assertEquals(1f, math.alpha(right), 0.001f)
+        assertTrue(math.alpha(right) > 0.8f)
         assertTrue(math.translationX(right, radius) > 0f)
         assertTrue(math.translationX(left, radius) < 0f)
-        assertTrue(math.scale(front) > math.scale(right))
-        assertEquals(CarouselMath.MIN_SCALE, math.scale((PI / 2.0).toFloat()), 0.001f)
-        assertTrue(math.scale((PI / 2.0).toFloat()) < CarouselMath.VISIBLE_MIN_SCALE)
-        assertEquals(0f, math.alpha((PI / 2.0).toFloat()), 0.001f)
-        assertEquals(0f, math.alpha((-PI / 2.0).toFloat()), 0.001f)
+        assertEquals(radius * kotlin.math.sin(right), math.translationX(right, radius), 0.01f)
+        assertEquals(0.81f, math.scale(side), 0.001f)
+        assertTrue(math.alpha(side) > 0.6f)
+        assertEquals(math.alpha(side), math.alpha(-side), 0.001f)
+        assertEquals(-10f, math.translationY(side, 10f), 0.001f)
+        assertEquals(0f, math.alpha((PI * 0.75).toFloat()), 0.001f)
+        assertEquals(0f, math.alpha(PI.toFloat()), 0.001f)
         assertTrue(math.shade(right) > math.shade(front))
+        assertEquals((1f - cos(side)) * CarouselMath.SHADE, math.shade(side), 0.001f)
         assertTrue(math.zIndex(front) > math.zIndex(right))
+        assertTrue(math.zIndex(right) > math.zIndex(side))
 
         val visible = (0 until math.itemCount).count { index ->
             math.alpha(math.offsetRadians(index, 0f)) > 0.01f
         }
-        assertEquals(3, visible)
+        assertEquals(5, visible)
     }
 
     @Test
-    fun rotationYTiltsSideItemsAwayFromTheCamera() {
+    fun rotationYFollowsNegativeAngleAndClamps() {
         assertEquals(0f, math.rotationYDegrees(0f), 0.001f)
-        assertTrue(math.rotationYDegrees(math.stepRadians) > 0f)
-        assertTrue(math.rotationYDegrees(-math.stepRadians) < 0f)
-        assertTrue(math.rotationYDegrees(math.stepRadians) < CarouselMath.TILT_DEGREES)
+        assertEquals(-27f, math.rotationYDegrees(math.stepRadians), 0.05f)
+        assertEquals(27f, math.rotationYDegrees(-math.stepRadians), 0.05f)
+        assertEquals(-40f, math.rotationYDegrees((PI / 2.0).toFloat()), 0.001f)
+        assertEquals(40f, math.rotationYDegrees(-(PI / 2.0).toFloat()), 0.001f)
     }
 
     @Test

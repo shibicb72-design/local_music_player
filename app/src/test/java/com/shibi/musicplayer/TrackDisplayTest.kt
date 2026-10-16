@@ -10,6 +10,15 @@ import org.junit.Test
 
 class TrackDisplayTest {
     @Test
+    fun title_keepsTheTamilSyllableInsteadOfRewritingIt() {
+        val raw = "\u0B8E\u0BA9\u0BCD\u0BA9\u0BC8 \u0B95\u0BCA\u0B9E\u0BCD\u0B9A\u0BAE\u0BCD.mp3"
+        val title = TrackDisplay.title(raw)
+        assertEquals("\u0B8E\u0BA9\u0BCD\u0BA9\u0BC8 \u0B95\u0BCA\u0B9E\u0BCD\u0B9A\u0BAE\u0BCD", title)
+        assertTrue(title.endsWith("\u0BAE\u0BCD"))
+        assertFalse(title.contains("\u0BAA"))
+    }
+
+    @Test
     fun title_stripsTrailingExtensionCaseInsensitively() {
         assertEquals("Song", TrackDisplay.title("Song.MP3"))
         assertEquals("Song", TrackDisplay.title("Song.mp3"))

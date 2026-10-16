@@ -71,6 +71,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.shibi.musicplayer.R
 import com.shibi.musicplayer.domain.CarouselMath
@@ -94,17 +95,17 @@ enum class NavSection(
     Settings(R.string.nav_settings, Icons.Rounded.Settings),
 }
 
-/** Tile ring only. Bottom inset padding sits under this so the pair stays compact. */
-internal val NavCarouselBodyHeight = 128.dp
+/** Tile ring only. The body grows with the tile; this is the phone-sized floor. */
+internal val NavCarouselBodyHeight = 156.dp
 
-/** Clearance between the ring and the navigation bar. */
+/** Clearance between the front label and the navigation-bar inset. */
 internal val NavCarouselBottomPadding = 8.dp
 
-/** Space under a song list so the last row clears the bottom fade. */
+/** Space under a song list so the last row clears the carousel. */
 internal val SongListBottomPadding = 36.dp
 
-/** Space under playlist cards so the last square clears the carousel. */
-internal val PlaylistListBottomPadding = 16.dp
+/** Space under playlist cards so the carousel does not cover the last square. */
+internal val PlaylistListBottomPadding = 36.dp
 
 /** Gap between the two-pane player card and the screen edge, past the nav inset. */
 internal val TwoPanePlayerBottomPadding = 48.dp
@@ -112,13 +113,12 @@ internal val TwoPanePlayerBottomPadding = 48.dp
 /** Air around the carousel when it sits in the two-pane list column. */
 internal val TwoPaneCarouselPadding = 16.dp
 
-private val TileSize = 60.dp
 private val TileCorner = 18.dp
-private val LabelGap = 4.dp
-private val LabelHeight = 16.dp
-private val RingSpanFraction = 0.825f
-private val RingEdgeMargin = 8.dp
-private val VerticalRadius = 26.dp
+private val LabelGap = 8.dp
+private val LabelHeight = 20.dp
+private val TopBreathing = 12.dp
+private val NeighborOverlap = 8.dp
+private val BackLift = 10.dp
 private val SelectedFill = Color(0xFF6E4EF0)
 private val TileShape = RoundedCornerShape(TileCorner)
 private val CarouselSpring = spring<Float>(
@@ -131,7 +131,7 @@ private data class CarouselLayout(
     val centerX: Float,
     val centerY: Float,
     val radius: Float,
-    val verticalRadius: Float,
+    val liftPx: Float,
     val tileRadius: Float,
     val labelExtent: Float,
 )
@@ -169,7 +169,6 @@ fun NavCarousel(
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(NavCarouselBodyHeight)
                 .semantics {
                     role = Role.Tab
                     contentDescription = label
@@ -177,35 +176,42 @@ fun NavCarousel(
         ) {
             val density = LocalDensity.current
             val densityScale = density.density
+            val tileSize = with(density) {
+                val widthPx = maxWidth.toPx()
+                val radius = widthPx * CarouselMath.RADIUS_FRACTION
+                val neighbor = radius * sin(math.stepRadians)
+                val scale45 = math.scale(math.stepRadians)
+                val overlap = NeighborOverlap.toPx()
+                ((2f * (neighbor + overlap)) / (1f + scale45))
+                    .coerceIn(72.dp.toPx(), 120.dp.toPx())
+                    .toDp()
+            }
             val layout = with(density) {
-                val tileRadius = TileSize.toPx() / 2f
+                val tileRadius = tileSize.toPx() / 2f
                 val labelExtent = (LabelGap + LabelHeight).toPx()
-                val verticalRadius = VerticalRadius.toPx()
+                val liftPx = BackLift.toPx()
                 val widthPx = constraints.maxWidth.toFloat()
-                val heightPx = constraints.maxHeight.toFloat()
-                val bottomPad = 4.dp.toPx()
-                val sideScale = math.scale(math.stepRadians)
-                val sideVisualRadius = tileRadius * sideScale
-                val sinStep = sin(math.stepRadians).coerceAtLeast(0.01f)
-                val margin = RingEdgeMargin.toPx()
-                val spanRadius = ((widthPx * RingSpanFraction) / 2f - sideVisualRadius) / sinStep
-                val maxRadius = ((widthPx / 2f) - margin - sideVisualRadius) / sinStep
+                val heightPx = (tileSize + TopBreathing + LabelGap + LabelHeight).toPx()
                 CarouselLayout(
                     centerX = widthPx / 2f,
-                    centerY = heightPx - bottomPad - labelExtent - tileRadius - verticalRadius,
-                    radius = min(spanRadius, maxRadius).coerceAtLeast(tileRadius),
-                    verticalRadius = verticalRadius,
+                    centerY = heightPx - labelExtent - tileRadius,
+                    radius = widthPx * CarouselMath.RADIUS_FRACTION,
+                    liftPx = liftPx,
                     tileRadius = tileRadius,
                     labelExtent = labelExtent,
                 )
             }
             val layoutState = rememberUpdatedState(layout)
-
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(tileSize + TopBreathing + LabelGap + LabelHeight),
+            ) {
             Canvas(modifier = Modifier.fillMaxSize().zIndex(0.4f)) {
-                // A short floor under the front tile. The side tiles sit out near the edges.
-                val floorY = layout.centerY + layout.verticalRadius + layout.tileRadius * 0.92f
-                val rx = min(layout.radius * sin(math.stepRadians) * 0.62f, size.width * 0.22f)
-                val ry = 18.dp.toPx()
+                // Floor sits on the front tile, above the label.
+                val floorY = layout.centerY + layout.tileRadius * 0.72f
+                val rx = min(layout.radius * sin(math.stepRadians) * 0.55f, size.width * 0.28f)
+                val ry = 12.dp.toPx()
                 drawOval(
                     brush = Brush.radialGradient(
                         0f to Color.White.copy(alpha = 0.28f),
@@ -229,23 +235,26 @@ fun NavCarousel(
                 val centered = index == selectedIndex
                 val itemLabel = stringResource(section.labelRes)
                 val shiftX = math.translationX(offset, layout.radius)
-                val shiftY = math.translationY(offset, layout.verticalRadius)
-                val tile = TileSize * scale
+                val shiftY = math.translationY(offset, layout.liftPx)
                 Box(
                     modifier = Modifier
                         .zIndex(depth + 1f)
                         .offset {
-                            val half = layout.tileRadius * scale
                             IntOffset(
-                                (layout.centerX - half).roundToInt(),
-                                (layout.centerY - half).roundToInt(),
+                                (layout.centerX - layout.tileRadius).roundToInt(),
+                                (layout.centerY - layout.tileRadius).roundToInt(),
                             )
                         }
-                        .size(tile)
+                        .size(tileSize)
                         .graphicsLayer {
                             translationX = shiftX
                             translationY = shiftY
+                            scaleX = scale
+                            scaleY = scale
                             alpha = itemAlpha
+                            rotationY = math.rotationYDegrees(offset)
+                            cameraDistance = 12f * densityScale
+                            transformOrigin = TransformOrigin.Center
                         }
                         .semantics {
                             role = Role.Tab
@@ -272,11 +281,6 @@ fun NavCarousel(
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .graphicsLayer {
-                                rotationY = math.rotationYDegrees(offset)
-                                cameraDistance = 10f * densityScale
-                                transformOrigin = TransformOrigin.Center
-                            }
                             .shadow(
                                 elevation = if (centered) 16.dp else 6.dp,
                                 shape = TileShape,
@@ -311,14 +315,14 @@ fun NavCarousel(
                         imageVector = section.icon,
                         contentDescription = null,
                         tint = if (centered) Color.White else Color.White.copy(alpha = 0.92f),
-                        modifier = Modifier.size(26.dp * scale),
+                        modifier = Modifier.size(tileSize * 0.38f),
                     )
                 }
             }
 
             Text(
                 text = label,
-                style = MaterialTheme.typography.labelSmall,
+                fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onBackground,
                 maxLines = 1,
@@ -328,8 +332,7 @@ fun NavCarousel(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .zIndex(7f)
-                    .padding(bottom = 2.dp)
-                    .width(148.dp)
+                    .width(160.dp)
                     .height(LabelHeight),
             )
 
@@ -419,6 +422,7 @@ fun NavCarousel(
                         }
                     },
             )
+            }
         }
         Box(modifier = Modifier.height(NavCarouselBottomPadding))
     }
@@ -437,9 +441,9 @@ private fun hitTest(
     for (index in 0 until math.itemCount) {
         val offset = math.offsetRadians(index, rotation)
         val scale = math.scale(offset)
-        if (scale < CarouselMath.VISIBLE_MIN_SCALE || math.alpha(offset) < 0.12f) continue
+        if (math.alpha(offset) < 0.12f) continue
         val pointX = layout.centerX + math.translationX(offset, layout.radius)
-        val pointY = layout.centerY + math.translationY(offset, layout.verticalRadius)
+        val pointY = layout.centerY + math.translationY(offset, layout.liftPx)
         val dx = abs(x - pointX)
         val dy = y - pointY
         val halfW = layout.tileRadius * scale * 1.35f

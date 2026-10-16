@@ -1,5 +1,6 @@
 package com.shibi.musicplayer.domain
 
+import java.lang.Math.toDegrees
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.roundToInt
@@ -8,14 +9,10 @@ import kotlin.math.sin
 /**
  * Geometry for the bottom carousel.
  *
- * Eight items sit on a horizontal ring seen from above. Rotation is in item
- * units (1f moves by one item). Angle 0 is the front of the ring. Positive
- * angles run to the right. Screen Y grows downward, so the front item sits
- * lower than the sides.
- *
- * Scale, alpha, and horizontal position are mirror-symmetric about the front.
- * At rest the front tile and its two neighbors are visible. Anything below
- * [VISIBLE_MIN_SCALE] (the back of the ring) is alpha 0, on both sides.
+ * Eight items sit 45° apart on a ring. Angle 0 is the front. Positive angles
+ * run to the right. Every pose is an odd or even function of that angle, so
+ * the left side mirrors the right. The back of the ring (cos θ < -0.1) is
+ * hidden. Screen Y grows downward; a negative Y offset lifts a tile.
  */
 class CarouselMath(val itemCount: Int) {
     init {
@@ -68,37 +65,44 @@ class CarouselMath(val itemCount: Int) {
     /** 1 at the front, -1 at the back. */
     fun depth(offsetRadians: Float): Float = cos(offsetRadians)
 
-    /** Front is lower on the screen (positive Y). */
-    fun translationY(offsetRadians: Float, verticalRadius: Float): Float =
-        verticalRadius * cos(offsetRadians)
+    /**
+     * 0 at the front. Back tiles move up by [liftPx] times `(1 - cos θ)`.
+     * [liftPx] is the 10dp rise, in pixels.
+     */
+    fun translationY(offsetRadians: Float, liftPx: Float): Float =
+        -(1f - cos(offsetRadians)) * liftPx
 
-    /** 1 at the front, [MIN_SCALE] once an item reaches the side or passes behind it. */
+    /** 1 at the front, 0.81 at ±90°, 0.62 at the back. */
     fun scale(offsetRadians: Float): Float {
-        val facing = depth(offsetRadians).coerceAtLeast(0f)
+        val facing = (cos(offsetRadians) + 1f) / 2f
         return MIN_SCALE + (1f - MIN_SCALE) * facing
     }
 
     /**
-     * 0 once [scale] drops below [VISIBLE_MIN_SCALE], otherwise a symmetric fade
-     * up to 1. `alpha(angle) == alpha(-angle)` for every angle.
+     * 0 when `cos θ < -0.1`. Otherwise a mirror-symmetric fade from 0.35 at the
+     * back of the visible arc to 1 at the front.
      */
     fun alpha(offsetRadians: Float): Float {
-        val size = scale(offsetRadians)
-        if (size < VISIBLE_MIN_SCALE) return 0f
-        return ((size - VISIBLE_MIN_SCALE) / ALPHA_FADE_SPAN).coerceIn(0f, 1f)
+        val facing = cos(offsetRadians)
+        if (facing < BACK_COS) return 0f
+        val t = (facing + 1f) / 2f
+        return MIN_ALPHA + (1f - MIN_ALPHA) * t
     }
 
-    /** 0 at the front, up to [SHADE] for a tile that has turned away. */
-    fun shade(offsetRadians: Float): Float {
-        val facing = depth(offsetRadians).coerceAtLeast(0f)
-        return (1f - facing) * SHADE
-    }
+    /** Background darkening, 0 at the front and proportional to `(1 - cos θ)`. */
+    fun shade(offsetRadians: Float): Float =
+        ((1f - cos(offsetRadians)) * SHADE).coerceIn(0f, 1f)
 
     fun zIndex(offsetRadians: Float): Float = depth(offsetRadians)
 
-    /** Cylinder tilt in degrees. Items on the right turn their right edge away. */
-    fun rotationYDegrees(offsetRadians: Float): Float =
-        sin(offsetRadians) * TILT_DEGREES
+    /**
+     * `-θ * 0.6` degrees, clamped to ±[MAX_TILT_DEGREES]. Positive θ (the right
+     * side) tilts negatively.
+     */
+    fun rotationYDegrees(offsetRadians: Float): Float {
+        val degrees = toDegrees(offsetRadians.toDouble()).toFloat()
+        return (-degrees * TILT_PER_DEGREE).coerceIn(-MAX_TILT_DEGREES, MAX_TILT_DEGREES)
+    }
 
     /**
      * 1:1 drag along the ring. [deltaPx] is a finger movement (or a velocity in
@@ -113,10 +117,12 @@ class CarouselMath(val itemCount: Int) {
     }
 
     companion object {
-        const val MIN_SCALE = 0.65f
-        const val VISIBLE_MIN_SCALE = 0.70f
-        const val ALPHA_FADE_SPAN = 0.08f
-        const val SHADE = 0.35f
-        const val TILT_DEGREES = 48f
+        const val MIN_SCALE = 0.62f
+        const val MIN_ALPHA = 0.35f
+        const val BACK_COS = -0.1f
+        const val SHADE = 0.55f
+        const val TILT_PER_DEGREE = 0.6f
+        const val MAX_TILT_DEGREES = 40f
+        const val RADIUS_FRACTION = 0.36f
     }
 }

@@ -4,7 +4,6 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -145,16 +144,9 @@ internal fun PlaylistsContent(
                 )
             }
         } else {
-            BoxWithConstraints(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                val columns = playlistColumnCount(
-                    widthDp = maxWidth.value,
-                    heightDp = maxHeight.value,
-                    cardCount = cards.size,
-                    bottomPaddingDp = contentBottomPadding.value,
-                )
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(columns),
-                    modifier = Modifier.fillMaxSize(),
+            LazyVerticalGrid(
+                    columns = GridCells.Adaptive(minSize = 150.dp),
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
                     contentPadding = PaddingValues(
                         start = 20.dp,
                         end = 20.dp,
@@ -167,7 +159,6 @@ internal fun PlaylistsContent(
                         PlaylistCard(card = card, onClick = { onOpen(card.id) })
                     }
                 }
-            }
         }
     }
 }
@@ -258,39 +249,6 @@ private fun PlaylistCard(
 }
 
 private val NewPlaylist = Color(0xFFB9A8FF)
-
-/**
- * Column count for the square playlist grid. Starts from the width (2 on a
- * phone, 3 from 520dp) and drops a column when that grid would
- * leave a large empty band under the cards. Fewer columns make the squares
- * larger, so the same covers fill the height instead of sitting in a hole.
- */
-internal fun playlistColumnCount(
-    widthDp: Float,
-    heightDp: Float,
-    cardCount: Int,
-    bottomPaddingDp: Float,
-): Int {
-    if (cardCount <= 0 || widthDp <= 0f) return 1
-    val maxColumns = when {
-        widthDp >= 520f -> 3
-        else -> 2
-    }.coerceAtMost(cardCount)
-    fun contentHeight(columns: Int): Float {
-        val cell = (widthDp - 40f - 12f * (columns - 1)) / columns
-        val card = cell + 56f
-        val rows = (cardCount + columns - 1) / columns
-        return card * rows + 12f * (rows - 1).coerceAtLeast(0)
-    }
-    var columns = maxColumns
-    while (columns > 1) {
-        val slack = heightDp - bottomPaddingDp - contentHeight(columns)
-        if (slack <= 96f) break
-        val fewerSlack = heightDp - bottomPaddingDp - contentHeight(columns - 1)
-        if (fewerSlack < slack) columns -= 1 else break
-    }
-    return columns
-}
 
 @Composable
 internal fun ArtCollage(
