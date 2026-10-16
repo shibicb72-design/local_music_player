@@ -353,11 +353,13 @@ private fun EmptyState(
 fun SettingsScreen(
     darkTheme: Boolean,
     onDarkThemeChange: (Boolean) -> Unit,
+    contentBottomPadding: Dp = 0.dp,
     modifier: Modifier = Modifier,
 ) {
     SettingsContent(
         darkTheme = darkTheme,
         onDarkThemeChange = onDarkThemeChange,
+        contentBottomPadding = contentBottomPadding,
         modifier = modifier,
     )
 }
@@ -366,12 +368,13 @@ fun SettingsScreen(
 internal fun SettingsContent(
     darkTheme: Boolean,
     onDarkThemeChange: (Boolean) -> Unit,
+    contentBottomPadding: Dp = 0.dp,
     modifier: Modifier = Modifier,
 ) {
     SectionFrame(
         title = stringResource(R.string.settings_title),
         subtitle = stringResource(R.string.settings_about),
-        modifier = modifier,
+        modifier = modifier.padding(bottom = contentBottomPadding),
     ) {
         Surface(
             modifier = Modifier

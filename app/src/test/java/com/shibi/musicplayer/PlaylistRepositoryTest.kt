@@ -162,6 +162,28 @@ class PlaylistRepositoryTest {
     }
 
     @Test
+    fun likingStoresLikedAtAndPlayingIncrementsPlayCount() = runBlocking {
+        assertEquals(0, repository.stats(8L).playCount)
+        repository.recordPlay(8L)
+        repository.recordPlay(8L)
+        now = 5_000L
+        repository.setFavorite(8L, true)
+
+        val liked = repository.stats(8L)
+        assertTrue(liked.favorite)
+        assertEquals(5_000L, liked.likedAt)
+        assertEquals(2, liked.playCount)
+        assertEquals(setOf(8L), repository.favoriteIds.first())
+
+        repository.setFavorite(8L, false)
+        val unliked = repository.stats(8L)
+        assertFalse(unliked.favorite)
+        assertNull(unliked.likedAt)
+        assertEquals(2, unliked.playCount)
+        assertFalse(repository.favoriteIds.first().contains(8L))
+    }
+
+    @Test
     fun recentPlaysKeepsTheNewestFiftyDistinctSongs() = runBlocking {
         repeat(55) { index ->
             now = 1_000L + index

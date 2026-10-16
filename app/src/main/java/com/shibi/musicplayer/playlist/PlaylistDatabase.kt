@@ -16,7 +16,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         RecentSearchEntity::class,
         AppSettingsEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = false,
 )
 abstract class PlaylistDatabase : RoomDatabase() {
@@ -26,7 +26,7 @@ abstract class PlaylistDatabase : RoomDatabase() {
         @Volatile
         private var instance: PlaylistDatabase? = null
 
-        private val MIGRATION_1_2 = object : Migration(1, 2) {
+        internal val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(
                     "CREATE TABLE IF NOT EXISTS `favorites` (" +
@@ -50,7 +50,7 @@ abstract class PlaylistDatabase : RoomDatabase() {
             }
         }
 
-        private val MIGRATION_2_3 = object : Migration(2, 3) {
+        internal val MIGRATION_2_3 = object : Migration(2, 3) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(
                     "CREATE TABLE IF NOT EXISTS `recent_searches` (" +
@@ -61,13 +61,22 @@ abstract class PlaylistDatabase : RoomDatabase() {
             }
         }
 
+        internal val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `favorites` ADD COLUMN `likedAt` INTEGER")
+                db.execSQL(
+                    "ALTER TABLE `favorites` ADD COLUMN `playCount` INTEGER NOT NULL DEFAULT 0",
+                )
+            }
+        }
+
         fun get(context: Context): PlaylistDatabase {
             return instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
                     context.applicationContext,
                     PlaylistDatabase::class.java,
                     "playlists.db",
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                     .build()
                     .also { instance = it }
             }

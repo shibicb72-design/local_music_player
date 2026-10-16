@@ -1,12 +1,19 @@
 package com.shibi.musicplayer.playlist
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
+/**
+ * One row per song the listener has liked or played. [likedAt] and [playCount]
+ * are stored for a future like-weighted shuffle; that shuffle is not implemented.
+ */
 @Entity(tableName = "favorites")
 data class FavoriteEntity(
     @PrimaryKey val trackId: Long,
     val favorite: Boolean,
+    val likedAt: Long? = null,
+    @ColumnInfo(defaultValue = "0") val playCount: Int = 0,
 )
 
 @Entity(tableName = "recent_plays")

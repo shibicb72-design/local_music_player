@@ -35,15 +35,20 @@ import coil3.compose.LocalAsyncImagePreviewHandler
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.shibi.musicplayer.domain.AudioOutput
 import com.shibi.musicplayer.domain.OutputKind
+import com.shibi.musicplayer.domain.RouteIcon
+import com.shibi.musicplayer.domain.RoutePresentation
 import com.shibi.musicplayer.domain.Track
 import com.shibi.musicplayer.domain.TrackDisplay
 import com.shibi.musicplayer.playback.PlayerUiState
 import com.shibi.musicplayer.ui.AddToPlaylistContent
 import com.shibi.musicplayer.ui.FavoritesContent
 import com.shibi.musicplayer.ui.LibraryContent
+import com.shibi.musicplayer.ui.MiniPlayerCarouselGap
 import com.shibi.musicplayer.ui.NavCarousel
 import com.shibi.musicplayer.ui.NavSection
 import com.shibi.musicplayer.ui.NowPlayingBar
+import com.shibi.musicplayer.ui.SectionScaffold
+import com.shibi.musicplayer.ui.SettingsContent
 import com.shibi.musicplayer.ui.OutputPickerContent
 import com.shibi.musicplayer.ui.OutputScrim
 import com.shibi.musicplayer.ui.TwoPaneCarouselPadding
@@ -386,6 +391,167 @@ class ScreenshotTest {
     }
 
     @Test
+    fun miniPlayerOnSongs() {
+        captureRoboImage("build/outputs/roborazzi/mini_player_songs.png") {
+            MusicPlayerTheme {
+                SongsWithCarousel(tracks, NavSection.Songs)
+            }
+        }
+    }
+
+    @Test
+    fun miniPlayerOnPlaylists() {
+        captureRoboImage("build/outputs/roborazzi/mini_player_playlists.png") {
+            MusicPlayerTheme {
+                SectionScaffold(
+                    modifier = Modifier.fillMaxSize(),
+                    showMiniPlayer = true,
+                    showCarousel = true,
+                    contentBottomPadding = PlaylistListBottomPadding,
+                    miniPlayer = {
+                        MiniBar(longState, carRoute, liked = true)
+                    },
+                    carousel = {
+                        NavCarousel(selected = NavSection.Playlists, onSelect = {})
+                    },
+                ) { bottom ->
+                    PlaylistsContent(
+                        cards = playlistCards,
+                        onOpen = {},
+                        onCreate = {},
+                        contentBottomPadding = bottom,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
+    fun miniPlayerOnSettings() {
+        captureRoboImage("build/outputs/roborazzi/mini_player_settings.png") {
+            MusicPlayerTheme {
+                SectionScaffold(
+                    modifier = Modifier.fillMaxSize(),
+                    showMiniPlayer = true,
+                    showCarousel = true,
+                    contentBottomPadding = SongListBottomPadding,
+                    miniPlayer = {
+                        MiniBar(playingState, headphonesRoute, liked = false)
+                    },
+                    carousel = {
+                        NavCarousel(selected = NavSection.Settings, onSelect = {})
+                    },
+                ) { bottom ->
+                    SettingsContent(
+                        darkTheme = true,
+                        onDarkThemeChange = {},
+                        contentBottomPadding = bottom,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
+    fun miniPlayerPhoneUnliked() = captureRoute("mini_player_phone_unliked.png", phoneRoute, liked = false)
+
+    @Test
+    fun miniPlayerPhoneLiked() = captureRoute("mini_player_phone_liked.png", phoneRoute, liked = true)
+
+    @Test
+    fun miniPlayerCarUnliked() = captureRoute("mini_player_car_unliked.png", carRoute, liked = false)
+
+    @Test
+    fun miniPlayerCarLiked() = captureRoute("mini_player_car_liked.png", carRoute, liked = true)
+
+    @Test
+    fun miniPlayerHeadphonesUnliked() =
+        captureRoute("mini_player_headphones_unliked.png", headphonesRoute, liked = false)
+
+    @Test
+    fun miniPlayerHeadphonesLiked() =
+        captureRoute("mini_player_headphones_liked.png", headphonesRoute, liked = true)
+
+    @Test
+    @Config(qualifiers = "w900dp-h600dp-xhdpi")
+    fun twoPaneMiniPlayer() {
+        captureRoboImage("build/outputs/roborazzi/two_pane_mini.png") {
+            MusicPlayerTheme {
+                Row(modifier = Modifier.fillMaxSize()) {
+                    SectionScaffold(
+                        modifier = Modifier.weight(0.42f).fillMaxSize(),
+                        showMiniPlayer = true,
+                        showCarousel = true,
+                        contentBottomPadding = SongListBottomPadding,
+                        miniPlayer = {
+                            MiniBar(longState, carRoute, liked = true)
+                        },
+                        carousel = {
+                            NavCarousel(
+                                selected = NavSection.Songs,
+                                onSelect = {},
+                                modifier = Modifier.padding(
+                                    top = TwoPaneCarouselPadding,
+                                    bottom = TwoPaneCarouselPadding,
+                                ),
+                            )
+                        },
+                    ) { bottom ->
+                        LibraryContent(
+                            tracks = tracks,
+                            nowPlaying = longState,
+                            showMiniPlayer = false,
+                            onTrackSelected = { _, _ -> },
+                            onOpenPlayer = {},
+                            onTogglePlayPause = {},
+                            favoriteIds = setOf(2L),
+                            contentBottomPadding = bottom,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
+                    Box(modifier = Modifier.weight(0.58f).fillMaxSize())
+                }
+            }
+        }
+    }
+
+    @Composable
+    private fun MiniBar(
+        state: PlayerUiState,
+        route: RoutePresentation,
+        liked: Boolean,
+    ) {
+        NowPlayingBar(
+            state = state,
+            onOpen = {},
+            onTogglePlayPause = {},
+            route = route,
+            isFavorite = liked,
+            padForNavigationBars = false,
+            bottomPadding = MiniPlayerCarouselGap,
+        )
+    }
+
+    private fun captureRoute(fileName: String, route: RoutePresentation, liked: Boolean) {
+        val state = if (route.icon == RouteIcon.PHONE) playingState else longState
+        captureRoboImage("build/outputs/roborazzi/$fileName") {
+            MusicPlayerTheme {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color(0xFF0E0E12)),
+                ) {
+                    Column(modifier = Modifier.align(Alignment.BottomCenter)) {
+                        MiniBar(state, route, liked)
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
     fun search() {
         captureRoboImage("build/outputs/roborazzi/search.png") {
             MusicPlayerTheme {
@@ -413,33 +579,43 @@ class ScreenshotTest {
     }
 
     @Composable
-    private fun SongsWithCarousel(library: List<Track>, selected: NavSection) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            Box(modifier = Modifier.weight(1f)) {
-                LibraryContent(
-                    tracks = library,
-                    nowPlaying = if (library.isEmpty()) PlayerUiState() else playingState,
-                    showMiniPlayer = false,
-                    onTrackSelected = { _, _ -> },
-                    onOpenPlayer = {},
-                    onTogglePlayPause = {},
-                    favoriteIds = if (library.isEmpty()) emptySet() else setOf(8L),
-                    contentBottomPadding = SongListBottomPadding,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            }
-            if (library.isNotEmpty()) {
+    private fun SongsWithCarousel(
+        library: List<Track>,
+        selected: NavSection,
+        route: RoutePresentation = RoutePresentation.phone(),
+        liked: Boolean = false,
+        nowPlaying: PlayerUiState = if (library.isEmpty()) PlayerUiState() else playingState,
+    ) {
+        SectionScaffold(
+            modifier = Modifier.fillMaxSize(),
+            showMiniPlayer = nowPlaying.hasMedia,
+            showCarousel = true,
+            contentBottomPadding = SongListBottomPadding,
+            miniPlayer = {
                 NowPlayingBar(
-                    state = playingState,
+                    state = nowPlaying,
                     onOpen = {},
                     onTogglePlayPause = {},
+                    route = route,
+                    isFavorite = liked,
                     padForNavigationBars = false,
-                    bottomPadding = 12.dp,
+                    bottomPadding = MiniPlayerCarouselGap,
                 )
-            }
-            NavCarousel(
-                selected = selected,
-                onSelect = {},
+            },
+            carousel = {
+                NavCarousel(selected = selected, onSelect = {})
+            },
+        ) { bottom ->
+            LibraryContent(
+                tracks = library,
+                nowPlaying = nowPlaying,
+                showMiniPlayer = false,
+                onTrackSelected = { _, _ -> },
+                onOpenPlayer = {},
+                onTogglePlayPause = {},
+                favoriteIds = if (library.isEmpty()) emptySet() else setOf(8L),
+                contentBottomPadding = bottom,
+                modifier = Modifier.fillMaxSize(),
             )
         }
     }
@@ -513,6 +689,27 @@ class ScreenshotTest {
             hasMedia = true,
             hasNext = true,
             hasPrevious = true,
+        )
+
+        val longState = playingState.copy(
+            title = "Why Do We Fall From The Dark Knight Rises Original Motion Picture Score",
+            artist = "Hans Zimmer, James Newton Howard",
+        )
+
+        val phoneRoute = RoutePresentation.phone()
+
+        val carRoute = RoutePresentation(
+            icon = RouteIcon.CAR,
+            deviceName = "HandsFreeLink",
+            showDeviceName = true,
+            showBluetoothGlyph = true,
+        )
+
+        val headphonesRoute = RoutePresentation(
+            icon = RouteIcon.HEADPHONES,
+            deviceName = "WH-1000XM5",
+            showDeviceName = true,
+            showBluetoothGlyph = true,
         )
 
         val englishState = PlayerUiState(

@@ -113,6 +113,9 @@ internal val TwoPanePlayerBottomPadding = 48.dp
 /** Air around the carousel when it sits in the two-pane list column. */
 internal val TwoPaneCarouselPadding = 16.dp
 
+/** Space between the mini player and the top of the carousel. */
+internal val MiniPlayerCarouselGap = 12.dp
+
 private val TileCorner = 18.dp
 private val LabelGap = 8.dp
 private val LabelHeight = 20.dp
