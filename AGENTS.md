@@ -44,6 +44,12 @@ After every task, append an entry below: `- [task] what went wrong -> new rule`.
 
 - [ticket E2] First `assembleDebug test` printed no `w:` because Kotlin compile was partly UP-TO-DATE, so an incremental run cannot prove the warning bar -> after UI/API changes run `clean assembleDebug test` and grep the console for `^w:` before reporting "zero warnings".
 
+- [ticket E3] Wrote `palette.vibrant ?: palette.dominant` straight from the ticket wording; the Android `androidx.palette.graphics.Palette` API exposes the getters `vibrantSwatch`/`dominantSwatch`, so the first clean build failed with "Unresolved reference 'vibrant'" -> when a ticket paraphrases a library API, resolve the real accessor names (`vibrantSwatch`, `dominantSwatch`, `swatch.rgb`) before writing the call.
+
+- [ticket E3] Adding `TopAppBarDefaults.centerAlignedTopAppBarColors(...)` produced the only `w:` line of the clean build ("deprecated. Use topAppBarColors instead") -> in material3 1.4.0 use `TopAppBarDefaults.topAppBarColors(containerColor = ...)` for `CenterAlignedTopAppBar`.
+
+- [ticket E3] The value-based `Slider(value, ..., track = { SliderDefaults.Track(sliderState, modifier, enabled) })` overload is experimental; opted in defensively with `@OptIn(ExperimentalMaterial3Api::class)` on the helper and it compiled first try with no redundant-`@OptIn` warning -> Kotlin does not warn on a redundant `@OptIn`, so opting in up-front is a safe one-build strategy.
+
 ## 6. Lessons learned
 - androidx.mediarouter's `MediaRouteChooserDialog` extends `androidx.appcompat.app.AppCompatDialog`, and mediarouter does not expose appcompat at compile time. Using mediarouter dialog classes requires `implementation(libs.androidx.appcompat)` in app/build.gradle.kts (catalog alias `androidx-appcompat`).
 - You cannot read the Gradle cache (~/.gradle/caches): OpenCode denies external directories and the run aborts. Do not try. Verify an API by compiling (gradlew.bat assembleDebug) instead.
