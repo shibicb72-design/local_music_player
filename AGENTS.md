@@ -50,6 +50,10 @@ After every task, append an entry below: `- [task] what went wrong -> new rule`.
 
 - [ticket E3] The value-based `Slider(value, ..., track = { SliderDefaults.Track(sliderState, modifier, enabled) })` overload is experimental; opted in defensively with `@OptIn(ExperimentalMaterial3Api::class)` on the helper and it compiled first try with no redundant-`@OptIn` warning -> Kotlin does not warn on a redundant `@OptIn`, so opting in up-front is a safe one-build strategy.
 
+- [ticket E4] The ticket said to apply the new `modifier` parameter to each screen's `Scaffold`, but `PlayerScreen` wraps its `Scaffold` in a `Box`; a `RowScope.weight` applied to the inner `Scaffold` (a child of `Box`, not the `Row`) would be ignored -> apply layout-role modifiers like `weight` to the screen's outermost composable (`Box` for `PlayerScreen`, `Scaffold` for `LibraryScreen`), not an inner container.
+
+- [ticket E4] `rg` is not on PATH in this PowerShell shell, so the `rg '^w:'` warning sweep failed with CommandNotFound -> use `Select-String -Path build\e4-build.log -Pattern '^w:'` for the zero-warning check.
+
 ## 6. Lessons learned
 - androidx.mediarouter's `MediaRouteChooserDialog` extends `androidx.appcompat.app.AppCompatDialog`, and mediarouter does not expose appcompat at compile time. Using mediarouter dialog classes requires `implementation(libs.androidx.appcompat)` in app/build.gradle.kts (catalog alias `androidx-appcompat`).
 - You cannot read the Gradle cache (~/.gradle/caches): OpenCode denies external directories and the run aborts. Do not try. Verify an API by compiling (gradlew.bat assembleDebug) instead.

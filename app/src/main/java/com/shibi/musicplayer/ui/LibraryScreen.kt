@@ -75,6 +75,8 @@ fun LibraryScreen(
     onTrackSelected: (List<Track>, Long) -> Unit,
     onOpenPlayer: () -> Unit,
     onTogglePlayPause: () -> Unit,
+    showMiniPlayer: Boolean = true,
+    modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -101,13 +103,14 @@ fun LibraryScreen(
     }
 
     Scaffold(
+        modifier = modifier,
         topBar = {
             CenterAlignedTopAppBar(
                 title = { Text(stringResource(R.string.library_title)) },
             )
         },
         bottomBar = {
-            if (nowPlaying.hasMedia) {
+            if (showMiniPlayer && nowPlaying.hasMedia) {
                 NowPlayingBar(
                     state = nowPlaying,
                     onOpen = onOpenPlayer,

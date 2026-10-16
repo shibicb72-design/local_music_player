@@ -81,6 +81,8 @@ fun PlayerScreen(
     onSeek: (Long) -> Unit,
     selectedOutputId: Int?,
     onSelectOutput: (Int?) -> Unit,
+    showBack: Boolean = true,
+    modifier: Modifier = Modifier,
 ) {
     val backDescription = stringResource(R.string.back)
     val outputs by rememberAudioOutputs()
@@ -91,7 +93,7 @@ fun PlayerScreen(
         label = "artworkColor",
     )
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxSize()
             .background(
                 Brush.verticalGradient(
@@ -108,11 +110,13 @@ fun PlayerScreen(
                         containerColor = Color.Transparent,
                     ),
                     navigationIcon = {
-                        IconButton(onClick = onBack) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = backDescription,
-                            )
+                        if (showBack) {
+                            IconButton(onClick = onBack) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = backDescription,
+                                )
+                            }
                         }
                     },
                 )
