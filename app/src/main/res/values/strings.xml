@@ -21,4 +21,5 @@
     <string name="library_error">Could not read music from this device.</string>
     <string name="playback_channel_name">Playback</string>
     <string name="back">Back</string>
+    <string name="choose_output">Choose audio output</string>
 </resources>
