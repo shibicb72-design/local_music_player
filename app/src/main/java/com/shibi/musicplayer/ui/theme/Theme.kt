@@ -1,10 +1,13 @@
 package com.shibi.musicplayer.ui.theme
 
 import android.os.Build
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 
@@ -32,6 +35,13 @@ fun MusicPlayerTheme(content: @Composable () -> Unit) {
     }
     MaterialTheme(
         colorScheme = colorScheme,
-        content = content,
-    )
+    ) {
+        Surface(
+            color = colorScheme.background,
+            contentColor = colorScheme.onBackground,
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            content()
+        }
+    }
 }

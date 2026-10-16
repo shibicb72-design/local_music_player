@@ -103,11 +103,14 @@ fun PlayerScreen(
     ) {
         Scaffold(
             containerColor = Color.Transparent,
+            contentColor = colorScheme.onBackground,
             topBar = {
                 CenterAlignedTopAppBar(
                     title = { Text(stringResource(R.string.player_title)) },
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = Color.Transparent,
+                        titleContentColor = colorScheme.onBackground,
+                        navigationIconContentColor = colorScheme.onBackground,
                     ),
                     navigationIcon = {
                         if (showBack) {
