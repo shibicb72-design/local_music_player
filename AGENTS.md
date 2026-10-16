@@ -40,7 +40,11 @@ After every task, append an entry below: `- [task] what went wrong -> new rule`.
 
 - [ticket D4] Removed the mediarouter/appcompat catalog entries only after `rg` confirmed no remaining `androidx.mediarouter`/`androidx.appcompat` imports in app/src; `assembleDebug test` stayed green with zero `w:` -> delete a dependency only after an import sweep plus a full build, never on the assumption the last user was the obvious one.
 
+- [ticket F] Redirected build output to $env:TEMP and then could not read it (external directory denied) -> keep build logs inside the repo's build/ folder or read the console output directly.
+
 ## 6. Lessons learned
 - androidx.mediarouter's `MediaRouteChooserDialog` extends `androidx.appcompat.app.AppCompatDialog`, and mediarouter does not expose appcompat at compile time. Using mediarouter dialog classes requires `implementation(libs.androidx.appcompat)` in app/build.gradle.kts (catalog alias `androidx-appcompat`).
 - You cannot read the Gradle cache (~/.gradle/caches): OpenCode denies external directories and the run aborts. Do not try. Verify an API by compiling (gradlew.bat assembleDebug) instead.
 - `android.media.AudioDeviceCallback` is a top-level class (not nested in AudioManager). `AudioManager.AudioRecordingCallback` IS nested.
+- Only the repo directory is readable/writable for you. Never write or read files in %TEMP% or other outside paths; pipe Gradle output to the console or to build/.
+- Scaffold applies insets only to its content padding. Custom composables in bottomBar/topBar must handle navigation/status bar insets themselves (navigationBarsPadding()).
