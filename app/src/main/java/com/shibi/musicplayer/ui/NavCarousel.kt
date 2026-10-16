@@ -4,6 +4,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.exponentialDecay
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -44,6 +45,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -67,9 +71,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.shibi.musicplayer.R
 import com.shibi.musicplayer.domain.CarouselMath
+import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.cos
 import kotlin.math.hypot
 import kotlin.math.roundToInt
+import kotlin.math.sin
 import kotlinx.coroutines.launch
 
 enum class NavSection(
@@ -87,7 +94,7 @@ enum class NavSection(
 }
 
 /** Icon ring only. Bottom inset padding sits under this so the pair stays compact. */
-internal val NavCarouselBodyHeight = 112.dp
+internal val NavCarouselBodyHeight = 120.dp
 
 /** Clearance between the ring and the navigation bar. */
 internal val NavCarouselBottomPadding = 12.dp
@@ -95,7 +102,7 @@ internal val NavCarouselBottomPadding = 12.dp
 private val IconSize = 44.dp
 private val LabelBlock = 26.dp
 private val LabelGap = 4.dp
-private val VerticalRadius = 10.dp
+private val VerticalRadius = 34.dp
 private val SelectedFill = Color(0xFF6E4EF0)
 private val CarouselSpring = spring<Float>(
     dampingRatio = Spring.DampingRatioLowBouncy,
@@ -162,12 +169,28 @@ fun NavCarousel(
                 CarouselLayout(
                     centerX = widthPx / 2f,
                     centerY = heightPx - labelBlock - gap - verticalRadius - iconRadius,
-                    radius = (widthPx * 0.42f).coerceAtMost(180.dp.toPx()),
+                    radius = (widthPx * 0.30f).coerceAtMost(128.dp.toPx()),
                     verticalRadius = verticalRadius,
                     iconRadius = iconRadius,
                 )
             }
             val layoutState = rememberUpdatedState(layout)
+
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val path = Path()
+                val steps = 36
+                for (step in 0..steps) {
+                    val theta = (-PI / 2.0 + PI * step / steps).toFloat()
+                    val x = layout.centerX + sin(theta) * layout.radius * 0.94f
+                    val y = layout.centerY + cos(theta) * layout.verticalRadius
+                    if (step == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                }
+                drawPath(
+                    path = path,
+                    color = Color.White.copy(alpha = 0.38f),
+                    style = Stroke(width = 1.5.dp.toPx(), cap = StrokeCap.Round),
+                )
+            }
 
             NavSection.entries.forEachIndexed { index, section ->
                 val offset = math.offsetRadians(index, rotationValue)
@@ -247,7 +270,7 @@ fun NavCarousel(
                         } else {
                             MaterialTheme.colorScheme.onBackground
                         },
-                        modifier = Modifier.size(if (centered) 24.dp else 22.dp),
+                        modifier = Modifier.size(if (centered) 26.dp else 24.dp),
                     )
                 }
             }

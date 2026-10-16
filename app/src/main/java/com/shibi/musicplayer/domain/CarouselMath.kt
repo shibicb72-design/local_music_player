@@ -108,6 +108,6 @@ class CarouselMath(val itemCount: Int) {
         const val SCALE_GAMMA = 1.8f
         const val ALPHA_GAMMA = 0.8f
         const val HIDDEN_DEPTH = -0.30f
-        const val TILT_DEGREES = 46f
+        const val TILT_DEGREES = 32f
     }
 }
