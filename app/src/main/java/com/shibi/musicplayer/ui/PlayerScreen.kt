@@ -50,12 +50,12 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ScaffoldDefaults
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -93,7 +93,9 @@ import com.shibi.musicplayer.domain.ShuffleContext
 import com.shibi.musicplayer.domain.TrackDisplay
 import com.shibi.musicplayer.domain.containsTamil
 import com.shibi.musicplayer.playback.PlayerUiState
-import com.shibi.musicplayer.ui.theme.TextHigh
+import com.shibi.musicplayer.ui.background.ContrastSurface
+import com.shibi.musicplayer.ui.background.LocalBackgroundChrome
+import com.shibi.musicplayer.ui.theme.Base0
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -115,14 +117,21 @@ fun PlayerScreen(
     val backDescription = stringResource(R.string.back)
     val outputs by rememberAudioOutputs()
     var showSheet by remember { mutableStateOf(false) }
-    val colorScheme = MaterialTheme.colorScheme
+    val chrome = LocalBackgroundChrome.current
+    val paneColor = if (chrome.isLight) chrome.frost else Base0
     val glow = (
         rememberArtworkColor(state.albumArtUri)
             ?: Color(ArtTile.specFor(state.title).startArgb)
         ).copy(alpha = 0.9f)
     val effective = effectiveOutput(outputs, selectedOutputId)
 
-    Box(modifier = modifier.fillMaxSize()) {
+    ContrastSurface(
+        color = paneColor,
+        modifier = modifier.fillMaxSize(),
+    ) {
+        val onPane = LocalContentColor.current
+        val onPaneVariant = MaterialTheme.colorScheme.onSurfaceVariant
+        Box(modifier = Modifier.fillMaxSize()) {
         AlbumArtwork(
             albumArtUri = state.albumArtUri,
             title = state.title,
@@ -147,15 +156,15 @@ fun PlayerScreen(
                 .fillMaxSize()
                 .background(
                     Brush.verticalGradient(
-                        0f to colorScheme.background.copy(alpha = 0.72f),
-                        0.45f to colorScheme.background.copy(alpha = 0.78f),
-                        1f to colorScheme.background,
+                        0f to paneColor.copy(alpha = if (chrome.isLight) 0.38f else 0.72f),
+                        0.45f to paneColor.copy(alpha = if (chrome.isLight) 0.58f else 0.78f),
+                        1f to paneColor.copy(alpha = if (chrome.isLight) 0.82f else 1f),
                     ),
                 ),
         )
         Scaffold(
             containerColor = Color.Transparent,
-            contentColor = colorScheme.onBackground,
+            contentColor = onPane,
             contentWindowInsets = if (includeNavigationBars) {
                 ScaffoldDefaults.contentWindowInsets
             } else {
@@ -170,13 +179,14 @@ fun PlayerScreen(
                             text = stringResource(R.string.player_title).uppercase(),
                             style = MaterialTheme.typography.labelMedium,
                             letterSpacing = 2.sp,
-                            color = TextHigh,
+                            color = onPane,
                         )
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = Color.Transparent,
                         scrolledContainerColor = Color.Transparent,
-                        navigationIconContentColor = colorScheme.onBackground,
+                        navigationIconContentColor = onPane,
+                        titleContentColor = onPane,
                     ),
                     navigationIcon = {
                         if (showBack) {
@@ -234,7 +244,7 @@ fun PlayerScreen(
                         TrackTitle(
                             text = titleText,
                             style = MaterialTheme.typography.headlineSmall,
-                            color = colorScheme.onBackground,
+                            color = onPane,
                             textAlign = TextAlign.Start,
                             modifier = Modifier.fillMaxWidth(),
                         )
@@ -242,7 +252,7 @@ fun PlayerScreen(
                         Text(
                             text = titleText,
                             style = MaterialTheme.typography.headlineSmall,
-                            color = colorScheme.onBackground,
+                            color = onPane,
                             maxLines = 1,
                             softWrap = false,
                             overflow = TextOverflow.Ellipsis,
@@ -260,7 +270,7 @@ fun PlayerScreen(
                         color = if (subtitle == null) {
                             Color.Transparent
                         } else {
-                            colorScheme.onSurfaceVariant
+                            onPaneVariant
                         },
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -291,12 +301,18 @@ fun PlayerScreen(
                         onCycleRepeat = onCycleRepeat,
                     )
                     Spacer(Modifier.height(if (compact) 12.dp else 24.dp))
-                    Surface(
+                    ContrastSurface(
                         onClick = { showSheet = true },
                         shape = CircleShape,
-                        color = Color.White.copy(alpha = 0.10f),
-                        contentColor = colorScheme.onBackground,
-                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f)),
+                        color = if (chrome.isLight) {
+                            Color.White.copy(alpha = 0.62f)
+                        } else {
+                            Color.White.copy(alpha = 0.10f)
+                        },
+                        border = BorderStroke(
+                            1.dp,
+                            if (chrome.isLight) chrome.frostBorder else Color.White.copy(alpha = 0.12f),
+                        ),
                     ) {
                         Row(
                             modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
@@ -319,6 +335,7 @@ fun PlayerScreen(
                     Spacer(Modifier.height(if (compact) 12.dp else 24.dp))
                 }
             }
+        }
         }
     }
     if (showSheet) {
@@ -353,6 +370,7 @@ private fun SeekControl(
     val sliderValue = displayed.coerceIn(0f, if (durationMs > 0L) durationMs.toFloat() else 1f)
     val seekDescription = stringResource(R.string.seek)
     val shownPosition = if (dragging) dragPosition.toLong() else positionMs
+    val onPane = LocalContentColor.current
 
     Column(modifier = Modifier.fillMaxWidth()) {
         Slider(
@@ -372,7 +390,7 @@ private fun SeekControl(
                     modifier = Modifier
                         .size(14.dp)
                         .shadow(4.dp, CircleShape)
-                        .background(Color.White, CircleShape),
+                        .background(onPane, CircleShape),
                 )
             },
             track = { sliderState ->
@@ -380,8 +398,8 @@ private fun SeekControl(
                     sliderState = sliderState,
                     modifier = Modifier.height(4.dp),
                     colors = SliderDefaults.colors(
-                        activeTrackColor = Color.White,
-                        inactiveTrackColor = Color.White.copy(alpha = 0.18f),
+                        activeTrackColor = onPane,
+                        inactiveTrackColor = onPane.copy(alpha = 0.18f),
                     ),
                     thumbTrackGapSize = 0.dp,
                     drawStopIndicator = null,
@@ -398,12 +416,12 @@ private fun SeekControl(
             Text(
                 text = PlaybackTime.format(shownPosition),
                 style = MaterialTheme.typography.labelSmall,
-                color = TextHigh,
+                color = onPane,
             )
             Text(
                 text = PlaybackTime.format(durationMs),
                 style = MaterialTheme.typography.labelSmall,
-                color = TextHigh,
+                color = onPane.copy(alpha = 0.72f),
             )
         }
     }
@@ -426,12 +444,14 @@ private fun TransportControls(
     onCycleRepeat: () -> Unit,
 ) {
     val colorScheme = MaterialTheme.colorScheme
+    val chrome = LocalBackgroundChrome.current
     val playButtonSize = if (compact) 64.dp else 80.dp
     val playIconSize = if (compact) 34.dp else 42.dp
     val skipButtonSize = if (compact) 36.dp else 44.dp
     val modeButtonSize = if (compact) 26.dp else 30.dp
-    val accent = colorScheme.secondary
-    val dimmed = colorScheme.onBackground.copy(alpha = 0.40f)
+    val onPane = LocalContentColor.current
+    val accent = if (chrome.isLight) chrome.progress else colorScheme.secondary
+    val dimmed = onPane.copy(alpha = 0.40f)
     val shuffleBadge = ShuffleBadge.label(shuffleEnabled, shuffleContext)?.toString()
     val repeatBadge = when (repeatMode) {
         RepeatMode.OFF -> null
@@ -468,8 +488,8 @@ private fun TransportControls(
             enabled = hasPrevious,
             modifier = Modifier.size(56.dp),
             colors = IconButtonDefaults.iconButtonColors(
-                contentColor = colorScheme.onBackground,
-                disabledContentColor = colorScheme.onBackground.copy(alpha = 0.38f),
+                contentColor = onPane,
+                disabledContentColor = onPane.copy(alpha = 0.38f),
             ),
         ) {
             Icon(
@@ -509,8 +529,8 @@ private fun TransportControls(
             enabled = hasNext,
             modifier = Modifier.size(56.dp),
             colors = IconButtonDefaults.iconButtonColors(
-                contentColor = colorScheme.onBackground,
-                disabledContentColor = colorScheme.onBackground.copy(alpha = 0.38f),
+                contentColor = onPane,
+                disabledContentColor = onPane.copy(alpha = 0.38f),
             ),
         ) {
             Icon(

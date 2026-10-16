@@ -105,6 +105,7 @@ After every task, append an entry below: `- [task] what went wrong -> new rule`.
 
 - [backgrounds] `TabRow` + `tabIndicatorOffset` in current material3 is deprecated and failed the zero-warning bar -> use `SecondaryTabRow` (or `PrimaryTabRow`) and its built-in indicator.
 - [shuffle/repeat] A single Random seed can leave a 5-track keep-current shuffle identical to the input -> assert a permutation plus “some seed differs”, never one seed’s inequality.
+- [surface contrast] Pastel `onBackground` on a dark Now Playing card is dark-on-dark -> every painted surface derives `contentColor` from its own container luminance (`ContrastSurface` / `rolesForContainer`), never from the window.
 
 ## 6. Lessons learned
 - androidx.mediarouter's `MediaRouteChooserDialog` extends `androidx.appcompat.app.AppCompatDialog`, and mediarouter does not expose appcompat at compile time. Using mediarouter dialog classes requires `implementation(libs.androidx.appcompat)` in app/build.gradle.kts (catalog alias `androidx-appcompat`).

@@ -60,11 +60,12 @@ internal fun BackgroundFineTuneSheet(
     onDismiss: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheetColor = LocalBackgroundChrome.current.sheet
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-        contentColor = MaterialTheme.colorScheme.onSurface,
+        containerColor = sheetColor,
+        contentColor = contentColorForContainer(sheetColor),
         dragHandle = { BottomSheetDefaults.DragHandle() },
     ) {
         BackgroundFineTuneContent(

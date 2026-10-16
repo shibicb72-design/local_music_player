@@ -34,7 +34,6 @@ import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -57,6 +56,7 @@ import com.shibi.musicplayer.R
 import com.shibi.musicplayer.domain.Track
 import com.shibi.musicplayer.playlist.PlaylistSummary
 import com.shibi.musicplayer.playlist.PlaylistViewModel
+import com.shibi.musicplayer.ui.background.ContrastSurface
 import com.shibi.musicplayer.ui.background.LocalBackgroundChrome
 
 data class PlaylistCardUi(
@@ -216,12 +216,11 @@ private fun PlaylistCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
+    ContrastSurface(
         onClick = onClick,
         modifier = modifier,
         shape = RoundedCornerShape(20.dp),
         color = MaterialTheme.colorScheme.surfaceContainer,
-        contentColor = MaterialTheme.colorScheme.onSurface,
         border = BorderStroke(1.dp, LocalBackgroundChrome.current.cardBorder),
     ) {
         Column(modifier = Modifier.padding(10.dp)) {

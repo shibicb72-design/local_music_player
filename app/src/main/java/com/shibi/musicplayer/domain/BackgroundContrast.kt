@@ -64,6 +64,37 @@ object BackgroundContrast {
         )
     }
 
+    /**
+     * Content roles for the surface that is actually painted, not the window
+     * behind it. Translucent [containerArgb] is composited over [behindArgb]
+     * before luminance is measured.
+     */
+    fun rolesForContainer(
+        containerArgb: Long,
+        behindArgb: Long = 0xFF000000L,
+    ): Roles {
+        return roles(compositeOver(containerArgb, behindArgb))
+    }
+
+    fun isReadable(contentArgb: Long, containerArgb: Long): Boolean {
+        return contrastRatio(contentArgb, containerArgb) >= MIN_BODY_CONTRAST
+    }
+
+    fun compositeOver(foregroundArgb: Long, backgroundArgb: Long): Long {
+        val fg = foregroundArgb and 0xFFFFFFFFL
+        val bg = backgroundArgb and 0xFFFFFFFFL
+        val fa = ((fg shr 24) and 0xFFL).toInt()
+        if (fa >= 255) return 0xFF000000L or (fg and 0x00FFFFFFL)
+        if (fa <= 0) return 0xFF000000L or (bg and 0x00FFFFFFL)
+        val alpha = fa / 255.0
+        fun mix(shift: Int): Long {
+            val f = ((fg shr shift) and 0xFFL).toInt()
+            val b = ((bg shr shift) and 0xFFL).toInt()
+            return kotlin.math.round(f * alpha + b * (1.0 - alpha)).toLong()
+        }
+        return 0xFF000000L or (mix(16) shl 16) or (mix(8) shl 8) or mix(0)
+    }
+
     fun rolesFor(
         background: AppBackground,
         custom: Map<String, List<Long>> = emptyMap(),

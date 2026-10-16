@@ -31,7 +31,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -53,6 +52,7 @@ import com.shibi.musicplayer.R
 import com.shibi.musicplayer.domain.LibrarySearch
 import com.shibi.musicplayer.domain.Track
 import com.shibi.musicplayer.playback.PlayerUiState
+import com.shibi.musicplayer.ui.background.ContrastSurface
 @Composable
 fun FavoritesScreen(
     tracks: List<Track>,
@@ -380,7 +380,7 @@ internal fun SettingsContent(
         subtitle = stringResource(R.string.settings_about),
         modifier = modifier.padding(bottom = contentBottomPadding),
     ) {
-        Surface(
+        ContrastSurface(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 20.dp),
@@ -397,7 +397,7 @@ internal fun SettingsContent(
                     Text(
                         text = stringResource(R.string.settings_theme),
                         style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onBackground,
+                        color = MaterialTheme.colorScheme.onSurface,
                     )
                     Text(
                         text = stringResource(R.string.settings_dark),
@@ -412,7 +412,7 @@ internal fun SettingsContent(
             }
         }
         Spacer(Modifier.height(16.dp))
-        Surface(
+        ContrastSurface(
             onClick = onOpenBackgrounds,
             modifier = Modifier
                 .fillMaxWidth()
@@ -424,7 +424,7 @@ internal fun SettingsContent(
                 Text(
                     text = stringResource(R.string.settings_backgrounds),
                     style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onBackground,
+                    color = MaterialTheme.colorScheme.onSurface,
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
@@ -435,7 +435,7 @@ internal fun SettingsContent(
             }
         }
         Spacer(Modifier.height(16.dp))
-        Surface(
+        ContrastSurface(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 20.dp),
@@ -446,7 +446,7 @@ internal fun SettingsContent(
                 Text(
                     text = stringResource(R.string.app_name),
                     style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onBackground,
+                    color = MaterialTheme.colorScheme.onSurface,
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(

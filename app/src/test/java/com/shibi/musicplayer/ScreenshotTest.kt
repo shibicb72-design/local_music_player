@@ -17,7 +17,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
@@ -70,6 +69,7 @@ import com.shibi.musicplayer.ui.background.AppBackgroundHost
 import com.shibi.musicplayer.ui.background.BackgroundAnimalGrid
 import com.shibi.musicplayer.ui.background.BackgroundFineTuneContent
 import com.shibi.musicplayer.ui.background.BackgroundPickerContent
+import com.shibi.musicplayer.ui.background.ContrastSurface
 import com.shibi.musicplayer.ui.theme.MusicPlayerTheme
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -193,6 +193,24 @@ class ScreenshotTest {
     }
 
     @Test
+    fun nowPlayingPastelShuffle() {
+        captureNowPlaying(
+            "now_playing_pastel_shuffle.png",
+            englishState.copy(shuffleEnabled = true, shuffleContext = ShuffleContext.ALL_SONGS),
+            background = AppBackground.Solid("sky"),
+        )
+    }
+
+    @Test
+    fun nowPlayingPastelRepeat() {
+        captureNowPlaying(
+            "now_playing_pastel_repeat.png",
+            englishState.copy(repeatMode = RepeatMode.THRICE),
+            background = AppBackground.Solid("blush"),
+        )
+    }
+
+    @Test
     fun miniPlayer() {
         captureRoboImage("build/outputs/roborazzi/mini_player.png") {
             MusicPlayerTheme {
@@ -221,7 +239,7 @@ class ScreenshotTest {
                             .fillMaxSize()
                             .background(OutputScrim),
                     )
-                    Surface(
+                    ContrastSurface(
                         modifier = Modifier
                             .fillMaxWidth()
                             .align(Alignment.BottomCenter),
@@ -384,7 +402,7 @@ class ScreenshotTest {
                             .fillMaxSize()
                             .background(Color.Black.copy(alpha = 0.72f)),
                     )
-                    Surface(
+                    ContrastSurface(
                         modifier = Modifier
                             .fillMaxWidth()
                             .align(Alignment.BottomCenter),
@@ -796,7 +814,7 @@ class ScreenshotTest {
                             .fillMaxSize()
                             .background(Color.Black.copy(alpha = 0.45f)),
                     )
-                    Surface(
+                    ContrastSurface(
                         modifier = Modifier
                             .fillMaxWidth()
                             .align(Alignment.BottomCenter),
@@ -976,19 +994,25 @@ class ScreenshotTest {
         }
     }
 
-    private fun captureNowPlaying(fileName: String, state: PlayerUiState) {
+    private fun captureNowPlaying(
+        fileName: String,
+        state: PlayerUiState,
+        background: AppBackground = AppBackground.Default,
+    ) {
         captureRoboImage("build/outputs/roborazzi/$fileName") {
             MusicPlayerTheme {
-                PlayerScreen(
-                    state = state,
-                    onBack = {},
-                    onTogglePlayPause = {},
-                    onNext = {},
-                    onPrevious = {},
-                    onSeek = {},
-                    selectedOutputId = null,
-                    onSelectOutput = {},
-                )
+                AppBackgroundHost(background, emptyMap(), forceStatic = true) {
+                    PlayerScreen(
+                        state = state,
+                        onBack = {},
+                        onTogglePlayPause = {},
+                        onNext = {},
+                        onPrevious = {},
+                        onSeek = {},
+                        selectedOutputId = null,
+                        onSelectOutput = {},
+                    )
+                }
             }
         }
     }

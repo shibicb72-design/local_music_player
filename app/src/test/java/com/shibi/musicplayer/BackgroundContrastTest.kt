@@ -76,4 +76,49 @@ class BackgroundContrastTest {
         assertTrue(roles.isLight)
         assertEquals(BackgroundContrast.ON_LIGHT, roles.onBackgroundArgb)
     }
+
+    @Test
+    fun nowPlayingPaneDoesNotUseWindowContentColor() {
+        val window = 0xFFC5E4F7L
+        val darkPane = BackgroundCatalog.DEFAULT_ARGB
+        val windowContent = BackgroundContrast.contentArgb(window)
+        val paneContent = BackgroundContrast.contentArgb(darkPane)
+        assertEquals(BackgroundContrast.ON_LIGHT, windowContent)
+        assertEquals(BackgroundContrast.ON_DARK, paneContent)
+        assertFalse(
+            "window onBackground on a dark Now Playing pane is dark-on-dark",
+            BackgroundContrast.isReadable(windowContent, darkPane),
+        )
+        assertTrue(BackgroundContrast.isReadable(paneContent, darkPane))
+        val paneRoles = BackgroundContrast.rolesForContainer(darkPane, behindArgb = window)
+        assertFalse(paneRoles.isLight)
+        assertEquals(BackgroundContrast.ON_DARK, paneRoles.onBackgroundArgb)
+        assertTrue(paneRoles.onBackgroundArgb != windowContent)
+    }
+
+    @Test
+    fun frostCardOverPastelKeepsDarkText() {
+        val window = 0xFFC5E4F7L
+        val painted = BackgroundContrast.compositeOver(BackgroundContrast.FROST_LIGHT, window)
+        assertTrue(BackgroundContrast.isLight(painted))
+        val roles = BackgroundContrast.rolesForContainer(
+            BackgroundContrast.FROST_LIGHT,
+            behindArgb = window,
+        )
+        assertEquals(BackgroundContrast.ON_LIGHT, roles.onBackgroundArgb)
+        assertTrue(BackgroundContrast.isReadable(roles.onBackgroundArgb, painted))
+    }
+
+    @Test
+    fun darkFrostOverPastelKeepsLightText() {
+        val window = 0xFFC5E4F7L
+        val painted = BackgroundContrast.compositeOver(BackgroundContrast.FROST_DARK, window)
+        assertFalse(BackgroundContrast.isLight(painted))
+        val roles = BackgroundContrast.rolesForContainer(
+            BackgroundContrast.FROST_DARK,
+            behindArgb = window,
+        )
+        assertEquals(BackgroundContrast.ON_DARK, roles.onBackgroundArgb)
+        assertTrue(BackgroundContrast.isReadable(roles.onBackgroundArgb, painted))
+    }
 }

@@ -58,7 +58,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -90,6 +89,7 @@ import com.shibi.musicplayer.domain.Track
 import com.shibi.musicplayer.domain.TrackDisplay
 import com.shibi.musicplayer.library.LibraryViewModel
 import com.shibi.musicplayer.playback.PlayerUiState
+import com.shibi.musicplayer.ui.background.ContrastSurface
 import com.shibi.musicplayer.ui.background.LocalBackgroundChrome
 import com.shibi.musicplayer.ui.theme.DeviceGreen
 import com.shibi.musicplayer.ui.theme.Secondary
@@ -540,7 +540,7 @@ internal fun NowPlayingBar(
             .then(if (padForNavigationBars) Modifier.navigationBarsPadding() else Modifier)
             .padding(start = Spacing.sm, end = Spacing.sm, bottom = bottomPadding),
     ) {
-        Surface(
+        ContrastSurface(
             onClick = onOpen,
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(22.dp),
@@ -549,7 +549,6 @@ internal fun NowPlayingBar(
             } else {
                 MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.92f)
             },
-            contentColor = MaterialTheme.colorScheme.onSurface,
             border = BorderStroke(1.dp, chrome.frostBorder),
             shadowElevation = 8.dp,
         ) {

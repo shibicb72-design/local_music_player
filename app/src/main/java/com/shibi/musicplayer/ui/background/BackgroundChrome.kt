@@ -25,6 +25,9 @@ data class BackgroundChrome(
     val progressTrack: Color,
     val rowFill: Color,
     val playingRowFill: Color,
+    val sampleArgb: Long,
+    val sheet: Color,
+    val dialog: Color,
 )
 
 val DarkBackgroundChrome = BackgroundChrome(
@@ -40,6 +43,9 @@ val DarkBackgroundChrome = BackgroundChrome(
     progressTrack = Color.White.copy(alpha = 0.12f),
     rowFill = Color.Transparent,
     playingRowFill = Accent.copy(alpha = 0.12f),
+    sampleArgb = BackgroundCatalog.DEFAULT_ARGB,
+    sheet = Color(0xFF2E2E3A),
+    dialog = Color(0xFF24242E),
 )
 
 val LightBackgroundChrome = BackgroundChrome(
@@ -55,12 +61,16 @@ val LightBackgroundChrome = BackgroundChrome(
     progressTrack = Color(0xFF5B45C6).copy(alpha = 0.22f),
     rowFill = Color.White.copy(alpha = 0.58f),
     playingRowFill = Color(0xFF6E4EF0).copy(alpha = 0.16f),
+    sampleArgb = 0xFFF8C8D4,
+    sheet = Color(0xFFF7F4FB),
+    dialog = Color(0xFFFBF8FF),
 )
 
 val LocalBackgroundChrome = staticCompositionLocalOf { DarkBackgroundChrome }
 
 fun chromeFor(roles: BackgroundContrast.Roles): BackgroundChrome {
-    return if (roles.isLight) LightBackgroundChrome else DarkBackgroundChrome
+    val base = if (roles.isLight) LightBackgroundChrome else DarkBackgroundChrome
+    return base.copy(sampleArgb = roles.sampleArgb)
 }
 
 fun Long.toComposeColor(): Color = Color((this and 0xFFFFFFFFL).toInt())
@@ -80,11 +90,16 @@ fun BackgroundContentTheme(
     val scheme = if (roles.isLight) {
         base.copy(
             onBackground = roles.onBackgroundArgb.toComposeColor(),
+            surface = chrome.dialog,
             onSurface = roles.onSurfaceArgb.toComposeColor(),
+            surfaceVariant = Color(0xFFE8E4F2),
             onSurfaceVariant = roles.onVariantArgb.toComposeColor(),
             surfaceContainer = roles.frostArgb.toComposeColor(),
-            surfaceContainerHigh = Color.White.copy(alpha = 0.86f),
+            surfaceContainerLow = Color.White.copy(alpha = 0.72f),
+            surfaceContainerHigh = chrome.sheet,
             surfaceContainerHighest = Color.White.copy(alpha = 0.92f),
+            inverseSurface = Color(0xFF16161C),
+            inverseOnSurface = Color(0xFFF4F4F8),
             outline = Color(0xFF7A7588),
             outlineVariant = Color(0xFFD4D0DE),
         )

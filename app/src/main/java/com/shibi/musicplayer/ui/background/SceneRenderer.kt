@@ -75,7 +75,7 @@ internal fun DrawScope.drawScene(
         "aurora" -> drawAurora(colors, phase)
         "unicorn" -> drawUnicorn(colors, phase, field, scratch)
         "cat" -> drawCat(colors, phase, field, scratch)
-        "puppy" -> drawPuppy(colors, phase, scratch)
+        "puppy" -> drawPuppy(colors, phase)
         "bunnies" -> drawBunnies(colors, phase)
         "whale" -> drawWhale(colors, phase, field, scratch)
         "panda" -> drawPanda(colors, phase)
@@ -220,36 +220,39 @@ private fun DrawScope.drawUnicorn(
     scratch: SceneScratch,
 ) {
     drawClouds(colors, phase, field)
-    val coat = colors.colorAt(1, 0xFFFFFFF4)
-    val mane = colors.colorAt(2, 0xFFF0C8E0)
-    val star = colors.colorAt(3, 0xFFF7E6A1)
+    val coat = colors.colorAt(1, 0xFFFFF6E8)
+    val mane = colors.colorAt(2, 0xFFE8A8D0)
+    val star = colors.colorAt(3, 0xFFF2D56A)
     val compact = isCompact()
     val unit = min(size.width, size.height)
-    val scale = if (compact) unit * 0.30f else unit * 0.14f
+    val scale = if (compact) unit * 0.36f else unit * 0.16f
     val origin = if (compact) {
-        Offset(size.width * 0.58f, size.height * 0.52f)
+        Offset(size.width * 0.54f, size.height * 0.56f)
     } else {
-        Offset(size.width * 0.82f, size.height * 0.18f)
+        Offset(size.width * 0.78f, size.height * 0.22f)
     }
     val bob = sin(phase * 2f * PI.toFloat()) * scale * 0.12f
     translate(origin.x, origin.y + bob) {
-        drawCircle(coat, scale, Offset(0f, 0f))
-        drawCircle(coat, scale * 0.72f, Offset(scale * 0.85f, scale * 0.1f))
-        drawCircle(mane, scale * 0.22f, Offset(-scale * 0.35f, -scale * 0.15f))
-        drawCircle(mane, scale * 0.18f, Offset(-scale * 0.1f, -scale * 0.42f))
+        drawSoftCircle(coat, scale * 0.92f, Offset(-scale * 0.08f, scale * 0.12f))
+        drawSoftCircle(coat, scale * 0.88f, Offset(scale * 0.72f, -scale * 0.02f))
+        drawSoftCircle(mane, scale * 0.30f, Offset(-scale * 0.28f, -scale * 0.22f))
+        drawSoftCircle(mane, scale * 0.24f, Offset(scale * 0.02f, -scale * 0.52f))
+        drawSoftCircle(mane, scale * 0.20f, Offset(scale * 0.28f, -scale * 0.38f))
         val horn = scratch.path
         horn.rewind()
-        horn.moveTo(scale * 0.7f, -scale * 0.35f)
-        horn.lineTo(scale * 1.15f, -scale * 1.05f)
-        horn.lineTo(scale * 0.95f, -scale * 0.22f)
+        horn.moveTo(scale * 0.55f, -scale * 0.48f)
+        horn.lineTo(scale * 1.05f, -scale * 1.22f)
+        horn.lineTo(scale * 0.82f, -scale * 0.32f)
         horn.close()
         drawPath(horn, star)
-        drawCircle(Color(0xFF3A3450), scale * 0.06f, Offset(scale * 1.05f, 0f))
-        drawCircle(mane, scale * 0.08f, Offset(scale * 1.12f, scale * 0.18f))
+        drawPath(horn, AnimalLine.copy(alpha = 0.32f), style = Stroke(scale * 0.045f))
+        drawKawaiiEye(scale * 0.11f, Offset(scale * 0.95f, -scale * 0.06f))
+        drawSoftCircle(mane, scale * 0.12f, Offset(scale * 1.08f, scale * 0.22f))
+        drawCircle(mane.copy(alpha = 0.85f), scale * 0.11f, Offset(scale * 0.58f, scale * 0.18f))
     }
     val twinkle = 0.4f + 0.6f * abs(sin(phase * 2f * PI.toFloat()))
-    drawCircle(star.copy(alpha = 0.55f * twinkle), scale * 0.12f, Offset(origin.x - scale * 1.6f, origin.y - scale * 0.8f))
-    drawCircle(star.copy(alpha = 0.4f * twinkle), scale * 0.08f, Offset(origin.x - scale * 0.4f, origin.y - scale * 1.4f))
+    drawCircle(star.copy(alpha = 0.7f * twinkle), scale * 0.14f, Offset(origin.x - scale * 1.45f, origin.y - scale * 0.85f))
+    drawCircle(star.copy(alpha = 0.5f * twinkle), scale * 0.10f, Offset(origin.x - scale * 0.25f, origin.y - scale * 1.35f))
 }
 
 private fun DrawScope.drawCat(
@@ -259,41 +262,42 @@ private fun DrawScope.drawCat(
     scratch: SceneScratch,
 ) {
     drawRect(colors.colorAt(0, 0xFFF5EDE0))
-    val fur = colors.colorAt(1, 0xFFE8D0C0)
-    val bubble = colors.colorAt(2, 0xFFC5E4F7)
-    val nose = colors.colorAt(3, 0xFFF0C4D0)
+    val fur = colors.colorAt(1, 0xFFE0B89A)
+    val bubble = colors.colorAt(2, 0xFF8EC8EE)
+    val nose = colors.colorAt(3, 0xFFE89AAA)
     val compact = isCompact()
     val unit = min(size.width, size.height)
-    val scale = if (compact) unit * 0.28f else unit * 0.13f
+    val scale = if (compact) unit * 0.34f else unit * 0.15f
     val origin = if (compact) {
-        Offset(size.width * 0.42f, size.height * 0.58f)
+        Offset(size.width * 0.46f, size.height * 0.58f)
     } else {
-        Offset(size.width * 0.14f, size.height * 0.78f)
+        Offset(size.width * 0.16f, size.height * 0.76f)
     }
     val breathe = 1f + 0.04f * sin(phase * 2f * PI.toFloat())
     translate(origin.x, origin.y) {
-        drawOval(fur, Offset(-scale * 0.9f, -scale * 0.15f), Size(scale * 1.8f * breathe, scale * 1.05f))
-        drawCircle(fur, scale * 0.55f, Offset(scale * 0.7f, -scale * 0.15f))
+        drawSoftOval(fur, Offset(-scale * 0.95f, -scale * 0.08f), Size(scale * 1.85f * breathe, scale * 1.12f))
+        drawSoftCircle(fur, scale * 0.72f, Offset(scale * 0.55f, -scale * 0.28f))
         val ear = scratch.path
         ear.rewind()
-        ear.moveTo(scale * 0.4f, -scale * 0.55f)
-        ear.lineTo(scale * 0.55f, -scale * 1.05f)
-        ear.lineTo(scale * 0.85f, -scale * 0.4f)
+        ear.moveTo(scale * 0.18f, -scale * 0.72f)
+        ear.lineTo(scale * 0.28f, -scale * 1.28f)
+        ear.lineTo(scale * 0.62f, -scale * 0.58f)
         ear.close()
         drawPath(ear, fur)
+        drawPath(ear, AnimalLine.copy(alpha = 0.28f), style = Stroke(scale * 0.05f))
         ear.rewind()
-        ear.moveTo(scale * 0.75f, -scale * 0.5f)
-        ear.lineTo(scale * 1.05f, -scale * 0.95f)
-        ear.lineTo(scale * 1.15f, -scale * 0.28f)
+        ear.moveTo(scale * 0.62f, -scale * 0.68f)
+        ear.lineTo(scale * 0.95f, -scale * 1.22f)
+        ear.lineTo(scale * 1.12f, -scale * 0.42f)
         ear.close()
         drawPath(ear, fur)
-        drawCircle(Color(0xFF3A3450), scale * 0.06f, Offset(scale * 0.55f, -scale * 0.2f))
-        drawCircle(Color(0xFF3A3450), scale * 0.06f, Offset(scale * 0.88f, -scale * 0.18f))
-        drawCircle(nose, scale * 0.07f, Offset(scale * 0.78f, -scale * 0.02f))
+        drawPath(ear, AnimalLine.copy(alpha = 0.28f), style = Stroke(scale * 0.05f))
+        drawKawaiiFace(scale * 0.72f, Offset(scale * 0.55f, -scale * 0.28f), blush = nose)
+        drawSoftCircle(nose, scale * 0.09f, Offset(scale * 0.55f, -scale * 0.08f))
     }
-    val bubbleY = origin.y - scale * 1.1f - sin(phase * 2f * PI.toFloat()) * scale * 0.35f
-    drawCircle(bubble.copy(alpha = 0.7f), scale * 0.28f, Offset(origin.x + scale * 1.6f, bubbleY))
-    drawCircle(Color.White.copy(alpha = 0.7f), scale * 0.08f, Offset(origin.x + scale * 1.5f, bubbleY - scale * 0.08f))
+    val bubbleY = origin.y - scale * 1.25f - sin(phase * 2f * PI.toFloat()) * scale * 0.35f
+    drawSoftCircle(bubble.copy(alpha = 0.82f), scale * 0.30f, Offset(origin.x + scale * 1.55f, bubbleY))
+    drawCircle(Color.White.copy(alpha = 0.75f), scale * 0.09f, Offset(origin.x + scale * 1.44f, bubbleY - scale * 0.08f))
     if (!compact) {
         for (i in 0 until 3) {
             val rise = (field.y[i] - phase * 0.4f).let { t -> t - kotlin.math.floor(t.toDouble()).toFloat() }
@@ -306,61 +310,59 @@ private fun DrawScope.drawCat(
     }
 }
 
-private fun DrawScope.drawPuppy(colors: List<Long>, phase: Float, scratch: SceneScratch) {
+private fun DrawScope.drawPuppy(colors: List<Long>, phase: Float) {
     drawRect(colors.colorAt(0, 0xFFC5D9C3))
-    val fur = colors.colorAt(1, 0xFFF8D4B8)
-    val ear = colors.colorAt(2, 0xFFE0C8D8)
-    val tongue = colors.colorAt(3, 0xFFF5C4B8)
+    val fur = colors.colorAt(1, 0xFFF2C08A)
+    val ear = colors.colorAt(2, 0xFFD4A8C0)
+    val tongue = colors.colorAt(3, 0xFFE89A90)
     val compact = isCompact()
     val unit = min(size.width, size.height)
-    val scale = if (compact) unit * 0.28f else unit * 0.13f
+    val scale = if (compact) unit * 0.34f else unit * 0.15f
     val origin = if (compact) {
         Offset(size.width * 0.50f, size.height * 0.58f)
     } else {
-        Offset(size.width * 0.16f, size.height * 0.8f)
+        Offset(size.width * 0.18f, size.height * 0.78f)
     }
     val wag = sin(phase * 2f * PI.toFloat()) * 22f
     translate(origin.x, origin.y) {
-        drawOval(fur, Offset(-scale * 0.85f, -scale * 0.2f), Size(scale * 1.7f, scale * 1.1f))
-        drawCircle(fur, scale * 0.52f, Offset(scale * 0.75f, -scale * 0.2f))
-        drawOval(ear, Offset(scale * 0.15f, -scale * 0.85f), Size(scale * 0.42f, scale * 0.7f))
-        drawOval(ear, Offset(scale * 0.72f, -scale * 0.78f), Size(scale * 0.38f, scale * 0.62f))
-        drawCircle(Color(0xFF3A3450), scale * 0.06f, Offset(scale * 0.62f, -scale * 0.25f))
-        drawCircle(Color(0xFF3A3450), scale * 0.06f, Offset(scale * 0.92f, -scale * 0.22f))
-        drawCircle(tongue, scale * 0.09f, Offset(scale * 0.82f, scale * 0.02f))
-        rotate(wag, Offset(-scale * 0.7f, scale * 0.15f)) {
-            drawOval(fur, Offset(-scale * 1.35f, 0f), Size(scale * 0.7f, scale * 0.28f))
+        drawSoftOval(fur, Offset(-scale * 0.92f, -scale * 0.12f), Size(scale * 1.78f, scale * 1.15f))
+        drawSoftCircle(fur, scale * 0.70f, Offset(scale * 0.58f, -scale * 0.28f))
+        drawSoftOval(ear, Offset(scale * 0.08f, -scale * 1.05f), Size(scale * 0.48f, scale * 0.82f))
+        drawSoftOval(ear, Offset(scale * 0.68f, -scale * 0.98f), Size(scale * 0.44f, scale * 0.76f))
+        drawKawaiiFace(scale * 0.70f, Offset(scale * 0.58f, -scale * 0.28f), blush = tongue)
+        drawSoftCircle(tongue, scale * 0.12f, Offset(scale * 0.58f, scale * 0.08f))
+        rotate(wag, Offset(-scale * 0.72f, scale * 0.18f)) {
+            drawSoftOval(fur, Offset(-scale * 1.42f, 0f), Size(scale * 0.78f, scale * 0.30f))
         }
     }
 }
 
 private fun DrawScope.drawBunnies(colors: List<Long>, phase: Float) {
     drawRect(colors.colorAt(0, 0xFFE8F5D8))
-    val fur = colors.colorAt(1, 0xFFFFFFF4)
-    val ear = colors.colorAt(2, 0xFFF0C8E0)
-    val flower = colors.colorAt(3, 0xFFF8C8D4)
+    val fur = colors.colorAt(1, 0xFFFFF6E8)
+    val ear = colors.colorAt(2, 0xFFE8A8D0)
+    val flower = colors.colorAt(3, 0xFFE89AAA)
     val compact = isCompact()
     val unit = min(size.width, size.height)
-    val scale = if (compact) unit * 0.22f else unit * 0.11f
+    val scale = if (compact) unit * 0.26f else unit * 0.13f
     val hop = abs(sin(phase * 2f * PI.toFloat())) * scale * 0.55f
     val hop2 = abs(sin((phase + 0.35f) * 2f * PI.toFloat())) * scale * 0.55f
-    val left = if (compact) size.width * 0.3f else size.width * 0.12f
-    val right = if (compact) size.width * 0.68f else size.width * 0.28f
-    val ground = if (compact) size.height * 0.68f else size.height * 0.82f
+    val left = if (compact) size.width * 0.32f else size.width * 0.14f
+    val right = if (compact) size.width * 0.68f else size.width * 0.30f
+    val ground = if (compact) size.height * 0.70f else size.height * 0.82f
     drawBunny(left, ground - hop, scale, fur, ear)
     drawBunny(right, ground - hop2, scale * 0.86f, fur, ear)
-    drawCircle(flower, scale * 0.16f, Offset(left + scale * 1.4f, ground + scale * 0.15f))
-    drawCircle(flower.copy(alpha = 0.7f), scale * 0.12f, Offset(right - scale * 0.9f, ground + scale * 0.2f))
+    drawSoftCircle(flower, scale * 0.18f, Offset(left + scale * 1.35f, ground + scale * 0.12f))
+    drawSoftCircle(flower.copy(alpha = 0.8f), scale * 0.14f, Offset(right - scale * 0.85f, ground + scale * 0.16f))
 }
 
 private fun DrawScope.drawBunny(x: Float, y: Float, scale: Float, fur: Color, ear: Color) {
     translate(x, y) {
-        drawOval(fur, Offset(-scale * 0.7f, -scale * 0.1f), Size(scale * 1.35f, scale * 0.95f))
-        drawCircle(fur, scale * 0.42f, Offset(scale * 0.55f, -scale * 0.25f))
-        drawOval(ear, Offset(scale * 0.22f, -scale * 1.15f), Size(scale * 0.22f, scale * 0.75f))
-        drawOval(ear, Offset(scale * 0.52f, -scale * 1.1f), Size(scale * 0.2f, scale * 0.7f))
-        drawCircle(Color(0xFF3A3450), scale * 0.05f, Offset(scale * 0.45f, -scale * 0.28f))
-        drawCircle(Color(0xFF3A3450), scale * 0.05f, Offset(scale * 0.68f, -scale * 0.26f))
+        drawSoftOval(fur, Offset(-scale * 0.72f, -scale * 0.02f), Size(scale * 1.38f, scale * 1.0f))
+        drawSoftCircle(fur, scale * 0.55f, Offset(scale * 0.48f, -scale * 0.38f))
+        drawSoftOval(ear, Offset(scale * 0.18f, -scale * 1.32f), Size(scale * 0.26f, scale * 0.88f))
+        drawSoftOval(ear, Offset(scale * 0.50f, -scale * 1.26f), Size(scale * 0.24f, scale * 0.82f))
+        drawKawaiiFace(scale * 0.55f, Offset(scale * 0.48f, -scale * 0.38f), blush = ear)
     }
 }
 
@@ -371,80 +373,120 @@ private fun DrawScope.drawWhale(
     scratch: SceneScratch,
 ) {
     drawBubbles(colors, phase, field)
-    val body = colors.colorAt(1, 0xFF9EC8E8)
-    val belly = colors.colorAt(2, 0xFFFFFFF0)
+    val body = colors.colorAt(1, 0xFF7EB6DC)
+    val belly = colors.colorAt(2, 0xFFFFF6E8)
     val compact = isCompact()
     val unit = min(size.width, size.height)
-    val scale = if (compact) unit * 0.30f else unit * 0.15f
+    val scale = if (compact) unit * 0.34f else unit * 0.16f
     val travel = if (compact) {
-        size.width * 0.5f
+        size.width * 0.50f
     } else {
-        size.width * (0.18f + 0.08f * sin(phase * 2f * PI.toFloat()))
+        size.width * (0.20f + 0.08f * sin(phase * 2f * PI.toFloat()))
     }
     val bob = sin(phase * 2f * PI.toFloat()) * scale * 0.15f
-    val y = if (compact) size.height * 0.58f else size.height * 0.78f
+    val y = if (compact) size.height * 0.56f else size.height * 0.76f
     translate(travel, y + bob) {
-        drawOval(body, Offset(-scale * 1.2f, -scale * 0.45f), Size(scale * 2.3f, scale * 1.05f))
-        drawOval(belly, Offset(-scale * 0.7f, -scale * 0.05f), Size(scale * 1.5f, scale * 0.5f))
-        drawCircle(body, scale * 0.42f, Offset(scale * 1.05f, -scale * 0.05f))
-        drawCircle(Color(0xFF3A3450), scale * 0.06f, Offset(scale * 1.2f, -scale * 0.12f))
+        drawSoftOval(body, Offset(-scale * 1.25f, -scale * 0.48f), Size(scale * 2.4f, scale * 1.12f))
+        drawSoftOval(belly, Offset(-scale * 0.72f, -scale * 0.02f), Size(scale * 1.55f, scale * 0.52f))
+        drawSoftCircle(body, scale * 0.52f, Offset(scale * 1.02f, -scale * 0.06f))
+        drawKawaiiEye(scale * 0.11f, Offset(scale * 1.18f, -scale * 0.14f))
+        drawSoftCircle(Color(0xFFE89AAA), scale * 0.08f, Offset(scale * 1.22f, scale * 0.10f))
         val tail = scratch.path
         tail.rewind()
-        tail.moveTo(-scale * 1.15f, 0f)
-        tail.lineTo(-scale * 1.7f, -scale * 0.45f)
-        tail.lineTo(-scale * 1.55f, 0.05f)
-        tail.lineTo(-scale * 1.7f, scale * 0.4f)
+        tail.moveTo(-scale * 1.18f, 0f)
+        tail.lineTo(-scale * 1.82f, -scale * 0.50f)
+        tail.lineTo(-scale * 1.58f, 0.05f)
+        tail.lineTo(-scale * 1.82f, scale * 0.46f)
         tail.close()
         drawPath(tail, body)
+        drawPath(tail, AnimalLine.copy(alpha = 0.28f), style = Stroke(scale * 0.05f))
         val spray = 0.5f + 0.5f * abs(sin(phase * 2f * PI.toFloat()))
-        drawCircle(belly.copy(alpha = 0.55f * spray), scale * 0.1f, Offset(scale * 0.9f, -scale * 0.7f))
-        drawCircle(belly.copy(alpha = 0.4f * spray), scale * 0.07f, Offset(scale * 0.78f, -scale * 0.95f))
+        drawCircle(belly.copy(alpha = 0.7f * spray), scale * 0.12f, Offset(scale * 0.88f, -scale * 0.78f))
+        drawCircle(belly.copy(alpha = 0.5f * spray), scale * 0.08f, Offset(scale * 0.72f, -scale * 1.05f))
     }
 }
 
 private fun DrawScope.drawPanda(colors: List<Long>, phase: Float) {
     drawRect(colors.colorAt(0, 0xFFC5E4F7))
-    val fur = colors.colorAt(1, 0xFFF4F4F8)
-    val balloon = colors.colorAt(2, 0xFFF8C8D4)
-    val cheek = colors.colorAt(3, 0xFFFFD4B8)
+    val fur = colors.colorAt(1, 0xFFFFF6E8)
+    val balloon = colors.colorAt(2, 0xFFE89AAA)
+    val cheek = colors.colorAt(3, 0xFFF2B48A)
     val compact = isCompact()
     val unit = min(size.width, size.height)
-    val scale = if (compact) unit * 0.26f else unit * 0.13f
+    val scale = if (compact) unit * 0.32f else unit * 0.15f
     val origin = if (compact) {
         Offset(size.width * 0.50f, size.height * 0.60f)
     } else {
-        Offset(size.width * 0.84f, size.height * 0.78f)
+        Offset(size.width * 0.82f, size.height * 0.76f)
     }
     val float = sin(phase * 2f * PI.toFloat()) * scale * 0.18f
     translate(origin.x, origin.y) {
-        drawOval(fur, Offset(-scale * 0.75f, -scale * 0.1f), Size(scale * 1.5f, scale * 1.15f))
-        drawCircle(fur, scale * 0.55f, Offset(0f, -scale * 0.55f))
-        drawCircle(Color(0xFF2A2A35), scale * 0.22f, Offset(-scale * 0.42f, -scale * 0.85f))
-        drawCircle(Color(0xFF2A2A35), scale * 0.22f, Offset(scale * 0.42f, -scale * 0.85f))
-        drawCircle(Color(0xFF2A2A35), scale * 0.14f, Offset(-scale * 0.16f, -scale * 0.58f))
-        drawCircle(Color(0xFF2A2A35), scale * 0.14f, Offset(scale * 0.16f, -scale * 0.58f))
-        drawCircle(Color.White, scale * 0.05f, Offset(-scale * 0.13f, -scale * 0.62f))
-        drawCircle(Color.White, scale * 0.05f, Offset(scale * 0.19f, -scale * 0.62f))
-        drawCircle(Color(0xFF2A2A35), scale * 0.07f, Offset(0f, -scale * 0.42f))
-        drawCircle(cheek.copy(alpha = 0.8f), scale * 0.1f, Offset(-scale * 0.32f, -scale * 0.38f))
-        drawCircle(cheek.copy(alpha = 0.8f), scale * 0.1f, Offset(scale * 0.32f, -scale * 0.38f))
+        drawSoftOval(fur, Offset(-scale * 0.78f, -scale * 0.02f), Size(scale * 1.56f, scale * 1.18f))
+        drawSoftCircle(fur, scale * 0.72f, Offset(0f, -scale * 0.68f))
+        drawCircle(Color(0xFF2A2438), scale * 0.26f, Offset(-scale * 0.48f, -scale * 1.05f))
+        drawCircle(Color(0xFF2A2438), scale * 0.26f, Offset(scale * 0.48f, -scale * 1.05f))
+        drawKawaiiFace(scale * 0.72f, Offset(0f, -scale * 0.62f), blush = cheek, eyeGap = 0.20f)
+        drawCircle(Color(0xFF2A2438), scale * 0.09f, Offset(0f, -scale * 0.46f))
     }
-    val bx = origin.x - scale * 0.95f
-    val by = origin.y - scale * 1.85f + float
-    drawCircle(balloon, scale * 0.42f, Offset(bx, by))
-    drawCircle(colors.colorAt(3, 0xFFFFD4B8), scale * 0.34f, Offset(bx + scale * 0.7f, by - scale * 0.15f))
+    val bx = origin.x - scale * 0.98f
+    val by = origin.y - scale * 2.05f + float
+    drawSoftCircle(balloon, scale * 0.46f, Offset(bx, by))
+    drawSoftCircle(cheek, scale * 0.38f, Offset(bx + scale * 0.78f, by - scale * 0.12f))
     drawLine(
-        Color(0xFF3A3450).copy(alpha = 0.45f),
-        Offset(bx, by + scale * 0.42f),
-        Offset(origin.x - scale * 0.2f, origin.y - scale * 0.2f),
-        strokeWidth = 2f,
+        AnimalLine.copy(alpha = 0.50f),
+        Offset(bx, by + scale * 0.46f),
+        Offset(origin.x - scale * 0.22f, origin.y - scale * 0.18f),
+        strokeWidth = 2.4f,
     )
     drawLine(
-        Color(0xFF3A3450).copy(alpha = 0.45f),
-        Offset(bx + scale * 0.7f, by + scale * 0.18f),
-        Offset(origin.x + scale * 0.15f, origin.y - scale * 0.15f),
-        strokeWidth = 2f,
+        AnimalLine.copy(alpha = 0.50f),
+        Offset(bx + scale * 0.78f, by + scale * 0.22f),
+        Offset(origin.x + scale * 0.16f, origin.y - scale * 0.12f),
+        strokeWidth = 2.4f,
     )
+}
+
+private val AnimalLine = Color(0xFF4A3F5C)
+
+private fun DrawScope.drawSoftCircle(fill: Color, radius: Float, center: Offset) {
+    drawCircle(fill, radius, center)
+    drawCircle(
+        AnimalLine.copy(alpha = 0.30f),
+        radius,
+        center,
+        style = Stroke(width = (radius * 0.08f).coerceIn(2.2f, 4.6f)),
+    )
+}
+
+private fun DrawScope.drawSoftOval(fill: Color, topLeft: Offset, size: Size) {
+    drawOval(fill, topLeft, size)
+    drawOval(
+        AnimalLine.copy(alpha = 0.28f),
+        topLeft,
+        size,
+        style = Stroke(width = (min(size.width, size.height) * 0.055f).coerceIn(2.2f, 4.6f)),
+    )
+}
+
+private fun DrawScope.drawKawaiiEye(radius: Float, center: Offset) {
+    drawCircle(Color(0xFF2A2438), radius, center)
+    drawCircle(
+        Color.White,
+        radius * 0.34f,
+        Offset(center.x + radius * 0.22f, center.y - radius * 0.28f),
+    )
+}
+
+private fun DrawScope.drawKawaiiFace(
+    scale: Float,
+    center: Offset,
+    blush: Color,
+    eyeGap: Float = 0.22f,
+) {
+    drawKawaiiEye(scale * 0.12f, Offset(center.x - scale * eyeGap, center.y - scale * 0.02f))
+    drawKawaiiEye(scale * 0.12f, Offset(center.x + scale * eyeGap, center.y - scale * 0.02f))
+    drawCircle(blush.copy(alpha = 0.88f), scale * 0.11f, Offset(center.x - scale * 0.34f, center.y + scale * 0.16f))
+    drawCircle(blush.copy(alpha = 0.88f), scale * 0.11f, Offset(center.x + scale * 0.34f, center.y + scale * 0.16f))
 }
 
 private fun DrawScope.isCompact(): Boolean = min(size.width, size.height) < 720f

@@ -71,6 +71,8 @@ import com.shibi.musicplayer.domain.PlaylistOrder
 import com.shibi.musicplayer.domain.Track
 import com.shibi.musicplayer.domain.TrackDisplay
 import com.shibi.musicplayer.playlist.PlaylistViewModel
+import com.shibi.musicplayer.ui.background.LocalBackgroundChrome
+import com.shibi.musicplayer.ui.background.contentColorForContainer
 import com.shibi.musicplayer.ui.theme.Base0
 import com.shibi.musicplayer.ui.theme.Base3
 import com.shibi.musicplayer.ui.theme.Error
@@ -160,8 +162,13 @@ fun PlaylistDetailScreen(
         )
     }
     if (confirmingDelete) {
+        val dialogColor = LocalBackgroundChrome.current.dialog
+        val onDialog = contentColorForContainer(dialogColor)
         AlertDialog(
             onDismissRequest = { confirmingDelete = false },
+            containerColor = dialogColor,
+            titleContentColor = onDialog,
+            textContentColor = onDialog,
             title = { Text(stringResource(R.string.delete_playlist)) },
             text = { Text(stringResource(R.string.delete_playlist_body)) },
             confirmButton = {
