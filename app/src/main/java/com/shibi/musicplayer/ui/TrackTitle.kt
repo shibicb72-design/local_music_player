@@ -66,7 +66,6 @@ fun TrackTitle(
                         overflow = TextOverflow.Visible,
                         softWrap = false,
                         maxLines = 1,
-                        constraints = Constraints(maxWidth = 1_000_000),
                     ).size.width <= maxWidthPx
                 }
             }
