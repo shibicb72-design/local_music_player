@@ -225,7 +225,7 @@ private fun DrawScope.drawUnicorn(
     val star = colors.colorAt(3, 0xFFF7E6A1)
     val compact = isCompact()
     val unit = min(size.width, size.height)
-    val scale = if (compact) unit * 0.22f else unit * 0.13f
+    val scale = if (compact) unit * 0.30f else unit * 0.14f
     val origin = if (compact) {
         Offset(size.width * 0.58f, size.height * 0.52f)
     } else {
@@ -264,9 +264,9 @@ private fun DrawScope.drawCat(
     val nose = colors.colorAt(3, 0xFFF0C4D0)
     val compact = isCompact()
     val unit = min(size.width, size.height)
-    val scale = if (compact) unit * 0.2f else unit * 0.12f
+    val scale = if (compact) unit * 0.28f else unit * 0.13f
     val origin = if (compact) {
-        Offset(size.width * 0.38f, size.height * 0.62f)
+        Offset(size.width * 0.42f, size.height * 0.58f)
     } else {
         Offset(size.width * 0.14f, size.height * 0.78f)
     }
@@ -313,9 +313,9 @@ private fun DrawScope.drawPuppy(colors: List<Long>, phase: Float, scratch: Scene
     val tongue = colors.colorAt(3, 0xFFF5C4B8)
     val compact = isCompact()
     val unit = min(size.width, size.height)
-    val scale = if (compact) unit * 0.2f else unit * 0.12f
+    val scale = if (compact) unit * 0.28f else unit * 0.13f
     val origin = if (compact) {
-        Offset(size.width * 0.46f, size.height * 0.6f)
+        Offset(size.width * 0.50f, size.height * 0.58f)
     } else {
         Offset(size.width * 0.16f, size.height * 0.8f)
     }
@@ -341,7 +341,7 @@ private fun DrawScope.drawBunnies(colors: List<Long>, phase: Float) {
     val flower = colors.colorAt(3, 0xFFF8C8D4)
     val compact = isCompact()
     val unit = min(size.width, size.height)
-    val scale = if (compact) unit * 0.16f else unit * 0.1f
+    val scale = if (compact) unit * 0.22f else unit * 0.11f
     val hop = abs(sin(phase * 2f * PI.toFloat())) * scale * 0.55f
     val hop2 = abs(sin((phase + 0.35f) * 2f * PI.toFloat())) * scale * 0.55f
     val left = if (compact) size.width * 0.3f else size.width * 0.12f
@@ -375,7 +375,7 @@ private fun DrawScope.drawWhale(
     val belly = colors.colorAt(2, 0xFFFFFFF0)
     val compact = isCompact()
     val unit = min(size.width, size.height)
-    val scale = if (compact) unit * 0.22f else unit * 0.14f
+    val scale = if (compact) unit * 0.30f else unit * 0.15f
     val travel = if (compact) {
         size.width * 0.5f
     } else {
@@ -409,9 +409,9 @@ private fun DrawScope.drawPanda(colors: List<Long>, phase: Float) {
     val cheek = colors.colorAt(3, 0xFFFFD4B8)
     val compact = isCompact()
     val unit = min(size.width, size.height)
-    val scale = if (compact) unit * 0.2f else unit * 0.12f
+    val scale = if (compact) unit * 0.26f else unit * 0.13f
     val origin = if (compact) {
-        Offset(size.width * 0.42f, size.height * 0.62f)
+        Offset(size.width * 0.50f, size.height * 0.60f)
     } else {
         Offset(size.width * 0.84f, size.height * 0.78f)
     }
@@ -447,7 +447,7 @@ private fun DrawScope.drawPanda(colors: List<Long>, phase: Float) {
     )
 }
 
-private fun DrawScope.isCompact(): Boolean = min(size.width, size.height) < 420f
+private fun DrawScope.isCompact(): Boolean = min(size.width, size.height) < 720f
 
 private fun List<Long>.colorAt(index: Int, fallback: Long): Color {
     val value = getOrNull(index) ?: fallback
