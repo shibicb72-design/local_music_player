@@ -28,5 +28,8 @@ After every task, append an entry below: `- [task] what went wrong -> new rule`.
 
 - [output-device button] Used `MediaRouteChooserDialog` without appcompat on the classpath; CI failed to compile -> check the supertypes of every library class you use are on the classpath.
 
+- [ticket A, ticket B] Tried to unzip media3 jars from the Gradle cache to check APIs; permission denied ended the run with no code written -> use the compiler, not the cache, to confirm APIs.
+
 ## 6. Lessons learned
 - androidx.mediarouter's `MediaRouteChooserDialog` extends `androidx.appcompat.app.AppCompatDialog`, and mediarouter does not expose appcompat at compile time. Using mediarouter dialog classes requires `implementation(libs.androidx.appcompat)` in app/build.gradle.kts (catalog alias `androidx-appcompat`).
+- You cannot read the Gradle cache (~/.gradle/caches): OpenCode denies external directories and the run aborts. Do not try. Verify an API by compiling (gradlew.bat assembleDebug) instead.
