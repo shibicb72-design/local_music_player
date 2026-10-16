@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Music Player</string>
+    <string name="library_title">Music</string>
+    <string name="player_title">Now playing</string>
+    <string name="play">Play</string>
+    <string name="pause">Pause</string>
+    <string name="next">Next</string>
+    <string name="previous">Previous</string>
+    <string name="seek">Seek</string>
+    <string name="album_art">Album art</string>
+    <string name="nothing_playing">Nothing playing</string>
+    <string name="unknown_title">Unknown title</string>
+    <string name="unknown_artist">Unknown artist</string>
+    <string name="unknown_album">Unknown album</string>
+    <string name="permission_title">Music access needed</string>
+    <string name="permission_body">Allow access to audio files so this player can list the music stored on this device.</string>
+    <string name="grant_access">Grant access</string>
+    <string name="open_settings">Open settings</string>
+    <string name="empty_library">No music found on this device.</string>
+    <string name="library_error">Could not read music from this device.</string>
+    <string name="playback_channel_name">Playback</string>
+    <string name="back">Back</string>
+</resources>
