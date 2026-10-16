@@ -37,7 +37,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -45,8 +44,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.shibi.musicplayer.R
+import com.shibi.musicplayer.domain.AudioOutput
 import com.shibi.musicplayer.domain.PlaybackTime
-import com.shibi.musicplayer.playback.OutputSwitcher
 import com.shibi.musicplayer.playback.PlayerUiState
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -58,8 +57,12 @@ fun PlayerScreen(
     onNext: () -> Unit,
     onPrevious: () -> Unit,
     onSeek: (Long) -> Unit,
+    selectedOutputId: Int?,
+    onSelectOutput: (Int?) -> Unit,
 ) {
     val backDescription = stringResource(R.string.back)
+    val outputs by rememberAudioOutputs()
+    var showSheet by remember { mutableStateOf(false) }
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
@@ -124,20 +127,35 @@ fun PlayerScreen(
                 onPrevious = onPrevious,
             )
             Spacer(Modifier.height(8.dp))
-            OutputDeviceButton()
+            OutputDeviceButton(
+                outputs = outputs,
+                selectedId = selectedOutputId,
+                onClick = { showSheet = true },
+            )
         }
+    }
+    if (showSheet) {
+        OutputPickerSheet(
+            outputs = outputs,
+            selectedId = selectedOutputId,
+            onSelect = { id -> onSelectOutput(id) },
+            onDismiss = { showSheet = false },
+        )
     }
 }
 
 @Composable
-private fun OutputDeviceButton() {
-    val context = LocalContext.current
-    val outputName = remember(context) { OutputSwitcher.currentOutputName(context) }
+private fun OutputDeviceButton(
+    outputs: List<AudioOutput>,
+    selectedId: Int?,
+    onClick: () -> Unit,
+) {
+    val outputName = effectiveOutput(outputs, selectedId)?.name
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        IconButton(onClick = { OutputSwitcher.show(context) }) {
+        IconButton(onClick = onClick) {
             Icon(
                 imageVector = Icons.Filled.Speaker,
                 contentDescription = stringResource(R.string.choose_output),

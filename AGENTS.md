@@ -34,6 +34,11 @@ After every task, append an entry below: `- [task] what went wrong -> new rule`.
 
 - [ticket D2] Used the one-arg `AcceptedResultBuilder(MediaSession)`, which emitted a new deprecation warning and would have failed the "no new warnings" bar -> build `AcceptedResultBuilder(session, controller)` to start from per-controller defaults; after any media3 API call, re-run the build and grep the compiler output for `w:`.
 
+- [ticket D3] Assumed the callback was the nested `AudioManager.AudioDeviceCallback`, but compileSdk 36 exposes `android.media.AudioDeviceCallback` as a top-level class and the first build failed -> resolve the exact FQN of any framework class with `javap -classpath $ANDROID_HOME/platforms/<sdk>/android.jar` before referencing it.
+
+- [ticket D3] Wrote `AudioManager.AudioDeviceCallback`; first local build failed -> `AudioDeviceCallback` is top-level `android.media.AudioDeviceCallback`.
+
 ## 6. Lessons learned
 - androidx.mediarouter's `MediaRouteChooserDialog` extends `androidx.appcompat.app.AppCompatDialog`, and mediarouter does not expose appcompat at compile time. Using mediarouter dialog classes requires `implementation(libs.androidx.appcompat)` in app/build.gradle.kts (catalog alias `androidx-appcompat`).
 - You cannot read the Gradle cache (~/.gradle/caches): OpenCode denies external directories and the run aborts. Do not try. Verify an API by compiling (gradlew.bat assembleDebug) instead.
+- `android.media.AudioDeviceCallback` is a top-level class (not nested in AudioManager). `AudioManager.AudioRecordingCallback` IS nested.

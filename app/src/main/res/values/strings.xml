@@ -22,4 +22,5 @@
     <string name="playback_channel_name">Playback</string>
     <string name="back">Back</string>
     <string name="choose_output">Choose audio output</string>
+    <string name="output_this_phone">This phone</string>
 </resources>

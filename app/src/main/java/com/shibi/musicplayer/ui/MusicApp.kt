@@ -20,6 +20,7 @@ fun MusicApp(
 ) {
     val navController = rememberNavController()
     val playerState by playerViewModel.uiState.collectAsStateWithLifecycle()
+    val selectedOutputId by playerViewModel.preferredOutputId.collectAsStateWithLifecycle()
     NavHost(
         navController = navController,
         startDestination = LibraryRoute,
@@ -46,6 +47,8 @@ fun MusicApp(
                 onNext = playerViewModel::skipNext,
                 onPrevious = playerViewModel::skipPrevious,
                 onSeek = playerViewModel::seekTo,
+                selectedOutputId = selectedOutputId,
+                onSelectOutput = playerViewModel::setOutputDevice,
             )
         }
     }
