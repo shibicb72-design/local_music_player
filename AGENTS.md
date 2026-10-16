@@ -12,7 +12,7 @@
 - Style: 4-space indent, trailing commas, one composable per concern, private helper composables, user-facing text in `res/values/strings.xml` via `stringResource`, dependencies only through the version catalog (`libs.*`).
 
 ## 2. Definition of done
-- It compiles and `./gradlew assembleDebug test` passes (run it locally if `java -version` works and ANDROID_HOME is set; otherwise CI is the compiler, so check every import, dependency and type by hand).
+- Run `gradlew.bat assembleDebug test` locally (JDK 17 and Android SDK are installed; if JAVA_HOME/ANDROID_HOME are missing in your shell, load them from the user environment). It must be green before you say you are done. Report the actual result.
 - No new compiler warnings.
 - Only the files named in the ticket are touched.
 - Logic changes come with new or updated unit tests.
@@ -30,4 +30,3 @@ After every task, append an entry below: `- [task] what went wrong -> new rule`.
 
 ## 6. Lessons learned
 - androidx.mediarouter's `MediaRouteChooserDialog` extends `androidx.appcompat.app.AppCompatDialog`, and mediarouter does not expose appcompat at compile time. Using mediarouter dialog classes requires `implementation(libs.androidx.appcompat)` in app/build.gradle.kts (catalog alias `androidx-appcompat`).
-- No JDK on the laptop yet: you cannot run Gradle locally, so do not claim a build passed.
