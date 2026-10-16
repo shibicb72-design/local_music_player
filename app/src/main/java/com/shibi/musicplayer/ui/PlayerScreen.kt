@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -38,6 +39,8 @@ import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Repeat
+import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material.icons.rounded.Smartphone
@@ -74,14 +77,19 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.shibi.musicplayer.R
 import com.shibi.musicplayer.domain.ArtTile
 import com.shibi.musicplayer.domain.OutputKind
 import com.shibi.musicplayer.domain.PlaybackTime
+import com.shibi.musicplayer.domain.RepeatMode
+import com.shibi.musicplayer.domain.ShuffleBadge
+import com.shibi.musicplayer.domain.ShuffleContext
 import com.shibi.musicplayer.domain.TrackDisplay
 import com.shibi.musicplayer.domain.containsTamil
 import com.shibi.musicplayer.playback.PlayerUiState
@@ -98,6 +106,8 @@ fun PlayerScreen(
     onSeek: (Long) -> Unit,
     selectedOutputId: Int?,
     onSelectOutput: (Int?) -> Unit,
+    onToggleShuffle: () -> Unit = {},
+    onCycleRepeat: () -> Unit = {},
     showBack: Boolean = true,
     includeNavigationBars: Boolean = true,
     modifier: Modifier = Modifier,
@@ -270,10 +280,15 @@ fun PlayerScreen(
                         hasMedia = state.hasMedia,
                         hasNext = state.hasNext,
                         hasPrevious = state.hasPrevious,
+                        shuffleEnabled = state.shuffleEnabled,
+                        shuffleContext = state.shuffleContext,
+                        repeatMode = state.repeatMode,
                         compact = compact,
                         onTogglePlayPause = onTogglePlayPause,
                         onNext = onNext,
                         onPrevious = onPrevious,
+                        onToggleShuffle = onToggleShuffle,
+                        onCycleRepeat = onCycleRepeat,
                     )
                     Spacer(Modifier.height(if (compact) 12.dp else 24.dp))
                     Surface(
@@ -400,20 +415,54 @@ private fun TransportControls(
     hasMedia: Boolean,
     hasNext: Boolean,
     hasPrevious: Boolean,
+    shuffleEnabled: Boolean,
+    shuffleContext: ShuffleContext,
+    repeatMode: RepeatMode,
     compact: Boolean,
     onTogglePlayPause: () -> Unit,
     onNext: () -> Unit,
     onPrevious: () -> Unit,
+    onToggleShuffle: () -> Unit,
+    onCycleRepeat: () -> Unit,
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val playButtonSize = if (compact) 64.dp else 80.dp
     val playIconSize = if (compact) 34.dp else 42.dp
     val skipButtonSize = if (compact) 36.dp else 44.dp
+    val modeButtonSize = if (compact) 26.dp else 30.dp
+    val accent = colorScheme.secondary
+    val dimmed = colorScheme.onBackground.copy(alpha = 0.40f)
+    val shuffleBadge = ShuffleBadge.label(shuffleEnabled, shuffleContext)?.toString()
+    val repeatBadge = when (repeatMode) {
+        RepeatMode.OFF -> null
+        RepeatMode.ONCE -> stringResource(R.string.repeat_badge_once)
+        RepeatMode.THRICE -> stringResource(R.string.repeat_badge_thrice)
+        RepeatMode.INFINITE -> stringResource(R.string.repeat_badge_infinite)
+    }
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(28.dp, Alignment.CenterHorizontally),
+        horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        ModeButton(
+            onClick = onToggleShuffle,
+            enabled = hasMedia,
+            tint = if (shuffleEnabled) accent else dimmed,
+            badge = shuffleBadge,
+            description = stringResource(
+                if (shuffleEnabled) {
+                    if (shuffleContext == ShuffleContext.PLAYLIST) {
+                        R.string.shuffle_on_playlist
+                    } else {
+                        R.string.shuffle_on_all
+                    }
+                } else {
+                    R.string.shuffle_off
+                },
+            ),
+            icon = Icons.Rounded.Shuffle,
+            iconSize = modeButtonSize,
+        )
         IconButton(
             onClick = onPrevious,
             enabled = hasPrevious,
@@ -469,6 +518,64 @@ private fun TransportControls(
                 contentDescription = stringResource(R.string.next),
                 modifier = Modifier.size(skipButtonSize),
             )
+        }
+        ModeButton(
+            onClick = onCycleRepeat,
+            enabled = hasMedia,
+            tint = if (repeatMode == RepeatMode.OFF) dimmed else accent,
+            badge = repeatBadge,
+            description = stringResource(
+                when (repeatMode) {
+                    RepeatMode.OFF -> R.string.repeat_off
+                    RepeatMode.ONCE -> R.string.repeat_once
+                    RepeatMode.THRICE -> R.string.repeat_thrice
+                    RepeatMode.INFINITE -> R.string.repeat_infinite
+                },
+            ),
+            icon = Icons.Rounded.Repeat,
+            iconSize = modeButtonSize,
+        )
+    }
+}
+
+@Composable
+private fun ModeButton(
+    onClick: () -> Unit,
+    enabled: Boolean,
+    tint: Color,
+    badge: String?,
+    description: String,
+    icon: ImageVector,
+    iconSize: Dp,
+) {
+    IconButton(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = Modifier.size(56.dp),
+        colors = IconButtonDefaults.iconButtonColors(
+            contentColor = tint,
+            disabledContentColor = tint.copy(alpha = 0.38f),
+        ),
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                imageVector = icon,
+                contentDescription = description,
+                tint = tint,
+                modifier = Modifier.size(iconSize),
+            )
+            if (badge != null) {
+                Text(
+                    text = badge,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = tint,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .offset(x = 8.dp, y = (-6).dp),
+                )
+            }
         }
     }
 }

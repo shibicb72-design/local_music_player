@@ -64,6 +64,8 @@ import com.shibi.musicplayer.ui.TwoPanePlayerBottomPadding
 import com.shibi.musicplayer.domain.AppBackground
 import com.shibi.musicplayer.domain.BackgroundCatalog
 import com.shibi.musicplayer.domain.BackgroundTab
+import com.shibi.musicplayer.domain.RepeatMode
+import com.shibi.musicplayer.domain.ShuffleContext
 import com.shibi.musicplayer.ui.background.AppBackgroundHost
 import com.shibi.musicplayer.ui.background.BackgroundAnimalGrid
 import com.shibi.musicplayer.ui.background.BackgroundFineTuneContent
@@ -149,6 +151,45 @@ class ScreenshotTest {
                 }
             }
         }
+    }
+
+    @Test
+    fun nowPlayingShuffleAll() {
+        captureNowPlaying(
+            "now_playing_shuffle_all.png",
+            englishState.copy(shuffleEnabled = true, shuffleContext = ShuffleContext.ALL_SONGS),
+        )
+    }
+
+    @Test
+    fun nowPlayingShufflePlaylist() {
+        captureNowPlaying(
+            "now_playing_shuffle_playlist.png",
+            englishState.copy(shuffleEnabled = true, shuffleContext = ShuffleContext.PLAYLIST),
+        )
+    }
+
+    @Test
+    fun nowPlayingRepeatOff() {
+        captureNowPlaying("now_playing_repeat_off.png", englishState.copy(repeatMode = RepeatMode.OFF))
+    }
+
+    @Test
+    fun nowPlayingRepeatOnce() {
+        captureNowPlaying("now_playing_repeat_1x.png", englishState.copy(repeatMode = RepeatMode.ONCE))
+    }
+
+    @Test
+    fun nowPlayingRepeatThrice() {
+        captureNowPlaying("now_playing_repeat_3x.png", englishState.copy(repeatMode = RepeatMode.THRICE))
+    }
+
+    @Test
+    fun nowPlayingRepeatInfinite() {
+        captureNowPlaying(
+            "now_playing_repeat_infinite.png",
+            englishState.copy(repeatMode = RepeatMode.INFINITE),
+        )
     }
 
     @Test
@@ -932,6 +973,23 @@ class ScreenshotTest {
                 contentBottomPadding = bottom,
                 modifier = Modifier.fillMaxSize(),
             )
+        }
+    }
+
+    private fun captureNowPlaying(fileName: String, state: PlayerUiState) {
+        captureRoboImage("build/outputs/roborazzi/$fileName") {
+            MusicPlayerTheme {
+                PlayerScreen(
+                    state = state,
+                    onBack = {},
+                    onTogglePlayPause = {},
+                    onNext = {},
+                    onPrevious = {},
+                    onSeek = {},
+                    selectedOutputId = null,
+                    onSelectOutput = {},
+                )
+            }
         }
     }
 

@@ -37,6 +37,7 @@ import androidx.navigation.navArgument
 import com.shibi.musicplayer.R
 import com.shibi.musicplayer.background.BackgroundViewModel
 import com.shibi.musicplayer.domain.AppBackground
+import com.shibi.musicplayer.domain.ShuffleContext
 import com.shibi.musicplayer.domain.Track
 import com.shibi.musicplayer.library.LibraryViewModel
 import com.shibi.musicplayer.playback.PlayerUiState
@@ -114,9 +115,13 @@ fun MusicApp(
         val showCarousel = wide || route != PlayerRoute
         val activeOutputId = playbackRoute.activeDeviceId
 
-        fun playQueue(tracks: List<Track>, startId: Long) {
+        fun playQueue(
+            tracks: List<Track>,
+            startId: Long,
+            context: ShuffleContext = ShuffleContext.ALL_SONGS,
+        ) {
             if (tracks.isEmpty()) return
-            playerViewModel.playTrack(tracks, startId)
+            playerViewModel.playTrack(tracks, startId, context)
             playlistViewModel.recordPlay(startId)
             if (!wide) {
                 section = NavSection.NowPlaying
@@ -187,10 +192,12 @@ fun MusicApp(
                 onTogglePlayPause = playerViewModel::togglePlayPause,
                 onNext = playerViewModel::skipNext,
                 onPrevious = playerViewModel::skipPrevious,
-                onSeek = playerViewModel::seekTo,
-                selectedOutputId = activeOutputId,
-                onSelectOutput = playerViewModel::setOutputDevice,
-                showBack = false,
+                    onSeek = playerViewModel::seekTo,
+                    selectedOutputId = activeOutputId,
+                    onSelectOutput = playerViewModel::setOutputDevice,
+                    onToggleShuffle = playerViewModel::toggleShuffle,
+                    onCycleRepeat = playerViewModel::cycleRepeat,
+                    showBack = false,
                 includeNavigationBars = false,
                 modifier = Modifier
                     .fillMaxHeight()
@@ -228,7 +235,7 @@ fun MusicApp(
                     wide = false,
                     contentBottomPadding = bottomPadding,
                     activeOutputId = activeOutputId,
-                    onPlayQueue = { tracks, startId -> playQueue(tracks, startId) },
+                    onPlayQueue = { tracks, startId, context -> playQueue(tracks, startId, context) },
                     onOpenPlayer = {
                         section = NavSection.NowPlaying
                         navController.openPlayer()
@@ -264,7 +271,7 @@ fun MusicApp(
                         wide = true,
                         contentBottomPadding = SongListBottomPadding,
                         activeOutputId = activeOutputId,
-                        onPlayQueue = { tracks, startId -> playQueue(tracks, startId) },
+                        onPlayQueue = { tracks, startId, context -> playQueue(tracks, startId, context) },
                         onOpenPlayer = {},
                         onAddToPlaylist = { pendingTrack = it },
                         modifier = Modifier
@@ -305,7 +312,7 @@ fun MusicApp(
                         wide = true,
                         contentBottomPadding = SongListBottomPadding,
                         activeOutputId = activeOutputId,
-                        onPlayQueue = { tracks, startId -> playQueue(tracks, startId) },
+                        onPlayQueue = { tracks, startId, context -> playQueue(tracks, startId, context) },
                         onOpenPlayer = {},
                         onAddToPlaylist = { pendingTrack = it },
                         modifier = Modifier
@@ -384,7 +391,7 @@ private fun AppNavHost(
     wide: Boolean,
     contentBottomPadding: Dp,
     activeOutputId: Int?,
-    onPlayQueue: (List<Track>, Long) -> Unit,
+    onPlayQueue: (List<Track>, Long, ShuffleContext) -> Unit,
     onOpenPlayer: () -> Unit,
     onAddToPlaylist: (Track) -> Unit,
     modifier: Modifier = Modifier,
@@ -398,7 +405,9 @@ private fun AppNavHost(
             LibraryScreen(
                 viewModel = libraryViewModel,
                 nowPlaying = playerState,
-                onTrackSelected = { tracks, trackId -> onPlayQueue(tracks, trackId) },
+                onTrackSelected = { tracks, trackId ->
+                    onPlayQueue(tracks, trackId, ShuffleContext.ALL_SONGS)
+                },
                 onOpenPlayer = onOpenPlayer,
                 onTogglePlayPause = playerViewModel::togglePlayPause,
                 onAddToPlaylist = onAddToPlaylist,
@@ -430,10 +439,14 @@ private fun AppNavHost(
                 viewModel = playlistViewModel,
                 tracksById = tracksById,
                 onBack = { navController.popBackStack() },
-                onPlay = onPlayQueue,
+                onPlay = { tracks, startId ->
+                    onPlayQueue(tracks, startId, ShuffleContext.PLAYLIST)
+                },
                 onShuffle = { tracks ->
                     val shuffled = tracks.shuffled()
-                    shuffled.firstOrNull()?.let { onPlayQueue(shuffled, it.id) }
+                    shuffled.firstOrNull()?.let {
+                        onPlayQueue(shuffled, it.id, ShuffleContext.PLAYLIST)
+                    }
                 },
                 contentBottomPadding = contentBottomPadding,
                 modifier = Modifier.fillMaxSize(),
@@ -444,7 +457,9 @@ private fun AppNavHost(
                 tracks = libraryTracks,
                 favoriteIds = favoriteIds,
                 nowPlaying = playerState,
-                onTrackSelected = onPlayQueue,
+                onTrackSelected = { tracks, startId ->
+                    onPlayQueue(tracks, startId, ShuffleContext.ALL_SONGS)
+                },
                 onToggleFavorite = { playlistViewModel.toggleFavorite(it.id) },
                 onAddToPlaylist = onAddToPlaylist,
                 contentBottomPadding = contentBottomPadding,
@@ -456,7 +471,9 @@ private fun AppNavHost(
                 tracks = recentTracks,
                 favoriteIds = favoriteIds,
                 nowPlaying = playerState,
-                onTrackSelected = onPlayQueue,
+                onTrackSelected = { tracks, startId ->
+                    onPlayQueue(tracks, startId, ShuffleContext.ALL_SONGS)
+                },
                 onToggleFavorite = { playlistViewModel.toggleFavorite(it.id) },
                 onAddToPlaylist = onAddToPlaylist,
                 contentBottomPadding = contentBottomPadding,
@@ -468,7 +485,9 @@ private fun AppNavHost(
                 tracks = libraryTracks,
                 favoriteIds = favoriteIds,
                 nowPlaying = playerState,
-                onTrackSelected = onPlayQueue,
+                onTrackSelected = { tracks, startId ->
+                    onPlayQueue(tracks, startId, ShuffleContext.ALL_SONGS)
+                },
                 onToggleFavorite = { playlistViewModel.toggleFavorite(it.id) },
                 onAddToPlaylist = onAddToPlaylist,
                 recentSearches = recentSearches,
@@ -512,6 +531,8 @@ private fun AppNavHost(
                     onSeek = playerViewModel::seekTo,
                     selectedOutputId = activeOutputId,
                     onSelectOutput = playerViewModel::setOutputDevice,
+                    onToggleShuffle = playerViewModel::toggleShuffle,
+                    onCycleRepeat = playerViewModel::cycleRepeat,
                 )
             }
         }

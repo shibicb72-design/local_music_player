@@ -7,6 +7,16 @@
     <string name="pause">Pause</string>
     <string name="next">Next</string>
     <string name="previous">Previous</string>
+    <string name="shuffle_off">Shuffle off</string>
+    <string name="shuffle_on_all">Shuffle all songs</string>
+    <string name="shuffle_on_playlist">Shuffle this playlist</string>
+    <string name="repeat_off">Repeat off</string>
+    <string name="repeat_once">Repeat this song once more</string>
+    <string name="repeat_thrice">Repeat this song three more times</string>
+    <string name="repeat_infinite">Repeat this song forever</string>
+    <string name="repeat_badge_once">1x</string>
+    <string name="repeat_badge_thrice">3x</string>
+    <string name="repeat_badge_infinite">\u221e</string>
     <string name="seek">Seek</string>
     <string name="album_art">Album art</string>
     <string name="nothing_playing">Nothing playing</string>
