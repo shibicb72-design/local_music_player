@@ -51,7 +51,6 @@ data class AnimatedScene(
     val id: String,
     val defaults: List<Long>,
     val slotKeys: List<String>,
-    val animal: Boolean = false,
 )
 
 object BackgroundCatalog {
@@ -116,45 +115,7 @@ object BackgroundCatalog {
             defaults = listOf(0xFFD8E0F8, 0xFFF0C8E0, 0xFFC8EDE0, 0xFFDCC8F0),
             slotKeys = listOf("night", "rose", "mint", "lilac"),
         ),
-        AnimatedScene(
-            id = "unicorn",
-            defaults = listOf(0xFFD8E8F8, 0xFFFFF6E8, 0xFFE8A8D0, 0xFFF2D56A),
-            slotKeys = listOf("sky", "coat", "mane", "star"),
-            animal = true,
-        ),
-        AnimatedScene(
-            id = "cat",
-            defaults = listOf(0xFFF5EDE0, 0xFFE0B89A, 0xFF8EC8EE, 0xFFE89AAA),
-            slotKeys = listOf("room", "fur", "bubble", "nose"),
-            animal = true,
-        ),
-        AnimatedScene(
-            id = "puppy",
-            defaults = listOf(0xFFC5D9C3, 0xFFF2C08A, 0xFFD4A8C0, 0xFFE89A90),
-            slotKeys = listOf("field", "fur", "ear", "tongue"),
-            animal = true,
-        ),
-        AnimatedScene(
-            id = "bunnies",
-            defaults = listOf(0xFFE8F5D8, 0xFFFFF6E8, 0xFFE8A8D0, 0xFFE89AAA),
-            slotKeys = listOf("meadow", "fur", "ear", "flower"),
-            animal = true,
-        ),
-        AnimatedScene(
-            id = "whale",
-            defaults = listOf(0xFFB8E4FF, 0xFF7EB6DC, 0xFFFFF6E8, 0xFFE8F7FF),
-            slotKeys = listOf("ocean", "body", "belly", "spray"),
-            animal = true,
-        ),
-        AnimatedScene(
-            id = "panda",
-            defaults = listOf(0xFFC5E4F7, 0xFFFFF6E8, 0xFFE89AAA, 0xFFF2B48A),
-            slotKeys = listOf("sky", "fur", "balloon", "cheek"),
-            animal = true,
-        ),
     )
-
-    val animals: List<AnimatedScene> = scenes.filter { it.animal }
 
     const val DEFAULT_ARGB: Long = 0xFF0E0E12
 

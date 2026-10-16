@@ -9,10 +9,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -40,8 +43,10 @@ import com.shibi.musicplayer.domain.Track
 import com.shibi.musicplayer.domain.TrackDisplay
 import com.shibi.musicplayer.playback.PlayerUiState
 import com.shibi.musicplayer.ui.AddToPlaylistContent
+import com.shibi.musicplayer.ui.ChromeSlot
 import com.shibi.musicplayer.ui.FavoritesContent
 import com.shibi.musicplayer.ui.LibraryContent
+import com.shibi.musicplayer.ui.ListViewport
 import com.shibi.musicplayer.ui.MiniPlayerCarouselGap
 import com.shibi.musicplayer.ui.NavCarousel
 import com.shibi.musicplayer.ui.NavSection
@@ -66,7 +71,6 @@ import com.shibi.musicplayer.domain.BackgroundTab
 import com.shibi.musicplayer.domain.RepeatMode
 import com.shibi.musicplayer.domain.ShuffleContext
 import com.shibi.musicplayer.ui.background.AppBackgroundHost
-import com.shibi.musicplayer.ui.background.BackgroundAnimalGrid
 import com.shibi.musicplayer.ui.background.BackgroundFineTuneContent
 import com.shibi.musicplayer.ui.background.BackgroundPickerContent
 import com.shibi.musicplayer.ui.background.ContrastSurface
@@ -269,9 +273,9 @@ class ScreenshotTest {
             MusicPlayerTheme {
                 Row(modifier = Modifier.fillMaxSize()) {
                     Column(modifier = Modifier.weight(0.42f).fillMaxSize()) {
-                        Box(modifier = Modifier.weight(1f)) {
+                        ListViewport(modifier = Modifier.weight(1f).fillMaxSize()) {
                             LibraryContent(
-                                tracks = tracks,
+                                tracks = midTracks,
                                 nowPlaying = playingState,
                                 showMiniPlayer = false,
                                 onTrackSelected = { _, _ -> },
@@ -279,17 +283,20 @@ class ScreenshotTest {
                                 onTogglePlayPause = {},
                                 favoriteIds = setOf(8L),
                                 contentBottomPadding = SongListBottomPadding,
+                                listState = rememberLazyListState(initialFirstVisibleItemIndex = 8),
                                 modifier = Modifier.fillMaxSize(),
                             )
                         }
-                        NavCarousel(
-                            selected = NavSection.Songs,
-                            onSelect = {},
-                            modifier = Modifier.padding(
-                                top = TwoPaneCarouselPadding,
-                                bottom = TwoPaneCarouselPadding,
-                            ),
-                        )
+                        ChromeSlot {
+                            NavCarousel(
+                                selected = NavSection.Songs,
+                                onSelect = {},
+                                modifier = Modifier.padding(
+                                    top = TwoPaneCarouselPadding,
+                                    bottom = TwoPaneCarouselPadding,
+                                ),
+                            )
+                        }
                     }
                     PlayerScreen(
                         state = playingState,
@@ -326,19 +333,21 @@ class ScreenshotTest {
     fun playlists() {
         captureRoboImage("build/outputs/roborazzi/playlists.png") {
             MusicPlayerTheme {
-                Column(modifier = Modifier.fillMaxSize()) {
-                    Box(modifier = Modifier.weight(1f)) {
-                        PlaylistsContent(
-                            cards = playlistCards,
-                            onOpen = {},
-                            onCreate = {},
-                            contentBottomPadding = PlaylistListBottomPadding,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                    }
-                    NavCarousel(
-                        selected = NavSection.Playlists,
-                        onSelect = {},
+                SectionScaffold(
+                    modifier = Modifier.fillMaxSize(),
+                    showMiniPlayer = false,
+                    showCarousel = true,
+                    contentBottomPadding = PlaylistListBottomPadding,
+                    carousel = {
+                        NavCarousel(selected = NavSection.Playlists, onSelect = {})
+                    },
+                ) { bottom ->
+                    PlaylistsContent(
+                        cards = playlistCards,
+                        onOpen = {},
+                        onCreate = {},
+                        contentBottomPadding = bottom,
+                        modifier = Modifier.fillMaxSize(),
                     )
                 }
             }
@@ -349,26 +358,28 @@ class ScreenshotTest {
     fun playlistDetail() {
         captureRoboImage("build/outputs/roborazzi/playlist_detail.png") {
             MusicPlayerTheme {
-                Column(modifier = Modifier.fillMaxSize()) {
-                    Box(modifier = Modifier.weight(1f)) {
-                        PlaylistDetailContent(
-                            name = "Late night",
-                            songs = detailSongs,
-                            onBack = {},
-                            onPlayAll = {},
-                            onShuffle = {},
-                            onRenameClick = {},
-                            onDeleteClick = {},
-                            onRemove = {},
-                            onReorder = {},
-                            onPlayFrom = {},
-                            contentBottomPadding = SongListBottomPadding,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                    }
-                    NavCarousel(
-                        selected = NavSection.Playlists,
-                        onSelect = {},
+                SectionScaffold(
+                    modifier = Modifier.fillMaxSize(),
+                    showMiniPlayer = false,
+                    showCarousel = true,
+                    contentBottomPadding = SongListBottomPadding,
+                    carousel = {
+                        NavCarousel(selected = NavSection.Playlists, onSelect = {})
+                    },
+                ) { bottom ->
+                    PlaylistDetailContent(
+                        name = "Late night",
+                        songs = detailSongs,
+                        onBack = {},
+                        onPlayAll = {},
+                        onShuffle = {},
+                        onRenameClick = {},
+                        onDeleteClick = {},
+                        onRemove = {},
+                        onReorder = {},
+                        onPlayFrom = {},
+                        contentBottomPadding = bottom,
+                        modifier = Modifier.fillMaxSize(),
                     )
                 }
             }
@@ -384,17 +395,21 @@ class ScreenshotTest {
                         .fillMaxSize()
                         .background(Color.Black),
                 ) {
-                    Column(modifier = Modifier.fillMaxSize()) {
+                    SectionScaffold(
+                        modifier = Modifier.fillMaxSize(),
+                        showMiniPlayer = false,
+                        showCarousel = true,
+                        contentBottomPadding = PlaylistListBottomPadding,
+                        carousel = {
+                            NavCarousel(selected = NavSection.Playlists, onSelect = {})
+                        },
+                    ) { bottom ->
                         PlaylistsContent(
                             cards = playlistCards,
                             onOpen = {},
                             onCreate = {},
-                            contentBottomPadding = PlaylistListBottomPadding,
-                            modifier = Modifier.weight(1f),
-                        )
-                        NavCarousel(
-                            selected = NavSection.Playlists,
-                            onSelect = {},
+                            contentBottomPadding = bottom,
+                            modifier = Modifier.fillMaxSize(),
                         )
                     }
                     Box(
@@ -434,22 +449,24 @@ class ScreenshotTest {
     fun favorites() {
         captureRoboImage("build/outputs/roborazzi/favorites.png") {
             MusicPlayerTheme {
-                Column(modifier = Modifier.fillMaxSize()) {
-                    Box(modifier = Modifier.weight(1f)) {
-                        FavoritesContent(
-                            tracks = emptyList(),
-                            favoriteIds = emptySet(),
-                            nowPlaying = PlayerUiState(),
-                            onTrackSelected = { _, _ -> },
-                            onToggleFavorite = {},
-                            onAddToPlaylist = {},
-                            contentBottomPadding = SongListBottomPadding,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                    }
-                    NavCarousel(
-                        selected = NavSection.Favorites,
-                        onSelect = {},
+                SectionScaffold(
+                    modifier = Modifier.fillMaxSize(),
+                    showMiniPlayer = false,
+                    showCarousel = true,
+                    contentBottomPadding = SongListBottomPadding,
+                    carousel = {
+                        NavCarousel(selected = NavSection.Favorites, onSelect = {})
+                    },
+                ) { bottom ->
+                    FavoritesContent(
+                        tracks = emptyList(),
+                        favoriteIds = emptySet(),
+                        nowPlaying = PlayerUiState(),
+                        onTrackSelected = { _, _ -> },
+                        onToggleFavorite = {},
+                        onAddToPlaylist = {},
+                        contentBottomPadding = bottom,
+                        modifier = Modifier.fillMaxSize(),
                     )
                 }
             }
@@ -645,17 +662,23 @@ class ScreenshotTest {
                             .weight(1f)
                             .fillMaxSize(),
                     ) {
-                        LibraryContent(
-                            tracks = tracks,
-                            nowPlaying = longState,
-                            showMiniPlayer = false,
-                            onTrackSelected = { _, _ -> },
-                            onOpenPlayer = {},
-                            onTogglePlayPause = {},
-                            favoriteIds = setOf(2L, 8L),
-                            contentBottomPadding = SongListBottomPadding,
-                            modifier = Modifier.weight(0.42f).fillMaxSize(),
-                        )
+                        ListViewport(
+                            modifier = Modifier
+                                .weight(0.42f)
+                                .fillMaxHeight(),
+                        ) {
+                            LibraryContent(
+                                tracks = tracks,
+                                nowPlaying = longState,
+                                showMiniPlayer = false,
+                                onTrackSelected = { _, _ -> },
+                                onOpenPlayer = {},
+                                onTogglePlayPause = {},
+                                favoriteIds = setOf(2L, 8L),
+                                contentBottomPadding = SongListBottomPadding,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        }
                         PlayerScreen(
                             state = longState,
                             onBack = {},
@@ -678,8 +701,10 @@ class ScreenshotTest {
                                 .clip(RoundedCornerShape(28.dp)),
                         )
                     }
-                    MiniBar(longState, carRoute, liked = true)
-                    NavCarousel(selected = NavSection.Songs, onSelect = {})
+                    ChromeSlot {
+                        MiniBar(longState, carRoute, liked = true)
+                        NavCarousel(selected = NavSection.Songs, onSelect = {})
+                    }
                 }
             }
         }
@@ -777,22 +802,6 @@ class ScreenshotTest {
     }
 
     @Test
-    fun backgroundsAnimals() {
-        captureRoboImage("build/outputs/roborazzi/backgrounds_animals.png") {
-            MusicPlayerTheme {
-                AppBackgroundHost(AppBackground.Animated("unicorn"), emptyMap(), forceStatic = true) {
-                    BackgroundAnimalGrid(
-                        selected = AppBackground.Animated("unicorn"),
-                        customColors = emptyMap(),
-                        onSelect = {},
-                        forceStatic = true,
-                    )
-                }
-            }
-        }
-    }
-
-    @Test
     fun backgroundsFineTune() {
         val scene = BackgroundCatalog.scene("bubbles")!!
         captureRoboImage("build/outputs/roborazzi/backgrounds_finetune.png") {
@@ -865,12 +874,41 @@ class ScreenshotTest {
         captureSongsBackground(AppBackground.Animated("bubbles"), "songs_bubbles.png")
 
     @Test
-    fun songsUnicorn() =
-        captureSongsBackground(AppBackground.Animated("unicorn"), "songs_unicorn.png")
+    fun songsMidBlush() {
+        captureSongsBackground(
+            AppBackground.Solid("blush"),
+            "songs_mid_blush.png",
+            library = midTracks,
+            firstVisible = 8,
+        )
+    }
 
     @Test
-    fun songsPanda() =
-        captureSongsBackground(AppBackground.Animated("panda"), "songs_panda.png")
+    fun songsMidDark() {
+        captureSongsBackground(
+            AppBackground.Default,
+            "songs_mid_dark.png",
+            library = midTracks,
+            firstVisible = 8,
+        )
+    }
+
+    @Test
+    fun carouselAlone() {
+        captureRoboImage("build/outputs/roborazzi/carousel_alone.png") {
+            MusicPlayerTheme {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color(0xFF0E0E12)),
+                ) {
+                    ChromeSlot(modifier = Modifier.align(Alignment.BottomCenter)) {
+                        NavCarousel(selected = NavSection.Songs, onSelect = {})
+                    }
+                }
+            }
+        }
+    }
 
     @Test
     @Config(qualifiers = "w900dp-h600dp-xhdpi")
@@ -880,9 +918,9 @@ class ScreenshotTest {
                 AppBackgroundHost(AppBackground.Solid("sky"), emptyMap(), forceStatic = true) {
                     Row(modifier = Modifier.fillMaxSize()) {
                         Column(modifier = Modifier.weight(0.42f).fillMaxSize()) {
-                            Box(modifier = Modifier.weight(1f)) {
+                            ListViewport(modifier = Modifier.weight(1f).fillMaxSize()) {
                                 LibraryContent(
-                                    tracks = tracks,
+                                    tracks = midTracks,
                                     nowPlaying = playingState,
                                     showMiniPlayer = false,
                                     onTrackSelected = { _, _ -> },
@@ -890,17 +928,20 @@ class ScreenshotTest {
                                     onTogglePlayPause = {},
                                     favoriteIds = setOf(8L),
                                     contentBottomPadding = SongListBottomPadding,
+                                    listState = rememberLazyListState(initialFirstVisibleItemIndex = 8),
                                     modifier = Modifier.fillMaxSize(),
                                 )
                             }
-                            NavCarousel(
-                                selected = NavSection.Songs,
-                                onSelect = {},
-                                modifier = Modifier.padding(
-                                    top = TwoPaneCarouselPadding,
-                                    bottom = TwoPaneCarouselPadding,
-                                ),
-                            )
+                            ChromeSlot {
+                                NavCarousel(
+                                    selected = NavSection.Songs,
+                                    onSelect = {},
+                                    modifier = Modifier.padding(
+                                        top = TwoPaneCarouselPadding,
+                                        bottom = TwoPaneCarouselPadding,
+                                    ),
+                                )
+                            }
                         }
                         PlayerScreen(
                             state = playingState,
@@ -929,7 +970,15 @@ class ScreenshotTest {
     fun search() {
         captureRoboImage("build/outputs/roborazzi/search.png") {
             MusicPlayerTheme {
-                Column(modifier = Modifier.fillMaxSize()) {
+                SectionScaffold(
+                    modifier = Modifier.fillMaxSize(),
+                    showMiniPlayer = false,
+                    showCarousel = true,
+                    contentBottomPadding = SongListBottomPadding,
+                    carousel = {
+                        NavCarousel(selected = NavSection.Search, onSelect = {})
+                    },
+                ) { bottom ->
                     SearchContent(
                         tracks = tracks,
                         query = "",
@@ -940,12 +989,8 @@ class ScreenshotTest {
                         onToggleFavorite = {},
                         onAddToPlaylist = {},
                         recentSearches = listOf("Tide", "Golden", "Paper"),
-                        contentBottomPadding = SongListBottomPadding,
-                        modifier = Modifier.weight(1f),
-                    )
-                    NavCarousel(
-                        selected = NavSection.Search,
-                        onSelect = {},
+                        contentBottomPadding = bottom,
+                        modifier = Modifier.fillMaxSize(),
                     )
                 }
             }
@@ -959,6 +1004,7 @@ class ScreenshotTest {
         route: RoutePresentation = RoutePresentation.phone("This phone"),
         liked: Boolean = false,
         nowPlaying: PlayerUiState = if (library.isEmpty()) PlayerUiState() else playingState,
+        listState: LazyListState = rememberLazyListState(),
     ) {
         SectionScaffold(
             modifier = Modifier.fillMaxSize(),
@@ -989,6 +1035,7 @@ class ScreenshotTest {
                 onTogglePlayPause = {},
                 favoriteIds = if (library.isEmpty()) emptySet() else setOf(8L),
                 contentBottomPadding = bottom,
+                listState = listState,
                 modifier = Modifier.fillMaxSize(),
             )
         }
@@ -1017,11 +1064,22 @@ class ScreenshotTest {
         }
     }
 
-    private fun captureSongsBackground(background: AppBackground, fileName: String) {
+    private fun captureSongsBackground(
+        background: AppBackground,
+        fileName: String,
+        library: List<Track> = tracks,
+        firstVisible: Int = 0,
+    ) {
         captureRoboImage("build/outputs/roborazzi/$fileName") {
             MusicPlayerTheme {
                 AppBackgroundHost(background, emptyMap(), forceStatic = true) {
-                    SongsWithCarousel(tracks, NavSection.Songs)
+                    SongsWithCarousel(
+                        library,
+                        NavSection.Songs,
+                        listState = rememberLazyListState(
+                            initialFirstVisibleItemIndex = firstVisible,
+                        ),
+                    )
                 }
             }
         }
@@ -1073,6 +1131,18 @@ class ScreenshotTest {
             Track(6L, "Static Bloom", "Hollow Coast", "Static Bloom", 202_000L, "content://tracks/6", null),
             Track(7L, "Slow Tide", "June & The Current", "Slow Tide", 176_000L, "content://tracks/7", null),
         )
+
+        val midTracks = tracks + (9L..24L).map { id ->
+            Track(
+                id,
+                "Track $id",
+                "Artist $id",
+                "Album $id",
+                180_000L,
+                "content://tracks/$id",
+                null,
+            )
+        }
 
         val playingState = PlayerUiState(
             currentMediaId = "2",

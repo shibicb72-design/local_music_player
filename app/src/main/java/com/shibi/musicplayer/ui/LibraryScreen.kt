@@ -34,7 +34,9 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -231,6 +233,7 @@ fun LibraryContent(
     favoriteIds: Set<Long> = emptySet(),
     onToggleFavorite: (Track) -> Unit = {},
     contentBottomPadding: Dp = 120.dp,
+    listState: LazyListState = rememberLazyListState(),
     modifier: Modifier = Modifier,
 ) {
     LibraryScaffold(
@@ -278,6 +281,7 @@ fun LibraryContent(
                 onAddToPlaylist = onAddToPlaylist,
                 contentBottomPadding = contentBottomPadding,
                 emptyMessage = stringResource(R.string.empty_library),
+                listState = listState,
                 modifier = Modifier.weight(1f),
             )
         }
@@ -321,6 +325,7 @@ internal fun SongColumn(
     onAddToPlaylist: (Track) -> Unit,
     contentBottomPadding: Dp,
     emptyMessage: String,
+    listState: LazyListState = rememberLazyListState(),
     modifier: Modifier = Modifier,
 ) {
     if (tracks.isEmpty()) {
@@ -333,6 +338,7 @@ internal fun SongColumn(
     } else {
         LazyColumn(
             modifier = modifier,
+            state = listState,
             contentPadding = PaddingValues(bottom = contentBottomPadding),
         ) {
             items(tracks, key = { it.id }) { track ->

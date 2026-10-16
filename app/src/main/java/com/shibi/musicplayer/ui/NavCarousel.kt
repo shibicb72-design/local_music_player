@@ -96,17 +96,17 @@ enum class NavSection(
     Settings(R.string.nav_settings, Icons.Rounded.Settings),
 }
 
-/** Tile ring only. The body grows with the tile; this is the phone-sized floor. */
-internal val NavCarouselBodyHeight = 156.dp
+/** Tile ring only. About half the old 156dp floor after the compact ring. */
+internal val NavCarouselBodyHeight = 80.dp
 
 /** Clearance between the front label and the navigation-bar inset. */
 internal val NavCarouselBottomPadding = 8.dp
 
-/** Space under a song list so the last row clears the carousel. */
-internal val SongListBottomPadding = 36.dp
+/** Space under a song list so the last row can rest in the edge fade. */
+internal val SongListBottomPadding = ListEdgeFade
 
-/** Space under playlist cards so the carousel does not cover the last square. */
-internal val PlaylistListBottomPadding = 36.dp
+/** Space under playlist cards so the last square can rest in the edge fade. */
+internal val PlaylistListBottomPadding = ListEdgeFade
 
 /** Gap between the two-pane player card and the screen edge, past the nav inset. */
 internal val TwoPanePlayerBottomPadding = 48.dp
@@ -115,14 +115,15 @@ internal val TwoPanePlayerBottomPadding = 48.dp
 internal val TwoPaneCarouselPadding = 16.dp
 
 /** Space between the mini player and the top of the carousel. */
-internal val MiniPlayerCarouselGap = 12.dp
+internal val MiniPlayerCarouselGap = 8.dp
 
-private val TileCorner = 18.dp
-private val LabelGap = 8.dp
-private val LabelHeight = 20.dp
-private val TopBreathing = 12.dp
-private val NeighborOverlap = 8.dp
-private val BackLift = 10.dp
+private val TileCorner = 12.dp
+private val LabelGap = 6.dp
+private val LabelHeight = 18.dp
+private val TopBreathing = 4.dp
+private val BackLift = 6.dp
+private val MinTile = 44.dp
+private val MaxTile = 60.dp
 private val SelectedFill = Color(0xFF6E4EF0)
 private val TileShape = RoundedCornerShape(TileCorner)
 private val CarouselSpring = spring<Float>(
@@ -169,6 +170,7 @@ fun NavCarousel(
     Column(
         modifier = modifier
             .fillMaxWidth()
+            .background(chrome.pageFill)
             .navigationBarsPadding(),
     ) {
         BoxWithConstraints(
@@ -182,13 +184,8 @@ fun NavCarousel(
             val density = LocalDensity.current
             val densityScale = density.density
             val tileSize = with(density) {
-                val widthPx = maxWidth.toPx()
-                val radius = widthPx * CarouselMath.RADIUS_FRACTION
-                val neighbor = radius * sin(math.stepRadians)
-                val scale45 = math.scale(math.stepRadians)
-                val overlap = NeighborOverlap.toPx()
-                ((2f * (neighbor + overlap)) / (1f + scale45))
-                    .coerceIn(72.dp.toPx(), 120.dp.toPx())
+                (maxWidth.toPx() * 0.145f)
+                    .coerceIn(MinTile.toPx(), MaxTile.toPx())
                     .toDp()
             }
             val layout = with(density) {

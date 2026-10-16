@@ -123,6 +123,6 @@ class CarouselMath(val itemCount: Int) {
         const val SHADE = 0.55f
         const val TILT_PER_DEGREE = 0.6f
         const val MAX_TILT_DEGREES = 40f
-        const val RADIUS_FRACTION = 0.36f
+        const val RADIUS_FRACTION = 0.44f
     }
 }

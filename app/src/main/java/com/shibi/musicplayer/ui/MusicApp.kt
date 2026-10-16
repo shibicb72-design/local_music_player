@@ -251,6 +251,11 @@ fun MusicApp(
                         .weight(1f)
                         .fillMaxSize(),
                 ) {
+                    ListViewport(
+                        modifier = Modifier
+                            .weight(0.42f)
+                            .fillMaxHeight(),
+                    ) {
                     AppNavHost(
                         navController = navController,
                         libraryViewModel = libraryViewModel,
@@ -274,16 +279,17 @@ fun MusicApp(
                         onPlayQueue = { tracks, startId, context -> playQueue(tracks, startId, context) },
                         onOpenPlayer = {},
                         onAddToPlaylist = { pendingTrack = it },
-                        modifier = Modifier
-                            .weight(0.42f)
-                            .fillMaxHeight(),
+                        modifier = Modifier.fillMaxHeight(),
                     )
+                    }
                     Box(modifier = Modifier.weight(0.58f).fillMaxHeight()) {
                         playerPane(SongListBottomPadding)
                     }
                 }
-                miniBar()
-                if (showCarousel) carouselBar(Modifier)
+                ChromeSlot {
+                    miniBar()
+                    if (showCarousel) carouselBar(Modifier)
+                }
             }
         } else {
             Row(modifier = Modifier.fillMaxSize()) {
@@ -292,6 +298,11 @@ fun MusicApp(
                         .weight(0.42f)
                         .fillMaxHeight(),
                 ) {
+                    ListViewport(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxSize(),
+                    ) {
                     AppNavHost(
                         navController = navController,
                         libraryViewModel = libraryViewModel,
@@ -315,16 +326,17 @@ fun MusicApp(
                         onPlayQueue = { tracks, startId, context -> playQueue(tracks, startId, context) },
                         onOpenPlayer = {},
                         onAddToPlaylist = { pendingTrack = it },
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxSize(),
+                        modifier = Modifier.fillMaxSize(),
                     )
-                    carouselBar(
-                        Modifier.padding(
-                            top = TwoPaneCarouselPadding,
-                            bottom = TwoPaneCarouselPadding,
-                        ),
-                    )
+                    }
+                    ChromeSlot {
+                        carouselBar(
+                            Modifier.padding(
+                                top = TwoPaneCarouselPadding,
+                                bottom = TwoPaneCarouselPadding,
+                            ),
+                        )
+                    }
                 }
                 Box(
                     modifier = Modifier

@@ -35,12 +35,6 @@ internal fun backgroundTitleRes(id: String): Int = when (id) {
     "sparkles" -> R.string.bg_sparkles
     "petals" -> R.string.bg_petals
     "aurora" -> R.string.bg_aurora
-    "unicorn" -> R.string.bg_unicorn
-    "cat" -> R.string.bg_cat
-    "puppy" -> R.string.bg_puppy
-    "bunnies" -> R.string.bg_bunnies
-    "whale" -> R.string.bg_whale
-    "panda" -> R.string.bg_panda
     else -> R.string.bg_default
 }
 
@@ -61,22 +55,6 @@ internal fun slotLabelRes(key: String): Int = when (key) {
     "rose" -> R.string.bg_slot_rose
     "mint" -> R.string.bg_slot_mint
     "lilac" -> R.string.bg_slot_lilac
-    "coat" -> R.string.bg_slot_coat
-    "mane" -> R.string.bg_slot_mane
-    "room" -> R.string.bg_slot_room
-    "fur" -> R.string.bg_slot_fur
-    "nose" -> R.string.bg_slot_nose
-    "field" -> R.string.bg_slot_field
-    "ear" -> R.string.bg_slot_ear
-    "tongue" -> R.string.bg_slot_tongue
-    "meadow" -> R.string.bg_slot_meadow
-    "flower" -> R.string.bg_slot_flower
-    "ocean" -> R.string.bg_slot_ocean
-    "body" -> R.string.bg_slot_body
-    "belly" -> R.string.bg_slot_belly
-    "spray" -> R.string.bg_slot_spray
-    "balloon" -> R.string.bg_slot_balloon
-    "cheek" -> R.string.bg_slot_cheek
     else -> R.string.bg_slot_color
 }
 

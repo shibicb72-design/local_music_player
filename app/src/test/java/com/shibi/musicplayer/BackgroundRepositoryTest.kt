@@ -44,8 +44,8 @@ class BackgroundRepositoryTest {
         repository.setBackground(AppBackground.Gradient("cotton_candy"))
         assertEquals(AppBackground.Gradient("cotton_candy"), repository.selection.first())
 
-        repository.setBackground(AppBackground.Animated("unicorn"))
-        assertEquals(AppBackground.Animated("unicorn"), repository.selection.first())
+        repository.setBackground(AppBackground.Animated("waves"))
+        assertEquals(AppBackground.Animated("waves"), repository.selection.first())
 
         repository.setBackground(AppBackground.Default)
         assertEquals(AppBackground.Default, repository.selection.first())

@@ -28,6 +28,7 @@ data class BackgroundChrome(
     val sampleArgb: Long,
     val sheet: Color,
     val dialog: Color,
+    val pageFill: Color,
 )
 
 val DarkBackgroundChrome = BackgroundChrome(
@@ -46,6 +47,7 @@ val DarkBackgroundChrome = BackgroundChrome(
     sampleArgb = BackgroundCatalog.DEFAULT_ARGB,
     sheet = Color(0xFF2E2E3A),
     dialog = Color(0xFF24242E),
+    pageFill = Color(0xFF0E0E12),
 )
 
 val LightBackgroundChrome = BackgroundChrome(
@@ -64,13 +66,17 @@ val LightBackgroundChrome = BackgroundChrome(
     sampleArgb = 0xFFF8C8D4,
     sheet = Color(0xFFF7F4FB),
     dialog = Color(0xFFFBF8FF),
+    pageFill = Color(0xFFF8C8D4),
 )
 
 val LocalBackgroundChrome = staticCompositionLocalOf { DarkBackgroundChrome }
 
 fun chromeFor(roles: BackgroundContrast.Roles): BackgroundChrome {
     val base = if (roles.isLight) LightBackgroundChrome else DarkBackgroundChrome
-    return base.copy(sampleArgb = roles.sampleArgb)
+    return base.copy(
+        sampleArgb = roles.sampleArgb,
+        pageFill = roles.sampleArgb.toComposeColor(),
+    )
 }
 
 fun Long.toComposeColor(): Color = Color((this and 0xFFFFFFFFL).toInt())

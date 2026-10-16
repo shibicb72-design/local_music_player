@@ -272,47 +272,6 @@ internal fun BackgroundPreviewTile(
     }
 }
 
-@Composable
-internal fun BackgroundAnimalGrid(
-    selected: AppBackground,
-    customColors: Map<String, List<Long>>,
-    onSelect: (AppBackground) -> Unit,
-    forceStatic: Boolean = false,
-    contentBottomPadding: Dp = 0.dp,
-    modifier: Modifier = Modifier,
-) {
-    val play = rememberBackgroundMotion(forceStatic)
-    val phase = rememberScenePhase(play)
-    LazyVerticalGrid(
-        columns = GridCells.Adaptive(minSize = 150.dp),
-        modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(
-            start = 16.dp,
-            end = 16.dp,
-            top = 16.dp,
-            bottom = contentBottomPadding + 16.dp,
-        ),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        items(BackgroundCatalog.animals, key = { it.id }) { scene ->
-            val tile = AppBackground.Animated(scene.id)
-            BackgroundPreviewTile(
-                title = stringResource(backgroundTitleRes(scene.id)),
-                selected = tile == selected,
-                onClick = { onSelect(tile) },
-            ) {
-                AppBackgroundLayer(
-                    background = tile,
-                    colors = tile.previewColors(customColors),
-                    phase = phase,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            }
-        }
-    }
-}
-
 private fun tilesFor(tab: BackgroundTab): List<AppBackground> = when (tab) {
     BackgroundTab.SOLID -> buildList {
         add(AppBackground.Default)

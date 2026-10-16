@@ -61,19 +61,29 @@ class BackgroundPersistenceTest {
 
     @Test
     fun colorsKeyIsPerAnimation() {
-        assertEquals("anim_colors_unicorn", BackgroundPersistence.colorsKey("unicorn"))
-        assertTrue(BackgroundPersistence.colorsKey("waves").startsWith("anim_colors_"))
+        assertEquals("anim_colors_waves", BackgroundPersistence.colorsKey("waves"))
+        assertTrue(BackgroundPersistence.colorsKey("bubbles").startsWith("anim_colors_"))
     }
 
     @Test
-    fun sixteenSolidsEightBlendsAndTwelveScenes() {
+    fun sixteenSolidsEightBlendsAndSixScenes() {
         assertEquals(16, BackgroundCatalog.solids.size)
         assertEquals(8, BackgroundCatalog.blends.size)
-        assertEquals(12, BackgroundCatalog.scenes.size)
-        assertEquals(6, BackgroundCatalog.animals.size)
+        assertEquals(6, BackgroundCatalog.scenes.size)
         assertEquals(
-            listOf("unicorn", "cat", "puppy", "bunnies", "whale", "panda"),
-            BackgroundCatalog.animals.map { it.id },
+            listOf("waves", "bubbles", "clouds", "sparkles", "petals", "aurora"),
+            BackgroundCatalog.scenes.map { it.id },
         )
+    }
+
+    @Test
+    fun savedAnimalPrefsMigrateToDefault() {
+        listOf("unicorn", "cat", "puppy", "bunnies", "whale", "panda").forEach { id ->
+            assertEquals(
+                id,
+                AppBackground.Default,
+                BackgroundPersistence.decode("${AppBackground.PREFIX_ANIMATED}$id"),
+            )
+        }
     }
 }
