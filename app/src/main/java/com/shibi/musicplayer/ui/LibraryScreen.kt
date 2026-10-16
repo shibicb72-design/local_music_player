@@ -67,7 +67,6 @@ import com.shibi.musicplayer.library.LibraryViewModel
 import com.shibi.musicplayer.playback.PlayerUiState
 import com.shibi.musicplayer.ui.theme.Spacing
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LibraryScreen(
     viewModel: LibraryViewModel,
@@ -102,6 +101,135 @@ fun LibraryScreen(
         }
     }
 
+    when {
+        !audioGranted -> LibraryScaffold(
+            nowPlaying = nowPlaying,
+            showMiniPlayer = showMiniPlayer,
+            onOpenPlayer = onOpenPlayer,
+            onTogglePlayPause = onTogglePlayPause,
+            modifier = modifier,
+        ) { padding ->
+            PermissionPrompt(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(24.dp),
+                onGrant = { permissionLauncher.launch(startupPermissions()) },
+                onOpenSettings = {
+                    val intent = Intent(
+                        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        "package:${context.packageName}".toUri(),
+                    )
+                    context.startActivity(intent)
+                },
+            )
+        }
+        state.isLoading && state.tracks.isEmpty() -> LibraryScaffold(
+            nowPlaying = nowPlaying,
+            showMiniPlayer = showMiniPlayer,
+            onOpenPlayer = onOpenPlayer,
+            onTogglePlayPause = onTogglePlayPause,
+            modifier = modifier,
+        ) { padding ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                CircularProgressIndicator()
+            }
+        }
+        state.errorMessage != null && state.tracks.isEmpty() -> LibraryScaffold(
+            nowPlaying = nowPlaying,
+            showMiniPlayer = showMiniPlayer,
+            onOpenPlayer = onOpenPlayer,
+            onTogglePlayPause = onTogglePlayPause,
+            modifier = modifier,
+        ) { padding ->
+            MessagePane(
+                message = state.errorMessage ?: stringResource(R.string.library_error),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(24.dp),
+            )
+        }
+        state.tracks.isEmpty() -> LibraryScaffold(
+            nowPlaying = nowPlaying,
+            showMiniPlayer = showMiniPlayer,
+            onOpenPlayer = onOpenPlayer,
+            onTogglePlayPause = onTogglePlayPause,
+            modifier = modifier,
+        ) { padding ->
+            MessagePane(
+                message = stringResource(R.string.empty_library),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(24.dp),
+            )
+        }
+        else -> LibraryContent(
+            tracks = state.tracks,
+            nowPlaying = nowPlaying,
+            showMiniPlayer = showMiniPlayer,
+            onTrackSelected = onTrackSelected,
+            onOpenPlayer = onOpenPlayer,
+            onTogglePlayPause = onTogglePlayPause,
+            modifier = modifier,
+        )
+    }
+}
+
+@Composable
+fun LibraryContent(
+    tracks: List<Track>,
+    nowPlaying: PlayerUiState,
+    showMiniPlayer: Boolean,
+    onTrackSelected: (List<Track>, Long) -> Unit,
+    onOpenPlayer: () -> Unit,
+    onTogglePlayPause: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    LibraryScaffold(
+        nowPlaying = nowPlaying,
+        showMiniPlayer = showMiniPlayer,
+        onOpenPlayer = onOpenPlayer,
+        onTogglePlayPause = onTogglePlayPause,
+        modifier = modifier,
+    ) { padding ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .windowInsetsPadding(
+                    WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal),
+                ),
+            contentPadding = PaddingValues(vertical = 8.dp),
+        ) {
+            items(tracks, key = { it.id }) { track ->
+                TrackRow(
+                    track = track,
+                    isPlaying = nowPlaying.currentMediaId == track.id.toString(),
+                    onClick = { onTrackSelected(tracks, track.id) },
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun LibraryScaffold(
+    nowPlaying: PlayerUiState,
+    showMiniPlayer: Boolean,
+    onOpenPlayer: () -> Unit,
+    onTogglePlayPause: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable (PaddingValues) -> Unit,
+) {
     Scaffold(
         modifier = modifier,
         topBar = {
@@ -118,72 +246,8 @@ fun LibraryScreen(
                 )
             }
         },
-    ) { padding ->
-        when {
-            !audioGranted -> PermissionPrompt(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .padding(24.dp),
-                onGrant = { permissionLauncher.launch(startupPermissions()) },
-                onOpenSettings = {
-                    val intent = Intent(
-                        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                        "package:${context.packageName}".toUri(),
-                    )
-                    context.startActivity(intent)
-                },
-            )
-            state.isLoading && state.tracks.isEmpty() -> {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    CircularProgressIndicator()
-                }
-            }
-            state.errorMessage != null && state.tracks.isEmpty() -> {
-                MessagePane(
-                    message = state.errorMessage ?: stringResource(R.string.library_error),
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding)
-                        .padding(24.dp),
-                )
-            }
-            state.tracks.isEmpty() -> {
-                MessagePane(
-                    message = stringResource(R.string.empty_library),
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding)
-                        .padding(24.dp),
-                )
-            }
-            else -> {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding)
-                        .windowInsetsPadding(
-                            WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal),
-                        ),
-                    contentPadding = PaddingValues(vertical = 8.dp),
-                ) {
-                    items(state.tracks, key = { it.id }) { track ->
-                        TrackRow(
-                            track = track,
-                            isPlaying = nowPlaying.currentMediaId == track.id.toString(),
-                            onClick = { onTrackSelected(state.tracks, track.id) },
-                        )
-                    }
-                }
-            }
-        }
-    }
+        content = content,
+    )
 }
 
 @Composable

@@ -7,7 +7,9 @@ import android.media.AudioManager
 import android.os.Handler
 import android.os.Looper
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -74,11 +76,30 @@ fun OutputPickerSheet(
     onDismiss: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState()
-    val effective = effectiveOutput(outputs, selectedId)
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
     ) {
+        OutputPickerContent(
+            outputs = outputs,
+            selectedId = selectedId,
+            onSelect = { id ->
+                onSelect(id)
+                onDismiss()
+            },
+        )
+    }
+}
+
+@Composable
+internal fun OutputPickerContent(
+    outputs: List<AudioOutput>,
+    selectedId: Int?,
+    onSelect: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val effective = effectiveOutput(outputs, selectedId)
+    Column(modifier = modifier.fillMaxWidth()) {
         Text(
             text = stringResource(R.string.choose_output),
             style = MaterialTheme.typography.titleLarge,
@@ -100,7 +121,6 @@ fun OutputPickerSheet(
                 },
                 modifier = Modifier.clickable {
                     onSelect(output.id)
-                    onDismiss()
                 },
             )
         }
