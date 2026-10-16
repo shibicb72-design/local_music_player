@@ -74,15 +74,27 @@ class TrackDisplayTest {
     }
 
     @Test
-    fun tamilEllipsisCut_stepsBackOneGrapheme() {
+    fun tamilEllipsisCut_keepsAClusterThatAlreadyEndsOnTheBoundary() {
         val cluster = "\u0B95\u0BCA"
         assertEquals(0, TrackDisplay.tamilEllipsisCut(cluster, 1))
-        assertEquals(0, TrackDisplay.tamilEllipsisCut(cluster, 2))
+        assertEquals(cluster.length, TrackDisplay.tamilEllipsisCut(cluster, cluster.length))
         val line = "AB$cluster"
-        assertEquals(2, TrackDisplay.tamilEllipsisCut(line, line.length))
+        assertEquals(line.length, TrackDisplay.tamilEllipsisCut(line, line.length))
+        assertEquals(2, TrackDisplay.tamilEllipsisCut(line, line.length - 1))
         assertEquals(0, TrackDisplay.tamilEllipsisCut(line, 0))
         val conjunct = "A\u0B95\u0BCD\u0B95"
-        assertEquals(1, TrackDisplay.tamilEllipsisCut(conjunct, conjunct.length))
+        assertEquals(conjunct.length, TrackDisplay.tamilEllipsisCut(conjunct, conjunct.length))
+        assertEquals(1, TrackDisplay.tamilEllipsisCut(conjunct, conjunct.length - 1))
+    }
+
+    @Test
+    fun dropLastGrapheme_removesTheWholeCluster() {
+        val cluster = "\u0B95\u0BCA"
+        assertEquals(0, TrackDisplay.dropLastGrapheme(cluster, cluster.length))
+        val line = "AB$cluster"
+        assertEquals(2, TrackDisplay.dropLastGrapheme(line, line.length))
+        val conjunct = "A\u0B95\u0BCD\u0B95"
+        assertEquals(1, TrackDisplay.dropLastGrapheme(conjunct, conjunct.length))
     }
 
     @Test

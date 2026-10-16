@@ -67,7 +67,8 @@ fun TrackTitle(
         onTextLayout = { layout ->
             if (layout.hasVisualOverflow || layout.didOverflowWidth) {
                 val end = layout.getLineEnd(lineIndex = 0, visibleEnd = true)
-                val next = TrackDisplay.tamilEllipsisCut(text, end)
+                var next = TrackDisplay.tamilEllipsisCut(text, end)
+                if (next >= limit) next = TrackDisplay.dropLastGrapheme(text, limit)
                 if (next < limit) limit = next
             }
         },

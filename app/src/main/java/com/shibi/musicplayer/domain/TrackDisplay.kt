@@ -31,15 +31,27 @@ object TrackDisplay {
     fun subtitle(artist: String?, album: String?): String? = artist(artist) ?: album(album)
 
     /**
-     * Index at which a Tamil line should be cut so a following ellipsis fits.
-     * The cut is always on a grapheme boundary, one cluster before [visibleEnd].
-     * Combining marks and a Tamil virama stay with the preceding letter. JDK 17's
-     * [java.text.BreakIterator] splits those marks into their own characters.
+     * Snaps [visibleEnd] to a grapheme boundary without splitting a cluster.
+     *
+     * An index that already ends a cluster is kept. An index inside a cluster
+     * moves back to that cluster's start. Combining marks and a Tamil virama
+     * stay with the preceding letter. This does not use [java.text.BreakIterator]:
+     * JDK 17 treats a Tamil vowel sign as its own character, and JDK 21 does not.
      */
     fun tamilEllipsisCut(text: String, visibleEnd: Int): Int {
         if (text.isEmpty() || visibleEnd <= 0) return 0
-        val boundary = graphemeBoundaryAtOrBefore(text, visibleEnd.coerceAtMost(text.length))
-        return previousGraphemeStart(text, boundary)
+        return graphemeBoundaryAtOrBefore(text, visibleEnd.coerceAtMost(text.length))
+    }
+
+    /**
+     * End index of the grapheme before the one that ends at [boundary].
+     * A Tamil cluster is removed as a whole.
+     */
+    fun dropLastGrapheme(text: String, boundary: Int): Int {
+        if (text.isEmpty() || boundary <= 0) return 0
+        val end = graphemeBoundaryAtOrBefore(text, boundary.coerceAtMost(text.length))
+        if (end <= 0) return 0
+        return graphemeStart(text, previousCodePointIndex(text, end))
     }
 
     private fun knownName(raw: String?, unknownAlbum: Boolean): String? {
@@ -54,12 +66,9 @@ object TrackDisplay {
     private fun graphemeBoundaryAtOrBefore(text: String, index: Int): Int {
         if (index <= 0) return 0
         if (index >= text.length) return text.length
-        return graphemeStart(text, index)
-    }
-
-    private fun previousGraphemeStart(text: String, boundary: Int): Int {
-        if (boundary <= 0) return 0
-        return graphemeStart(text, previousCodePointIndex(text, boundary))
+        val start = codePointStart(text, index)
+        if (start != index || continuesGrapheme(text, index)) return graphemeStart(text, start)
+        return index
     }
 
     /** Start of the grapheme that contains [index]. */
