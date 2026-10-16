@@ -171,109 +171,104 @@ fun PlayerScreen(
                     .fillMaxSize()
                     .padding(padding),
             ) {
-                val artSize = minOf(maxWidth * 0.85f, maxHeight * 0.48f)
+                val compact = maxHeight < 700.dp
+                val artSize = minOf(
+                    maxWidth * 0.86f,
+                    maxHeight * (if (compact) 0.40f else 0.50f),
+                )
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(horizontal = 28.dp),
-                    verticalArrangement = Arrangement.SpaceBetween,
                     horizontalAlignment = Alignment.Start,
                 ) {
-                    Column(
+                    Spacer(Modifier.weight(1f))
+                    Box(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalAlignment = Alignment.Start,
+                        contentAlignment = Alignment.Center,
                     ) {
-                        Spacer(Modifier.height(8.dp))
-                        Box(
-                            modifier = Modifier.fillMaxWidth(),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            AlbumArtwork(
-                                albumArtUri = state.albumArtUri,
-                                title = state.title,
-                                shape = RoundedCornerShape(28.dp),
-                                modifier = Modifier
-                                    .size(artSize)
-                                    .shadow(
-                                        elevation = 36.dp,
-                                        shape = RoundedCornerShape(28.dp),
-                                        ambientColor = glow,
-                                        spotColor = glow,
-                                    ),
-                            )
-                        }
-                        Spacer(Modifier.height(28.dp))
-                        val titleText = TrackDisplay.title(state.title)
-                            .ifBlank { stringResource(R.string.nothing_playing) }
-                        Text(
-                            text = titleText,
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontFamily = if (containsTamil(titleText)) NotoTamil else null,
-                            color = colorScheme.onBackground,
-                            maxLines = 1,
+                        AlbumArtwork(
+                            albumArtUri = state.albumArtUri,
+                            title = state.title,
+                            shape = RoundedCornerShape(28.dp),
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .basicMarquee(),
+                                .size(artSize)
+                                .shadow(
+                                    elevation = 36.dp,
+                                    shape = RoundedCornerShape(28.dp),
+                                    ambientColor = glow,
+                                    spotColor = glow,
+                                ),
                         )
-                        Spacer(Modifier.height(4.dp))
-                        TrackDisplay.artist(state.artist)?.let { artist ->
+                    }
+                    Spacer(Modifier.weight(1f))
+                    val titleText = TrackDisplay.title(state.title)
+                        .ifBlank { stringResource(R.string.nothing_playing) }
+                    Text(
+                        text = titleText,
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontFamily = if (containsTamil(titleText)) NotoTamil else null,
+                        color = colorScheme.onBackground,
+                        maxLines = 1,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .basicMarquee(),
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    TrackDisplay.artist(state.artist)?.let { artist ->
+                        Text(
+                            text = artist,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    Spacer(Modifier.height(if (compact) 12.dp else 20.dp))
+                    SeekControl(
+                        positionMs = state.positionMs,
+                        durationMs = state.durationMs,
+                        enabled = state.hasMedia && state.durationMs > 0L,
+                        onSeek = onSeek,
+                    )
+                    Spacer(Modifier.height(if (compact) 8.dp else 16.dp))
+                    TransportControls(
+                        isPlaying = state.isPlaying,
+                        hasMedia = state.hasMedia,
+                        hasNext = state.hasNext,
+                        hasPrevious = state.hasPrevious,
+                        compact = compact,
+                        onTogglePlayPause = onTogglePlayPause,
+                        onNext = onNext,
+                        onPrevious = onPrevious,
+                    )
+                    Spacer(Modifier.height(if (compact) 12.dp else 24.dp))
+                    Surface(
+                        onClick = { showSheet = true },
+                        shape = CircleShape,
+                        color = Color.White.copy(alpha = 0.10f),
+                        contentColor = colorScheme.onBackground,
+                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f)),
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                imageVector = outputIcon(effective?.kind),
+                                contentDescription = null,
+                                tint = OutputAccent,
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Spacer(Modifier.width(8.dp))
                             Text(
-                                text = artist,
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
+                                text = effective?.name
+                                    ?: stringResource(R.string.output_this_phone),
+                                style = MaterialTheme.typography.labelLarge,
                             )
                         }
                     }
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalAlignment = Alignment.Start,
-                    ) {
-                        SeekControl(
-                            positionMs = state.positionMs,
-                            durationMs = state.durationMs,
-                            enabled = state.hasMedia && state.durationMs > 0L,
-                            onSeek = onSeek,
-                        )
-                        Spacer(Modifier.height(20.dp))
-                        TransportControls(
-                            isPlaying = state.isPlaying,
-                            hasMedia = state.hasMedia,
-                            hasNext = state.hasNext,
-                            hasPrevious = state.hasPrevious,
-                            onTogglePlayPause = onTogglePlayPause,
-                            onNext = onNext,
-                            onPrevious = onPrevious,
-                        )
-                        Spacer(Modifier.height(24.dp))
-                        Surface(
-                            onClick = { showSheet = true },
-                            shape = CircleShape,
-                            color = Color.White.copy(alpha = 0.10f),
-                            contentColor = colorScheme.onBackground,
-                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f)),
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Icon(
-                                    imageVector = outputIcon(effective?.kind),
-                                    contentDescription = null,
-                                    tint = OutputAccent,
-                                    modifier = Modifier.size(18.dp),
-                                )
-                                Spacer(Modifier.width(8.dp))
-                                Text(
-                                    text = effective?.name
-                                        ?: stringResource(R.string.output_this_phone),
-                                    style = MaterialTheme.typography.labelLarge,
-                                )
-                            }
-                        }
-                        Spacer(Modifier.height(24.dp))
-                    }
+                    Spacer(Modifier.height(if (compact) 12.dp else 24.dp))
                 }
             }
         }
@@ -372,11 +367,15 @@ private fun TransportControls(
     hasMedia: Boolean,
     hasNext: Boolean,
     hasPrevious: Boolean,
+    compact: Boolean,
     onTogglePlayPause: () -> Unit,
     onNext: () -> Unit,
     onPrevious: () -> Unit,
 ) {
     val colorScheme = MaterialTheme.colorScheme
+    val playButtonSize = if (compact) 64.dp else 80.dp
+    val playIconSize = if (compact) 34.dp else 42.dp
+    val skipButtonSize = if (compact) 36.dp else 44.dp
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceEvenly,
@@ -394,12 +393,12 @@ private fun TransportControls(
             Icon(
                 imageVector = Icons.Rounded.SkipPrevious,
                 contentDescription = stringResource(R.string.previous),
-                modifier = Modifier.size(44.dp),
+                modifier = Modifier.size(skipButtonSize),
             )
         }
         Box(
             modifier = Modifier
-                .size(80.dp)
+                .size(playButtonSize)
                 .shadow(16.dp, CircleShape, spotColor = colorScheme.primary)
                 .background(colorScheme.primary, CircleShape)
                 .clip(CircleShape)
@@ -419,7 +418,7 @@ private fun TransportControls(
                         if (playing) R.string.pause else R.string.play,
                     ),
                     tint = colorScheme.onPrimary,
-                    modifier = Modifier.size(42.dp),
+                    modifier = Modifier.size(playIconSize),
                 )
             }
         }
@@ -435,7 +434,7 @@ private fun TransportControls(
             Icon(
                 imageVector = Icons.Rounded.SkipNext,
                 contentDescription = stringResource(R.string.next),
-                modifier = Modifier.size(44.dp),
+                modifier = Modifier.size(skipButtonSize),
             )
         }
     }

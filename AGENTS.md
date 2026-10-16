@@ -78,6 +78,10 @@ After every task, append an entry below: `- [task] what went wrong -> new rule`.
 
 - [ticket V5] `captureRoboImage("build/outputs/roborazzi/x.png")` from `app/src/test` writes to `app/build/outputs/roborazzi/x.png`, so the acceptance check must look in the module's `build/`, not the repo root's `build/` -> verify screenshot artifacts at `app\build\outputs\roborazzi\`.
 
+- [ticket V6] The ticket said to "remove verticalScroll" from the Column, but the existing code used `Arrangement.SpaceBetween` and never had a `verticalScroll` -> a spacing ticket can describe edits that are already absent; grep the actual file for each named symbol before editing, and confirm the rest of the fix still applies.
+
+- [ticket V6] Dropped `verticalArrangement = Arrangement.SpaceBetween` from the player Column; `Arrangement` is still used by `SeekControl` (`SpaceBetween`) and `TransportControls` (`SpaceEvenly`), so the import had to stay -> after removing one `Arrangement` usage, check for the other call sites before pruning the import.
+
 ## 6. Lessons learned
 - androidx.mediarouter's `MediaRouteChooserDialog` extends `androidx.appcompat.app.AppCompatDialog`, and mediarouter does not expose appcompat at compile time. Using mediarouter dialog classes requires `implementation(libs.androidx.appcompat)` in app/build.gradle.kts (catalog alias `androidx-appcompat`).
 - You cannot read the Gradle cache (~/.gradle/caches): OpenCode denies external directories and the run aborts. Do not try. Verify an API by compiling (gradlew.bat assembleDebug) instead.
