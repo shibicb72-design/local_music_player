@@ -8,33 +8,50 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 
-private val Amber = Color(0xFFFFB74D)
-private val AmberDark = Color(0xFF4A2800)
-private val Ink = Color(0xFF121212)
-private val InkSurface = Color(0xFF1E1E1E)
-
-private val DarkColors = darkColorScheme(
-    primary = Amber,
-    onPrimary = AmberDark,
-    secondary = Color(0xFFD7CCC8),
-    background = Ink,
-    surface = InkSurface,
-    surfaceVariant = Color(0xFF2C241B),
-    onSurfaceVariant = Color(0xFFD7CCC8),
+private val MusicDarkColors = darkColorScheme(
+    primary = Accent,
+    onPrimary = OnAccent,
+    primaryContainer = AccentContainer,
+    onPrimaryContainer = OnAccentContainer,
+    secondary = Secondary,
+    onSecondary = OnSecondary,
+    tertiary = Secondary,
+    background = Base0,
+    onBackground = TextHigh,
+    surface = Base1,
+    onSurface = TextHigh,
+    surfaceVariant = Base4,
+    onSurfaceVariant = TextMed,
+    inverseSurface = TextHigh,
+    inverseOnSurface = Base0,
+    error = Error,
+    outline = Outline,
+    outlineVariant = OutlineVariant,
+    surfaceBright = Base4,
+    surfaceDim = Base0,
+    surfaceContainer = Base2,
+    surfaceContainerHigh = Base3,
+    surfaceContainerHighest = Base4,
+    surfaceContainerLow = Base1,
+    surfaceContainerLowest = Base0,
 )
 
 @Composable
-fun MusicPlayerTheme(content: @Composable () -> Unit) {
-    val colorScheme = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+fun MusicPlayerTheme(
+    dynamicColor: Boolean = false,
+    content: @Composable () -> Unit,
+) {
+    val colorScheme = if (dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         dynamicDarkColorScheme(LocalContext.current)
     } else {
-        DarkColors
+        MusicDarkColors
     }
     MaterialTheme(
         colorScheme = colorScheme,
+        shapes = AppShapes,
+        typography = AppTypography,
     ) {
         Surface(
             color = colorScheme.background,
