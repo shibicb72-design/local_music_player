@@ -37,9 +37,17 @@ import com.shibi.musicplayer.domain.AudioOutput
 import com.shibi.musicplayer.domain.OutputKind
 import com.shibi.musicplayer.domain.Track
 import com.shibi.musicplayer.playback.PlayerUiState
+import com.shibi.musicplayer.ui.AddToPlaylistContent
 import com.shibi.musicplayer.ui.LibraryContent
+import com.shibi.musicplayer.ui.NavWheel
+import com.shibi.musicplayer.ui.NowPlayingBar
 import com.shibi.musicplayer.ui.OutputPickerContent
 import com.shibi.musicplayer.ui.PlayerScreen
+import com.shibi.musicplayer.ui.PlaylistCardUi
+import com.shibi.musicplayer.ui.PlaylistDetailContent
+import com.shibi.musicplayer.ui.PlaylistSongRow
+import com.shibi.musicplayer.ui.PlaylistsContent
+import com.shibi.musicplayer.ui.WheelDestination
 import com.shibi.musicplayer.ui.theme.MusicPlayerTheme
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -199,15 +207,22 @@ class ScreenshotTest {
         captureRoboImage("build/outputs/roborazzi/two_pane.png") {
             MusicPlayerTheme {
                 Row(modifier = Modifier.fillMaxSize()) {
-                    LibraryContent(
-                        tracks = tracks,
-                        nowPlaying = playingState,
-                        showMiniPlayer = false,
-                        onTrackSelected = { _, _ -> },
-                        onOpenPlayer = {},
-                        onTogglePlayPause = {},
-                        modifier = Modifier.weight(0.42f),
-                    )
+                    Column(modifier = Modifier.weight(0.42f).fillMaxSize()) {
+                        LibraryContent(
+                            tracks = tracks,
+                            nowPlaying = playingState,
+                            showMiniPlayer = false,
+                            onTrackSelected = { _, _ -> },
+                            onOpenPlayer = {},
+                            onTogglePlayPause = {},
+                            contentBottomPadding = 12.dp,
+                            modifier = Modifier.weight(1f),
+                        )
+                        NavWheel(
+                            selected = WheelDestination.Songs,
+                            onSelect = {},
+                        )
+                    }
                     PlayerScreen(
                         state = playingState,
                         onBack = {},
@@ -223,6 +238,133 @@ class ScreenshotTest {
                             .padding(12.dp)
                             .clip(RoundedCornerShape(28.dp)),
                     )
+                }
+            }
+        }
+    }
+
+    @Test
+    fun wheelSongs() = captureWheel(WheelDestination.Songs, "wheel_songs.png")
+
+    @Test
+    fun wheelNowPlaying() = captureWheel(WheelDestination.NowPlaying, "wheel_now_playing.png")
+
+    @Test
+    fun wheelDevices() = captureWheel(WheelDestination.Devices, "wheel_devices.png")
+
+    @Test
+    fun playlists() {
+        captureRoboImage("build/outputs/roborazzi/playlists.png") {
+            MusicPlayerTheme {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    PlaylistsContent(
+                        cards = playlistCards,
+                        onOpen = {},
+                        onCreate = {},
+                        contentBottomPadding = 16.dp,
+                        modifier = Modifier.weight(1f),
+                    )
+                    NavWheel(
+                        selected = WheelDestination.Playlists,
+                        onSelect = {},
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
+    fun playlistDetail() {
+        captureRoboImage("build/outputs/roborazzi/playlist_detail.png") {
+            MusicPlayerTheme {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    PlaylistDetailContent(
+                        name = "Late night",
+                        songs = detailSongs,
+                        onBack = {},
+                        onPlayAll = {},
+                        onShuffle = {},
+                        onRenameClick = {},
+                        onDeleteClick = {},
+                        onRemove = {},
+                        onReorder = {},
+                        onPlayFrom = {},
+                        contentBottomPadding = 16.dp,
+                        modifier = Modifier.weight(1f),
+                    )
+                    NavWheel(
+                        selected = WheelDestination.Playlists,
+                        onSelect = {},
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
+    fun addToPlaylist() {
+        captureRoboImage("build/outputs/roborazzi/add_to_playlist.png") {
+            MusicPlayerTheme {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black),
+                ) {
+                    PlaylistsContent(
+                        cards = playlistCards,
+                        onOpen = {},
+                        onCreate = {},
+                        contentBottomPadding = 16.dp,
+                        modifier = Modifier.graphicsLayer { alpha = 0.4f },
+                    )
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .align(Alignment.BottomCenter),
+                        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .navigationBarsPadding(),
+                        ) {
+                            BottomSheetDefaults.DragHandle(
+                                modifier = Modifier.align(Alignment.CenterHorizontally),
+                            )
+                            AddToPlaylistContent(
+                                trackTitle = "Paper Planes",
+                                playlists = playlistCards.take(3),
+                                creating = true,
+                                draftName = "Late night",
+                                onDraftChange = {},
+                                onStartCreate = {},
+                                onConfirmCreate = {},
+                                onPick = {},
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun captureWheel(selected: WheelDestination, fileName: String) {
+        captureRoboImage("build/outputs/roborazzi/$fileName") {
+            MusicPlayerTheme {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    Column(modifier = Modifier.align(Alignment.BottomCenter)) {
+                        NowPlayingBar(
+                            state = playingState,
+                            onOpen = {},
+                            onTogglePlayPause = {},
+                            padForNavigationBars = false,
+                        )
+                        NavWheel(
+                            selected = selected,
+                            onSelect = {},
+                        )
+                    }
                 }
             }
         }
@@ -301,6 +443,41 @@ class ScreenshotTest {
             hasMedia = true,
             hasNext = true,
             hasPrevious = true,
+        )
+
+        val playlistCards = listOf(
+            PlaylistCardUi(
+                id = 1,
+                name = "Late night",
+                songCount = 8,
+                coverTitles = listOf("Midnight Drive", "Paper Planes", "Golden Hour", "Saltwater"),
+            ),
+            PlaylistCardUi(
+                id = 2,
+                name = "Focus",
+                songCount = 3,
+                coverTitles = listOf("Ember", "Static Bloom", "Slow Tide"),
+            ),
+            PlaylistCardUi(
+                id = 3,
+                name = "\u0BA4\u0BAE\u0BBF\u0BB4\u0BCD",
+                songCount = 1,
+                coverTitles = listOf(tamilTitle),
+            ),
+            PlaylistCardUi(
+                id = 4,
+                name = "Empty set",
+                songCount = 0,
+                coverTitles = emptyList(),
+            ),
+        )
+
+        val detailSongs = listOf(
+            PlaylistSongRow(1, "Midnight Drive", "Neon Cascade", null, false),
+            PlaylistSongRow(2, "Paper Planes", "Ella Voss", null, false),
+            PlaylistSongRow(3, "Golden Hour", "Marina Cole", null, false),
+            PlaylistSongRow(4, "Saltwater", "Northbound", null, false),
+            PlaylistSongRow(8, tamilTitle, "\u2014", null, false),
         )
 
         val outputs = listOf(

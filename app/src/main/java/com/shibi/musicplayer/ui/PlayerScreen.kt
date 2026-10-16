@@ -18,11 +18,17 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -43,6 +49,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ScaffoldDefaults
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
@@ -91,6 +98,7 @@ fun PlayerScreen(
     selectedOutputId: Int?,
     onSelectOutput: (Int?) -> Unit,
     showBack: Boolean = true,
+    includeNavigationBars: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     val backDescription = stringResource(R.string.back)
@@ -137,6 +145,13 @@ fun PlayerScreen(
         Scaffold(
             containerColor = Color.Transparent,
             contentColor = colorScheme.onBackground,
+            contentWindowInsets = if (includeNavigationBars) {
+                ScaffoldDefaults.contentWindowInsets
+            } else {
+                WindowInsets.statusBars.union(
+                    WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal),
+                )
+            },
             topBar = {
                 CenterAlignedTopAppBar(
                     title = {

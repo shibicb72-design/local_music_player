@@ -8,6 +8,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -34,10 +35,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -58,6 +63,7 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
@@ -79,7 +85,9 @@ fun LibraryScreen(
     onTrackSelected: (List<Track>, Long) -> Unit,
     onOpenPlayer: () -> Unit,
     onTogglePlayPause: () -> Unit,
+    onAddToPlaylist: (Track) -> Unit = {},
     showMiniPlayer: Boolean = true,
+    contentBottomPadding: Dp = 120.dp,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -183,6 +191,8 @@ fun LibraryScreen(
             onTrackSelected = onTrackSelected,
             onOpenPlayer = onOpenPlayer,
             onTogglePlayPause = onTogglePlayPause,
+            onAddToPlaylist = onAddToPlaylist,
+            contentBottomPadding = contentBottomPadding,
             modifier = modifier,
         )
     }
@@ -196,6 +206,8 @@ fun LibraryContent(
     onTrackSelected: (List<Track>, Long) -> Unit,
     onOpenPlayer: () -> Unit,
     onTogglePlayPause: () -> Unit,
+    onAddToPlaylist: (Track) -> Unit = {},
+    contentBottomPadding: Dp = 120.dp,
     modifier: Modifier = Modifier,
 ) {
     LibraryScaffold(
@@ -212,7 +224,7 @@ fun LibraryContent(
                 .windowInsetsPadding(
                     WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal),
                 ),
-            contentPadding = PaddingValues(bottom = 120.dp),
+            contentPadding = PaddingValues(bottom = contentBottomPadding),
         ) {
             item {
                 Column(
@@ -242,6 +254,7 @@ fun LibraryContent(
                     track = track,
                     isPlaying = nowPlaying.currentMediaId == track.id.toString(),
                     onClick = { onTrackSelected(tracks, track.id) },
+                    onAddToPlaylist = { onAddToPlaylist(track) },
                     modifier = Modifier.animateItem(),
                 )
             }
@@ -279,9 +292,11 @@ private fun TrackRow(
     track: Track,
     isPlaying: Boolean,
     onClick: () -> Unit,
+    onAddToPlaylist: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val title = TrackDisplay.title(track.title)
+    var menuOpen by remember { mutableStateOf(false) }
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -290,8 +305,11 @@ private fun TrackRow(
             .background(
                 if (isPlaying) Color(0xFF7C5CFF).copy(alpha = 0.12f) else Color.Transparent,
             )
-            .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onAddToPlaylist,
+            )
+            .padding(start = 12.dp, top = 8.dp, bottom = 8.dp, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         AlbumArtwork(
@@ -340,6 +358,27 @@ private fun TrackRow(
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        Box {
+            IconButton(onClick = { menuOpen = true }) {
+                Icon(
+                    imageVector = Icons.Filled.MoreVert,
+                    contentDescription = stringResource(R.string.more_actions),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            DropdownMenu(
+                expanded = menuOpen,
+                onDismissRequest = { menuOpen = false },
+            ) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.add_to_playlist)) },
+                    onClick = {
+                        menuOpen = false
+                        onAddToPlaylist()
+                    },
+                )
+            }
+        }
     }
 }
 
@@ -391,10 +430,11 @@ private fun MessagePane(message: String, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun NowPlayingBar(
+internal fun NowPlayingBar(
     state: PlayerUiState,
     onOpen: () -> Unit,
     onTogglePlayPause: () -> Unit,
+    padForNavigationBars: Boolean = true,
 ) {
     val progress = if (state.durationMs > 0L) {
         (state.positionMs.toFloat() / state.durationMs).coerceIn(0f, 1f)
@@ -407,7 +447,7 @@ private fun NowPlayingBar(
             .windowInsetsPadding(
                 WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal),
             )
-            .navigationBarsPadding()
+            .then(if (padForNavigationBars) Modifier.navigationBarsPadding() else Modifier)
             .padding(start = Spacing.sm, end = Spacing.sm, bottom = Spacing.sm),
     ) {
         Surface(

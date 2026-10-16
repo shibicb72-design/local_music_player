@@ -3,12 +3,13 @@
 ## 1. Project map
 - Single module `:app`, package `com.shibi.musicplayer` (minSdk 26, targetSdk 36). Kotlin + Jetpack Compose (Material 3) + Media3.
 - `MainActivity.kt`: entry point, `setContent { MusicPlayerTheme { MusicApp() } }`.
-- `domain/`: pure Kotlin logic (`PlaybackQueue`, `PlaybackTime`, `Track`, `AudioOutputs`), unit-tested.
+- `domain/`: pure Kotlin logic (`PlaybackQueue`, `PlaybackTime`, `Track`, `AudioOutputs`, `NavWheelMath`, `PlaylistOrder`), unit-tested. Android stays out of these types.
 - `library/`: `MusicRepository` (MediaStore) and `LibraryViewModel`.
+- `playlist/`: Room playlists (`PlaylistDatabase`, `PlaylistDao`, `PlaylistRepository`, `PlaylistViewModel`). Schema version 1, database name `playlists.db`.
 - `playback/`: `PlaybackService` (MediaSessionService), `PlayerViewModel`, `PlayerUiState`, `TrackMediaItems`, `OutputCommands`.
-- `ui/`: `MusicApp` (navigation), `LibraryScreen`, `PlayerScreen`, `AlbumArtwork`, `AudioPermission`, `OutputPickerSheet` (audio output picker), `theme/Theme.kt`.
-- Tests: `app/src/test/java/com/shibi/musicplayer/` (plain JUnit 4, no Robolectric).
-- Libraries (gradle/libs.versions.toml): AGP 9.4.0, Kotlin 2.4.10, core-ktx 1.18.0, activity-compose 1.13.0, lifecycle 2.10.0, Compose BOM 2026.06.01, navigation 2.9.8, media3 1.11.1, coil 3.5.0, coroutines 1.11.0, junit 4.13.2.
+- `ui/`: `MusicApp` (navigation), `LibraryScreen`, `PlaylistsScreen`, `PlaylistDetailScreen`, `AddToPlaylistSheet`, `NavWheel` (rotating bottom dial), `PlayerScreen`, `AlbumArtwork`, `AudioPermission`, `OutputPickerSheet` (audio output picker), `theme/Theme.kt`.
+- Tests: `app/src/test/java/com/shibi/musicplayer/` (plain JUnit 4). Room DAO tests and Roborazzi screenshots use Robolectric. Screenshot PNGs are recorded to `app/build/outputs/roborazzi/` by `recordRoborazziDebug` (plain `test` does not write them).
+- Libraries (gradle/libs.versions.toml): AGP 9.4.0, Kotlin 2.4.10, core-ktx 1.18.0, activity-compose 1.13.0, lifecycle 2.10.0, Compose BOM 2026.06.01, navigation 2.9.8, media3 1.11.1, coil 3.5.0, coroutines 1.11.0, room 2.8.5, ksp 2.3.12, junit 4.13.2.
 - Style: 4-space indent, trailing commas, one composable per concern, private helper composables, user-facing text in `res/values/strings.xml` via `stringResource`, dependencies only through the version catalog (`libs.*`).
 
 ## 2. Definition of done
@@ -82,9 +83,23 @@ After every task, append an entry below: `- [task] what went wrong -> new rule`.
 
 - [ticket V6] Dropped `verticalArrangement = Arrangement.SpaceBetween` from the player Column; `Arrangement` is still used by `SeekControl` (`SpaceBetween`) and `TransportControls` (`SpaceEvenly`), so the import had to stay -> after removing one `Arrangement` usage, check for the other call sites before pruning the import.
 
+- [playlists and wheel] `rotation.snapTo` / `animateTo` inside `awaitEachGesture` failed to compile (restricted coroutine) -> launch Animatable calls on a normal Compose scope, and accumulate the drag into a local rotation so a queued `snapTo` does not reuse a stale `Animatable.value`.
+
+- [playlists and wheel] `Icons.Rounded.QueueMusic` emitted a deprecation `w:` -> use `Icons.AutoMirrored.Rounded.QueueMusic`.
+
+- [playlists and wheel] `room-ktx` is an empty deprecated artifact since Room 2.7 -> depend on `room-runtime` only (Flow and coroutines already ship there) and `ksp` the compiler. The KSP2 plugin version is `2.3.12`, not prefixed with the Kotlin version. Room 3 (`androidx.room3`) is a different package and was not used.
+
+- [playlists and wheel] `NavDestination.route` is the pattern, so a playlist detail destination reads `playlist/{playlistId}` -> match that pattern when mapping the current route back onto the wheel.
+
+- [playlists and wheel] The dial stroke was white at 14% on `#0E0E12` (~1.5:1) and the viewport ended at the ±90° icons, so screenshots read as a bottom bar -> keep the ring near 3:1 (white ~42%, about 2.5dp) and leave arc below those icons so the circle curves back inward before the clip.
+
 ## 6. Lessons learned
 - androidx.mediarouter's `MediaRouteChooserDialog` extends `androidx.appcompat.app.AppCompatDialog`, and mediarouter does not expose appcompat at compile time. Using mediarouter dialog classes requires `implementation(libs.androidx.appcompat)` in app/build.gradle.kts (catalog alias `androidx-appcompat`).
 - You cannot read the Gradle cache (~/.gradle/caches): OpenCode denies external directories and the run aborts. Do not try. Verify an API by compiling (gradlew.bat assembleDebug) instead.
 - `android.media.AudioDeviceCallback` is a top-level class (not nested in AudioManager). `AudioManager.AudioRecordingCallback` IS nested.
 - Only the repo directory is readable/writable for you. Never write or read files in %TEMP% or other outside paths; pipe Gradle output to the console or to build/.
 - Scaffold applies insets only to its content padding. Custom composables in bottomBar/topBar must handle navigation/status bar insets themselves (navigationBarsPadding()).
+- `awaitEachGesture` cannot call `Animatable` suspend functions. Launch them on `rememberCoroutineScope`.
+- Room 2.8: `implementation(libs.androidx.room.runtime)` and `ksp(libs.androidx.room.compiler)`. Do not add `room-ktx`. KSP plugin: `com.google.devtools.ksp` version `2.3.12`.
+- `NavHost` destination `route` is the pattern string (`playlist/{playlistId}`), not the filled path.
+- A decorative stroke on `#0E0E12` needs about 40% white to reach ~3:1. White at 14% disappears.
