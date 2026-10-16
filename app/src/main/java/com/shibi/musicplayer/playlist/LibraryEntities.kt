@@ -16,6 +16,12 @@ data class RecentPlayEntity(
     val playedAt: Long,
 )
 
+@Entity(tableName = "recent_searches")
+data class RecentSearchEntity(
+    @PrimaryKey val query: String,
+    val searchedAt: Long,
+)
+
 @Entity(tableName = "app_settings")
 data class AppSettingsEntity(
     @PrimaryKey val id: Int = SETTINGS_ID,

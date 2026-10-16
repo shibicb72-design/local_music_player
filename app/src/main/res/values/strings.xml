@@ -43,6 +43,8 @@
     <string name="recent_empty">Songs you play show up here.</string>
     <string name="search_title">Search</string>
     <string name="search_hint">Search songs</string>
+    <string name="search_prompt">Search songs by title or artist.</string>
+    <string name="search_recent">Recent searches</string>
     <string name="search_empty">No matching songs.</string>
     <string name="settings_title">Settings</string>
     <string name="settings_theme">Theme</string>

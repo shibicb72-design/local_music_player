@@ -49,9 +49,12 @@ import com.shibi.musicplayer.ui.OutputPickerContent
 import com.shibi.musicplayer.ui.PlayerScreen
 import com.shibi.musicplayer.ui.PlaylistCardUi
 import com.shibi.musicplayer.ui.PlaylistDetailContent
+import com.shibi.musicplayer.ui.PlaylistListBottomPadding
 import com.shibi.musicplayer.ui.PlaylistSongRow
 import com.shibi.musicplayer.ui.PlaylistsContent
 import com.shibi.musicplayer.ui.SearchContent
+import com.shibi.musicplayer.ui.SongListBottomPadding
+import com.shibi.musicplayer.ui.TwoPanePlayerBottomPadding
 import com.shibi.musicplayer.ui.theme.MusicPlayerTheme
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -151,22 +154,12 @@ class ScreenshotTest {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(Color.Black),
+                        .background(Color(0xFF0E0E12)),
                 ) {
-                    PlayerScreen(
-                        state = englishState,
-                        onBack = {},
-                        onTogglePlayPause = {},
-                        onNext = {},
-                        onPrevious = {},
-                        onSeek = {},
-                        selectedOutputId = null,
-                        onSelectOutput = {},
-                    )
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .background(Color.Black.copy(alpha = 0.45f)),
+                            .background(Color.Black.copy(alpha = 0.60f)),
                     )
                     Surface(
                         modifier = Modifier
@@ -207,7 +200,7 @@ class ScreenshotTest {
                                 onOpenPlayer = {},
                                 onTogglePlayPause = {},
                                 favoriteIds = setOf(8L),
-                                contentBottomPadding = 8.dp,
+                                contentBottomPadding = SongListBottomPadding,
                                 modifier = Modifier.fillMaxSize(),
                             )
                             ListBottomFade(modifier = Modifier.align(Alignment.BottomCenter))
@@ -231,7 +224,7 @@ class ScreenshotTest {
                         modifier = Modifier
                             .weight(0.58f)
                             .navigationBarsPadding()
-                            .padding(start = 8.dp, top = 16.dp, end = 16.dp, bottom = 16.dp)
+                            .padding(start = 8.dp, top = 16.dp, end = 16.dp, bottom = TwoPanePlayerBottomPadding)
                             .clip(RoundedCornerShape(28.dp)),
                     )
                 }
@@ -258,7 +251,7 @@ class ScreenshotTest {
                             cards = playlistCards,
                             onOpen = {},
                             onCreate = {},
-                            contentBottomPadding = 8.dp,
+                            contentBottomPadding = PlaylistListBottomPadding,
                             modifier = Modifier.fillMaxSize(),
                         )
                         ListBottomFade(modifier = Modifier.align(Alignment.BottomCenter))
@@ -289,7 +282,7 @@ class ScreenshotTest {
                             onRemove = {},
                             onReorder = {},
                             onPlayFrom = {},
-                            contentBottomPadding = 8.dp,
+                            contentBottomPadding = SongListBottomPadding,
                             modifier = Modifier.fillMaxSize(),
                         )
                         ListBottomFade(modifier = Modifier.align(Alignment.BottomCenter))
@@ -317,7 +310,7 @@ class ScreenshotTest {
                             cards = playlistCards,
                             onOpen = {},
                             onCreate = {},
-                            contentBottomPadding = 8.dp,
+                            contentBottomPadding = PlaylistListBottomPadding,
                             modifier = Modifier.weight(1f),
                         )
                         NavCarousel(
@@ -365,13 +358,13 @@ class ScreenshotTest {
                 Column(modifier = Modifier.fillMaxSize()) {
                     Box(modifier = Modifier.weight(1f)) {
                         FavoritesContent(
-                            tracks = listOf(tracks[2], tracks[1], tracks[3]),
-                            favoriteIds = setOf(8L, 2L, 3L),
-                            nowPlaying = playingState,
+                            tracks = emptyList(),
+                            favoriteIds = emptySet(),
+                            nowPlaying = PlayerUiState(),
                             onTrackSelected = { _, _ -> },
                             onToggleFavorite = {},
                             onAddToPlaylist = {},
-                            contentBottomPadding = 8.dp,
+                            contentBottomPadding = SongListBottomPadding,
                             modifier = Modifier.fillMaxSize(),
                         )
                         ListBottomFade(modifier = Modifier.align(Alignment.BottomCenter))
@@ -392,14 +385,15 @@ class ScreenshotTest {
                 Column(modifier = Modifier.fillMaxSize()) {
                     SearchContent(
                         tracks = tracks,
-                        query = "Tide",
+                        query = "",
                         onQueryChange = {},
                         favoriteIds = setOf(8L),
                         nowPlaying = playingState,
                         onTrackSelected = { _, _ -> },
                         onToggleFavorite = {},
                         onAddToPlaylist = {},
-                        contentBottomPadding = 8.dp,
+                        recentSearches = listOf("Tide", "Golden", "Paper"),
+                        contentBottomPadding = SongListBottomPadding,
                         modifier = Modifier.weight(1f),
                     )
                     NavCarousel(
@@ -423,7 +417,7 @@ class ScreenshotTest {
                     onOpenPlayer = {},
                     onTogglePlayPause = {},
                     favoriteIds = if (library.isEmpty()) emptySet() else setOf(8L),
-                    contentBottomPadding = 8.dp,
+                    contentBottomPadding = SongListBottomPadding,
                     modifier = Modifier.fillMaxSize(),
                 )
                 ListBottomFade(modifier = Modifier.align(Alignment.BottomCenter))
@@ -560,7 +554,8 @@ class ScreenshotTest {
             PlaylistSongRow(
                 track.id,
                 TrackDisplay.title(track.title),
-                TrackDisplay.artist(track.artist) ?: "\u2014",
+                TrackDisplay.artist(track.artist),
+                TrackDisplay.album(track.album),
                 null,
                 false,
             )

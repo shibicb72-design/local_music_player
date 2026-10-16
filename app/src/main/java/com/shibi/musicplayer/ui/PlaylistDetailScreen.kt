@@ -81,7 +81,8 @@ import kotlin.math.abs
 data class PlaylistSongRow(
     val trackId: Long,
     val title: String,
-    val artist: String,
+    val artist: String?,
+    val album: String?,
     val albumArtUri: String?,
     val missing: Boolean,
 )
@@ -100,7 +101,6 @@ fun PlaylistDetailScreen(
     val detail by remember(playlistId) { viewModel.playlist(playlistId) }
         .collectAsStateWithLifecycle(null)
     val unavailable = stringResource(R.string.unavailable_song)
-    val missingArtist = stringResource(R.string.missing_artist)
     val current = detail
     var renaming by remember { mutableStateOf(false) }
     var confirmingDelete by remember { mutableStateOf(false) }
@@ -116,7 +116,8 @@ fun PlaylistDetailScreen(
             PlaylistSongRow(
                 trackId = trackId,
                 title = unavailable,
-                artist = missingArtist,
+                artist = null,
+                album = null,
                 albumArtUri = null,
                 missing = true,
             )
@@ -124,7 +125,8 @@ fun PlaylistDetailScreen(
             PlaylistSongRow(
                 trackId = trackId,
                 title = TrackDisplay.title(track.title),
-                artist = TrackDisplay.artist(track.artist) ?: missingArtist,
+                artist = TrackDisplay.artist(track.artist),
+                album = TrackDisplay.album(track.album),
                 albumArtUri = track.albumArtUri,
                 missing = false,
             )
@@ -445,14 +447,19 @@ private fun PlaylistSongLine(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = if (song.missing) TextMed else TextHigh,
+                    modifier = Modifier.fillMaxWidth(),
                 )
-                Text(
-                    text = song.artist,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = TextMed,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                val subtitle = song.artist ?: song.album
+                if (subtitle != null) {
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = TextMed,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
             }
         }
         Box {

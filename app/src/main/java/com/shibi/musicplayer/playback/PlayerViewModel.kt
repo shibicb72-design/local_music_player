@@ -165,6 +165,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             currentMediaId = player.currentMediaItem?.mediaId,
             title = metadata.title?.toString().orEmpty(),
             artist = metadata.artist?.toString().orEmpty(),
+            album = metadata.albumTitle?.toString().orEmpty(),
             albumArtUri = metadata.artworkUri?.toString(),
             isPlaying = player.playWhenReady && player.playbackState != Player.STATE_ENDED,
             positionMs = position,

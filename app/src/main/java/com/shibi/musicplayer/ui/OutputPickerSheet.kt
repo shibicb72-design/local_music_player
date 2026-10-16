@@ -91,7 +91,7 @@ fun OutputPickerSheet(
         sheetState = sheetState,
         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         contentColor = MaterialTheme.colorScheme.onSurface,
-        scrimColor = Color.Black.copy(alpha = 0.45f),
+        scrimColor = Color.Black.copy(alpha = 0.60f),
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
     ) {
         OutputPickerContent(
@@ -133,7 +133,7 @@ internal fun OutputPickerContent(
                     .clip(RoundedCornerShape(16.dp))
                     .background(
                         if (selected) {
-                            Color(0xFF7C5CFF).copy(alpha = 0.16f)
+                            Color.White.copy(alpha = 0.08f)
                         } else {
                             Color.Transparent
                         },
@@ -146,7 +146,7 @@ internal fun OutputPickerContent(
                     modifier = Modifier
                         .size(40.dp)
                         .background(
-                            if (selected) Color(0xFF7C5CFF) else Color.White.copy(alpha = 0.08f),
+                            if (selected) SelectedDeviceFill else Color.White.copy(alpha = 0.08f),
                             CircleShape,
                         ),
                     contentAlignment = Alignment.Center,
@@ -199,6 +199,8 @@ private fun outputSubtitle(kind: OutputKind): Int = when (kind) {
 }
 
 internal val OutputAccent = Color(0xFFB9A8FF)
+
+private val SelectedDeviceFill = Color(0xFF6E4EF0)
 
 internal fun effectiveOutput(outputs: List<AudioOutput>, selectedId: Int?): AudioOutput? =
     outputs.firstOrNull { it.id == AudioOutputs.selectedId(outputs, selectedId) }

@@ -82,24 +82,39 @@ class CarouselMathTest {
     }
 
     @Test
-    fun frontIsLargestAndTheBackHalfIsHidden() {
+    fun exactlyFourItemsAreVisibleAndScaleFollowsCosine() {
         val front = math.offsetRadians(0, 0f)
-        val side = math.offsetRadians(1, 0f)
-        val limb = math.offsetRadians(2, 0f)
+        val right = math.offsetRadians(1, 0f)
+        val left = math.offsetRadians(7, 0f)
+        val peek = math.offsetRadians(2, 0f)
+        val leftLimb = math.offsetRadians(6, 0f)
         val back = math.offsetRadians(4, 0f)
         val rear = math.offsetRadians(3, 0f)
 
         assertEquals(1f, math.scale(front), 0.001f)
+        assertEquals(CarouselMath.MIN_SCALE, math.scale((PI / 2.0).toFloat()), 0.001f)
+        assertTrue(math.scale(right) in 0.80f..0.95f)
+        assertTrue(math.scale(front) > math.scale(right))
+        assertTrue(math.scale(right) > math.scale(peek))
+
         assertEquals(1f, math.alpha(front), 0.001f)
-        assertTrue(math.scale(front) > math.scale(side))
-        assertTrue(math.scale(side) > math.scale(limb))
-        assertTrue(math.scale(side) < 0.85f)
-        assertTrue(math.alpha(side) > math.alpha(limb))
-        assertTrue(math.alpha(limb) > 0f)
+        assertEquals(1f, math.alpha(right), 0.001f)
+        assertEquals(1f, math.alpha(left), 0.001f)
+        assertTrue(math.alpha(peek) in 0.55f..0.95f)
+        assertEquals(0f, math.alpha(leftLimb), 0.001f)
         assertEquals(0f, math.alpha(back), 0.001f)
         assertEquals(0f, math.alpha(rear), 0.001f)
-        assertTrue(math.zIndex(front) > math.zIndex(side))
-        assertTrue(math.zIndex(side) > math.zIndex(back))
+        val visible = (0 until math.itemCount).count { index ->
+            math.alpha(math.offsetRadians(index, 0f)) > 0.01f
+        }
+        assertEquals(4, visible)
+
+        assertEquals(0f, math.shade(front), 0.001f)
+        assertTrue(math.shade(peek) > math.shade(right))
+        assertEquals(0f, math.blurDp(front), 0.001f)
+        assertTrue(math.blurDp(peek) > math.blurDp(right))
+        assertTrue(math.zIndex(front) > math.zIndex(right))
+        assertTrue(math.zIndex(right) > math.zIndex(peek))
     }
 
     @Test

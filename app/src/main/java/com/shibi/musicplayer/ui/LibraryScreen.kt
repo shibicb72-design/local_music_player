@@ -37,8 +37,8 @@ import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.rounded.Favorite
-import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -375,14 +375,18 @@ internal fun TrackRow(
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.fillMaxWidth(),
             )
-            Text(
-                text = TrackDisplay.artist(track.artist) ?: stringResource(R.string.missing_artist),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            TrackDisplay.subtitle(track.artist, track.album)?.let { subtitle ->
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
         }
         if (isPlaying) {
             Icon(
@@ -400,11 +404,11 @@ internal fun TrackRow(
         )
         IconButton(onClick = onToggleFavorite) {
             Icon(
-                imageVector = if (isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                imageVector = if (isFavorite) Icons.Rounded.Favorite else Icons.Outlined.FavoriteBorder,
                 contentDescription = stringResource(
                     if (isFavorite) R.string.unfavorite else R.string.favorite,
                 ),
-                tint = if (isFavorite) Secondary else MaterialTheme.colorScheme.onSurface,
+                tint = if (isFavorite) Secondary else Color.White.copy(alpha = 0.92f),
             )
         }
         Box {
@@ -549,15 +553,18 @@ internal fun NowPlayingBar(
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.fillMaxWidth(),
                         )
-                        Text(
-                            text = TrackDisplay.artist(state.artist)
-                                ?: stringResource(R.string.missing_artist),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
+                        TrackDisplay.subtitle(state.artist, state.album)?.let { subtitle ->
+                            Text(
+                                text = subtitle,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
                     }
                     Box(
                         modifier = Modifier

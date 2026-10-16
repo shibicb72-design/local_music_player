@@ -181,6 +181,27 @@ class PlaylistRepositoryTest {
     }
 
     @Test
+    fun recentSearchesKeepsEightNewestAndIgnoresBlank() = runBlocking {
+        repository.recordSearch("   ")
+        assertTrue(repository.recentSearches.first().isEmpty())
+        repeat(10) { index ->
+            now = 2_000L + index
+            repository.recordSearch("q$index")
+        }
+        val queries = repository.recentSearches.first()
+        assertEquals(8, queries.size)
+        assertEquals("q9", queries.first())
+        assertEquals("q2", queries.last())
+
+        now += 1
+        repository.recordSearch("q4")
+        val bumped = repository.recentSearches.first()
+        assertEquals(8, bumped.size)
+        assertEquals("q4", bumped.first())
+        assertEquals(1, bumped.count { it == "q4" })
+    }
+
+    @Test
     fun darkThemeDefaultsOnAndCanBeSwitched() = runBlocking {
         assertTrue(repository.darkTheme.first())
         repository.setDarkTheme(false)

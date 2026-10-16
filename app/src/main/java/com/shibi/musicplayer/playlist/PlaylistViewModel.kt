@@ -29,6 +29,9 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
     val recentTrackIds: StateFlow<List<Long>> = repository.recentTrackIds
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    val recentSearches: StateFlow<List<String>> = repository.recentSearches
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     val darkTheme: StateFlow<Boolean> = repository.darkTheme
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
 
@@ -87,6 +90,12 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
     fun setDarkTheme(dark: Boolean) {
         viewModelScope.launch {
             repository.setDarkTheme(dark)
+        }
+    }
+
+    fun recordSearch(query: String) {
+        viewModelScope.launch {
+            repository.recordSearch(query)
         }
     }
 }

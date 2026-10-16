@@ -49,7 +49,6 @@ private const val SearchRoute = "search"
 private const val SettingsRoute = "settings"
 private const val PlaylistIdArg = "playlistId"
 private val TwoPaneBreakpoint = 600.dp
-private val ListBottomPadding = 8.dp
 
 @Composable
 fun MusicApp(
@@ -62,6 +61,7 @@ fun MusicApp(
     val playlistState by playlistViewModel.state.collectAsStateWithLifecycle()
     val favoriteIds by playlistViewModel.favoriteIds.collectAsStateWithLifecycle()
     val recentIds by playlistViewModel.recentTrackIds.collectAsStateWithLifecycle()
+    val recentSearches by playlistViewModel.recentSearches.collectAsStateWithLifecycle()
     val darkTheme by playlistViewModel.darkTheme.collectAsStateWithLifecycle()
     val libraryState by libraryViewModel.uiState.collectAsStateWithLifecycle()
     val tracksById = remember(libraryState.tracks) {
@@ -165,7 +165,7 @@ fun MusicApp(
                                 favoriteIds = favoriteIds,
                                 onToggleFavorite = { playlistViewModel.toggleFavorite(it.id) },
                                 showMiniPlayer = false,
-                                contentBottomPadding = ListBottomPadding,
+                                contentBottomPadding = SongListBottomPadding,
                                 modifier = Modifier.fillMaxSize(),
                             )
                         }
@@ -176,7 +176,7 @@ fun MusicApp(
                                 onOpen = { id ->
                                     navController.navigate("playlist/$id") { launchSingleTop = true }
                                 },
-                                contentBottomPadding = ListBottomPadding,
+                                contentBottomPadding = PlaylistListBottomPadding,
                                 modifier = Modifier.fillMaxSize(),
                             )
                         }
@@ -195,7 +195,7 @@ fun MusicApp(
                                     val shuffled = tracks.shuffled()
                                     shuffled.firstOrNull()?.let { playQueue(shuffled, it.id) }
                                 },
-                                contentBottomPadding = ListBottomPadding,
+                                contentBottomPadding = SongListBottomPadding,
                                 modifier = Modifier.fillMaxSize(),
                             )
                         }
@@ -207,7 +207,7 @@ fun MusicApp(
                                 onTrackSelected = { tracks, trackId -> playQueue(tracks, trackId) },
                                 onToggleFavorite = { playlistViewModel.toggleFavorite(it.id) },
                                 onAddToPlaylist = { pendingTrack = it },
-                                contentBottomPadding = ListBottomPadding,
+                                contentBottomPadding = SongListBottomPadding,
                                 modifier = Modifier.fillMaxSize(),
                             )
                         }
@@ -219,7 +219,7 @@ fun MusicApp(
                                 onTrackSelected = { tracks, trackId -> playQueue(tracks, trackId) },
                                 onToggleFavorite = { playlistViewModel.toggleFavorite(it.id) },
                                 onAddToPlaylist = { pendingTrack = it },
-                                contentBottomPadding = ListBottomPadding,
+                                contentBottomPadding = SongListBottomPadding,
                                 modifier = Modifier.fillMaxSize(),
                             )
                         }
@@ -231,7 +231,9 @@ fun MusicApp(
                                 onTrackSelected = { tracks, trackId -> playQueue(tracks, trackId) },
                                 onToggleFavorite = { playlistViewModel.toggleFavorite(it.id) },
                                 onAddToPlaylist = { pendingTrack = it },
-                                contentBottomPadding = ListBottomPadding,
+                                recentSearches = recentSearches,
+                                onSearchCommitted = playlistViewModel::recordSearch,
+                                contentBottomPadding = SongListBottomPadding,
                                 modifier = Modifier.fillMaxSize(),
                             )
                         }
@@ -296,7 +298,7 @@ fun MusicApp(
                     modifier = Modifier
                         .weight(0.58f)
                         .navigationBarsPadding()
-                        .padding(start = 8.dp, top = 16.dp, end = 16.dp, bottom = 16.dp)
+                        .padding(start = 8.dp, top = 16.dp, end = 16.dp, bottom = TwoPanePlayerBottomPadding)
                         .clip(RoundedCornerShape(28.dp)),
                 )
             }

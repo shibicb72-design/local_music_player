@@ -16,6 +16,8 @@ class PlaylistRepository(
 
     val recentTrackIds: Flow<List<Long>> = dao.observeRecentIds()
 
+    val recentSearches: Flow<List<String>> = dao.observeRecentSearches()
+
     val darkTheme: Flow<Boolean> =
         dao.observeSettings(AppSettingsEntity.SETTINGS_ID).map { it?.darkTheme ?: true }
 
@@ -87,6 +89,13 @@ class PlaylistRepository(
         dao.upsertSettings(AppSettingsEntity(darkTheme = dark))
     }
 
+    suspend fun recordSearch(query: String) {
+        val trimmed = query.trim()
+        if (trimmed.isEmpty()) return
+        dao.upsertRecentSearch(RecentSearchEntity(query = trimmed, searchedAt = now()))
+        dao.trimRecentSearches(SEARCH_LIMIT)
+    }
+
     private fun PlaylistWithSongs.toSummary(): PlaylistSummary {
         val ordered = songs.sortedBy { it.position }
         return PlaylistSummary(
@@ -109,5 +118,6 @@ class PlaylistRepository(
     private companion object {
         const val COVER_LIMIT = 4
         const val RECENT_LIMIT = 50
+        const val SEARCH_LIMIT = 8
     }
 }

@@ -96,4 +96,16 @@ interface PlaylistDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertSettings(settings: AppSettingsEntity)
+
+    @Query("SELECT `query` FROM recent_searches ORDER BY searchedAt DESC")
+    fun observeRecentSearches(): Flow<List<String>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertRecentSearch(search: RecentSearchEntity)
+
+    @Query(
+        "DELETE FROM recent_searches WHERE `query` NOT IN " +
+            "(SELECT `query` FROM recent_searches ORDER BY searchedAt DESC LIMIT :keep)",
+    )
+    suspend fun trimRecentSearches(keep: Int)
 }

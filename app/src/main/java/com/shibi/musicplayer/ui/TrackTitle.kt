@@ -16,6 +16,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.material3.Text
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.foundation.layout.fillMaxWidth
+import com.shibi.musicplayer.domain.TrackDisplay
 import com.shibi.musicplayer.domain.containsTamil
 import com.shibi.musicplayer.ui.theme.Jakarta
 import com.shibi.musicplayer.ui.theme.NotoTamil
@@ -38,7 +40,7 @@ fun TrackTitle(
     if (!tamil) {
         Text(
             text = text,
-            modifier = modifier,
+            modifier = modifier.fillMaxWidth(),
             style = style,
             color = color,
             fontWeight = fontWeight,
@@ -53,7 +55,7 @@ fun TrackTitle(
     val display = remember(text, limit) { tamilLine(text, limit) }
     Text(
         text = display,
-        modifier = modifier,
+        modifier = modifier.fillMaxWidth(),
         style = style,
         color = color,
         fontWeight = fontWeight,
@@ -65,7 +67,7 @@ fun TrackTitle(
         onTextLayout = { layout ->
             if (layout.hasVisualOverflow || layout.didOverflowWidth) {
                 val end = layout.getLineEnd(lineIndex = 0, visibleEnd = true)
-                val next = (end - 1).coerceAtLeast(0)
+                val next = TrackDisplay.tamilEllipsisCut(text, end)
                 if (next < limit) limit = next
             }
         },

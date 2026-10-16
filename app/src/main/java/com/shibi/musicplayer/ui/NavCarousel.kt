@@ -4,8 +4,10 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.exponentialDecay
 import androidx.compose.animation.core.spring
+import android.os.Build
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
@@ -16,9 +18,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Favorite
@@ -42,12 +43,14 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -71,12 +74,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.shibi.musicplayer.R
 import com.shibi.musicplayer.domain.CarouselMath
-import kotlin.math.PI
 import kotlin.math.abs
-import kotlin.math.cos
-import kotlin.math.hypot
 import kotlin.math.roundToInt
-import kotlin.math.sin
 import kotlinx.coroutines.launch
 
 enum class NavSection(
@@ -93,17 +92,29 @@ enum class NavSection(
     Settings(R.string.nav_settings, Icons.Rounded.Settings),
 }
 
-/** Icon ring only. Bottom inset padding sits under this so the pair stays compact. */
-internal val NavCarouselBodyHeight = 120.dp
+/** Tile ring only. Bottom inset padding sits under this so the pair stays compact. */
+internal val NavCarouselBodyHeight = 128.dp
 
 /** Clearance between the ring and the navigation bar. */
-internal val NavCarouselBottomPadding = 12.dp
+internal val NavCarouselBottomPadding = 8.dp
 
-private val IconSize = 44.dp
-private val LabelBlock = 26.dp
-private val LabelGap = 4.dp
-private val VerticalRadius = 34.dp
+/** Space under a song list so the last row clears the bottom fade. */
+internal val SongListBottomPadding = 36.dp
+
+/** Space under playlist cards so the name sits above the fade. */
+internal val PlaylistListBottomPadding = 72.dp
+
+/** Gap between the two-pane player card and the screen edge. */
+internal val TwoPanePlayerBottomPadding = 28.dp
+
+private val TileSize = 60.dp
+private val TileCorner = 18.dp
+private val ColumnWidth = 76.dp
+private val LabelGap = 2.dp
+private val LabelHeight = 16.dp
+private val VerticalRadius = 26.dp
 private val SelectedFill = Color(0xFF6E4EF0)
+private val TileShape = RoundedCornerShape(TileCorner)
 private val CarouselSpring = spring<Float>(
     dampingRatio = Spring.DampingRatioLowBouncy,
     stiffness = Spring.StiffnessMedium,
@@ -115,7 +126,10 @@ private data class CarouselLayout(
     val centerY: Float,
     val radius: Float,
     val verticalRadius: Float,
-    val iconRadius: Float,
+    val tileRadius: Float,
+    val columnWidth: Float,
+    val columnHeight: Float,
+    val labelExtent: Float,
 )
 
 @Composable
@@ -160,35 +174,44 @@ fun NavCarousel(
             val density = LocalDensity.current
             val densityScale = density.density
             val layout = with(density) {
-                val iconRadius = IconSize.toPx() / 2f
-                val labelBlock = LabelBlock.toPx()
-                val gap = LabelGap.toPx()
+                val tileRadius = TileSize.toPx() / 2f
+                val labelExtent = (LabelGap + LabelHeight).toPx()
+                val columnWidth = ColumnWidth.toPx()
+                val columnHeight = TileSize.toPx() + labelExtent
                 val verticalRadius = VerticalRadius.toPx()
                 val widthPx = constraints.maxWidth.toFloat()
                 val heightPx = constraints.maxHeight.toFloat()
+                val bottomPad = 6.dp.toPx()
                 CarouselLayout(
                     centerX = widthPx / 2f,
-                    centerY = heightPx - labelBlock - gap - verticalRadius - iconRadius,
-                    radius = (widthPx * 0.30f).coerceAtMost(128.dp.toPx()),
+                    centerY = heightPx - bottomPad - labelExtent - tileRadius - verticalRadius,
+                    radius = (widthPx * 0.18f).coerceIn(60.dp.toPx(), 66.dp.toPx()),
                     verticalRadius = verticalRadius,
-                    iconRadius = iconRadius,
+                    tileRadius = tileRadius,
+                    columnWidth = columnWidth,
+                    columnHeight = columnHeight,
+                    labelExtent = labelExtent,
                 )
             }
             val layoutState = rememberUpdatedState(layout)
+            val pivotFraction = layout.tileRadius / layout.columnHeight
 
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                val path = Path()
-                val steps = 36
-                for (step in 0..steps) {
-                    val theta = (-PI / 2.0 + PI * step / steps).toFloat()
-                    val x = layout.centerX + sin(theta) * layout.radius * 0.94f
-                    val y = layout.centerY + cos(theta) * layout.verticalRadius
-                    if (step == 0) path.moveTo(x, y) else path.lineTo(x, y)
-                }
-                drawPath(
-                    path = path,
-                    color = Color.White.copy(alpha = 0.38f),
-                    style = Stroke(width = 1.5.dp.toPx(), cap = StrokeCap.Round),
+            Canvas(modifier = Modifier.fillMaxSize().zIndex(0f)) {
+                val floorY = layout.centerY + layout.verticalRadius + layout.tileRadius * 0.72f
+                val rx = layout.radius * 0.85f
+                val ry = 11.dp.toPx()
+                drawOval(
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            Color.White.copy(alpha = 0.16f),
+                            SelectedFill.copy(alpha = 0.10f),
+                            Color.Transparent,
+                        ),
+                        center = Offset(layout.centerX, floorY),
+                        radius = rx,
+                    ),
+                    topLeft = Offset(layout.centerX - rx, floorY - ry),
+                    size = Size(rx * 2f, ry * 2f),
                 )
             }
 
@@ -197,20 +220,22 @@ fun NavCarousel(
                 val scale = math.scale(offset)
                 val itemAlpha = math.alpha(offset)
                 val depth = math.zIndex(offset)
+                val shade = math.shade(offset)
+                val blurDp = math.blurDp(offset)
                 val centered = index == selectedIndex
                 val itemLabel = stringResource(section.labelRes)
                 val shiftX = math.translationX(offset, layout.radius)
                 val shiftY = math.translationY(offset, layout.verticalRadius)
-                Box(
+                Column(
                     modifier = Modifier
-                        .zIndex(depth)
+                        .zIndex(depth + 1f)
                         .offset {
                             IntOffset(
-                                (layout.centerX - layout.iconRadius).roundToInt(),
-                                (layout.centerY - layout.iconRadius).roundToInt(),
+                                (layout.centerX - layout.columnWidth / 2f).roundToInt(),
+                                (layout.centerY - layout.tileRadius).roundToInt(),
                             )
                         }
-                        .size(IconSize)
+                        .size(ColumnWidth, TileSize + LabelGap + LabelHeight)
                         .graphicsLayer {
                             translationX = shiftX
                             translationY = shiftY
@@ -218,7 +243,8 @@ fun NavCarousel(
                             scaleY = scale
                             alpha = itemAlpha
                             rotationY = math.rotationYDegrees(offset)
-                            cameraDistance = 16f * densityScale
+                            transformOrigin = TransformOrigin(0.5f, pivotFraction)
+                            cameraDistance = 10f * densityScale
                         }
                         .semantics {
                             role = Role.Tab
@@ -240,56 +266,71 @@ fun NavCarousel(
                                 true
                             }
                         },
-                    contentAlignment = Alignment.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    if (centered) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(
-                                    brush = Brush.radialGradient(
-                                        0f to SelectedFill.copy(alpha = 0.55f),
-                                        0.55f to SelectedFill.copy(alpha = 0.22f),
-                                        1f to Color.Transparent,
-                                    ),
-                                ),
+                    Box(
+                        modifier = Modifier
+                            .size(TileSize)
+                            .shadow(
+                                elevation = if (centered) 16.dp else 6.dp,
+                                shape = TileShape,
+                                ambientColor = Color.Black.copy(alpha = 0.55f),
+                                spotColor = if (centered) SelectedFill.copy(alpha = 0.45f) else Color.Black.copy(alpha = 0.40f),
+                            )
+                            .clip(TileShape)
+                            .background(if (centered) SelectedFill else Color.White.copy(alpha = 0.12f))
+                            .border(
+                                width = 1.dp,
+                                color = if (centered) {
+                                    Color.White.copy(alpha = 0.55f)
+                                } else {
+                                    Color.White.copy(alpha = 0.22f)
+                                },
+                                shape = TileShape,
+                            )
+                            .then(
+                                if (Build.VERSION.SDK_INT >= 31 && blurDp >= 0.6f && itemAlpha > 0.05f) {
+                                    Modifier.blur(blurDp.dp)
+                                } else {
+                                    Modifier
+                                },
+                            ),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = section.icon,
+                            contentDescription = null,
+                            tint = if (centered) Color.White else Color.White.copy(alpha = 0.92f),
+                            modifier = Modifier.size(26.dp),
                         )
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(2.dp)
-                                .clip(CircleShape)
-                                .background(SelectedFill),
-                        )
+                        if (shade > 0.02f) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(Color.Black.copy(alpha = shade)),
+                            )
+                        }
                     }
-                    Icon(
-                        imageVector = section.icon,
-                        contentDescription = null,
-                        tint = if (centered) {
-                            Color.White
-                        } else {
+                    Box(modifier = Modifier.height(LabelGap))
+                    Text(
+                        text = itemLabel,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = if (centered) FontWeight.SemiBold else FontWeight.Medium,
+                        color = if (centered) {
                             MaterialTheme.colorScheme.onBackground
+                        } else {
+                            MaterialTheme.colorScheme.onBackground.copy(alpha = 0.82f)
                         },
-                        modifier = Modifier.size(if (centered) 26.dp else 24.dp),
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(LabelHeight),
                     )
                 }
             }
-
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onBackground,
-                maxLines = 1,
-                softWrap = false,
-                overflow = TextOverflow.Ellipsis,
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .padding(bottom = 2.dp)
-                    .zIndex(2f),
-            )
 
             Box(
                 modifier = Modifier
@@ -389,18 +430,12 @@ internal fun ListBottomFade(modifier: Modifier = Modifier) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(40.dp)
+                .height(16.dp)
                 .background(
                     Brush.verticalGradient(
                         listOf(Color.Transparent, background),
                     ),
                 ),
-        )
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(10.dp)
-                .background(background),
         )
     }
 }
@@ -420,9 +455,14 @@ private fun hitTest(
         if (math.alpha(offset) < 0.12f) continue
         val pointX = layout.centerX + math.translationX(offset, layout.radius)
         val pointY = layout.centerY + math.translationY(offset, layout.verticalRadius)
-        val distance = hypot(x - pointX, y - pointY)
-        val reach = layout.iconRadius * math.scale(offset) * 1.25f
-        if (distance > reach) continue
+        val scale = math.scale(offset)
+        val dx = abs(x - pointX)
+        val dy = y - pointY
+        val halfW = layout.tileRadius * scale * 1.35f
+        val top = layout.tileRadius * scale
+        val bottom = (layout.tileRadius + layout.labelExtent) * scale
+        if (dx > halfW || dy < -top || dy > bottom) continue
+        val distance = dx + abs(dy)
         val depth = math.zIndex(offset)
         if (depth > bestDepth || (depth == bestDepth && distance < bestDistance)) {
             bestDepth = depth

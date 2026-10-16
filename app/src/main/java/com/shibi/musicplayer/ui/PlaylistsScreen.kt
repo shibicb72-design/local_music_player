@@ -58,7 +58,6 @@ import com.shibi.musicplayer.R
 import com.shibi.musicplayer.domain.Track
 import com.shibi.musicplayer.playlist.PlaylistSummary
 import com.shibi.musicplayer.playlist.PlaylistViewModel
-import com.shibi.musicplayer.ui.theme.Secondary
 import com.shibi.musicplayer.ui.theme.TextHigh
 
 data class PlaylistCardUi(
@@ -148,52 +147,19 @@ internal fun PlaylistsContent(
         } else {
             BoxWithConstraints(modifier = Modifier.weight(1f).fillMaxWidth()) {
                 val columns = if (maxWidth >= 520.dp) 3 else 2
-                val rows = (cards.size + columns - 1) / columns
-                if (rows <= 3) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(start = 20.dp, end = 20.dp, bottom = contentBottomPadding),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        cards.chunked(columns).forEach { rowCards ->
-                            Row(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            ) {
-                                rowCards.forEach { card ->
-                                    PlaylistCard(
-                                        card = card,
-                                        onClick = { onOpen(card.id) },
-                                        expand = true,
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .fillMaxHeight(),
-                                    )
-                                }
-                                repeat(columns - rowCards.size) {
-                                    Spacer(Modifier.weight(1f).fillMaxHeight())
-                                }
-                            }
-                        }
-                    }
-                } else {
-                    LazyVerticalGrid(
-                        columns = GridCells.Fixed(columns),
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(
-                            start = 20.dp,
-                            end = 20.dp,
-                            bottom = contentBottomPadding,
-                        ),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        items(cards, key = { it.id }) { card ->
-                            PlaylistCard(card = card, onClick = { onOpen(card.id) })
-                        }
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(columns),
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(
+                        start = 20.dp,
+                        end = 20.dp,
+                        bottom = contentBottomPadding,
+                    ),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    items(cards, key = { it.id }) { card ->
+                        PlaylistCard(card = card, onClick = { onOpen(card.id) })
                     }
                 }
             }
@@ -229,18 +195,18 @@ private fun PlaylistHeader(
         }
         TextButton(
             onClick = onCreate,
-            colors = ButtonDefaults.textButtonColors(contentColor = Secondary),
+            colors = ButtonDefaults.textButtonColors(contentColor = NewPlaylist),
         ) {
             Icon(
                 imageVector = Icons.Rounded.Add,
                 contentDescription = null,
-                tint = Secondary,
+                tint = NewPlaylist,
                 modifier = Modifier.size(18.dp),
             )
             Spacer(Modifier.width(4.dp))
             Text(
                 text = stringResource(R.string.new_playlist),
-                color = Secondary,
+                color = NewPlaylist,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -253,7 +219,6 @@ private fun PlaylistCard(
     card: PlaylistCardUi,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    expand: Boolean = false,
 ) {
     Surface(
         onClick = onClick,
@@ -263,22 +228,12 @@ private fun PlaylistCard(
         contentColor = TextHigh,
         border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
     ) {
-        Column(
-            modifier = Modifier
-                .padding(10.dp)
-                .then(if (expand) Modifier.fillMaxHeight() else Modifier),
-        ) {
+        Column(modifier = Modifier.padding(10.dp)) {
             ArtCollage(
                 titles = card.coverTitles,
-                modifier = if (expand) {
-                    Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                } else {
-                    Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(1f)
-                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1f),
             )
             Spacer(Modifier.height(10.dp))
             TrackTitle(
@@ -291,10 +246,13 @@ private fun PlaylistCard(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
     }
 }
+
+private val NewPlaylist = Color(0xFFB9A8FF)
 
 @Composable
 internal fun ArtCollage(

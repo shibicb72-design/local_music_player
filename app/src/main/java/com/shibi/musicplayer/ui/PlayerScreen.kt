@@ -242,18 +242,19 @@ fun PlayerScreen(
                                 .basicMarquee(),
                         )
                     }
-                    Spacer(Modifier.height(4.dp))
-                    val artist = TrackDisplay.artist(state.artist)
-                    Text(
-                        text = artist ?: "\u00A0",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = if (artist == null) Color.Transparent else colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        minLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        textAlign = TextAlign.Start,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
+                    val subtitle = TrackDisplay.subtitle(state.artist, state.album)
+                    if (subtitle != null) {
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = subtitle,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            textAlign = TextAlign.Start,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
                     Spacer(Modifier.height(if (compact) 12.dp else 20.dp))
                     SeekControl(
                         positionMs = state.positionMs,
