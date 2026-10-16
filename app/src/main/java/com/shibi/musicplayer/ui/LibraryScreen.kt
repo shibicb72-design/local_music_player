@@ -8,6 +8,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -34,10 +36,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -58,6 +66,7 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
@@ -66,10 +75,9 @@ import com.shibi.musicplayer.R
 import com.shibi.musicplayer.domain.PlaybackTime
 import com.shibi.musicplayer.domain.Track
 import com.shibi.musicplayer.domain.TrackDisplay
-import com.shibi.musicplayer.domain.containsTamil
 import com.shibi.musicplayer.library.LibraryViewModel
 import com.shibi.musicplayer.playback.PlayerUiState
-import com.shibi.musicplayer.ui.theme.NotoTamil
+import com.shibi.musicplayer.ui.theme.Secondary
 import com.shibi.musicplayer.ui.theme.Spacing
 
 @Composable
@@ -79,7 +87,11 @@ fun LibraryScreen(
     onTrackSelected: (List<Track>, Long) -> Unit,
     onOpenPlayer: () -> Unit,
     onTogglePlayPause: () -> Unit,
+    onAddToPlaylist: (Track) -> Unit = {},
+    favoriteIds: Set<Long> = emptySet(),
+    onToggleFavorite: (Track) -> Unit = {},
     showMiniPlayer: Boolean = true,
+    contentBottomPadding: Dp = 120.dp,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -183,6 +195,10 @@ fun LibraryScreen(
             onTrackSelected = onTrackSelected,
             onOpenPlayer = onOpenPlayer,
             onTogglePlayPause = onTogglePlayPause,
+            onAddToPlaylist = onAddToPlaylist,
+            favoriteIds = favoriteIds,
+            onToggleFavorite = onToggleFavorite,
+            contentBottomPadding = contentBottomPadding,
             modifier = modifier,
         )
     }
@@ -196,6 +212,10 @@ fun LibraryContent(
     onTrackSelected: (List<Track>, Long) -> Unit,
     onOpenPlayer: () -> Unit,
     onTogglePlayPause: () -> Unit,
+    onAddToPlaylist: (Track) -> Unit = {},
+    favoriteIds: Set<Long> = emptySet(),
+    onToggleFavorite: (Track) -> Unit = {},
+    contentBottomPadding: Dp = 120.dp,
     modifier: Modifier = Modifier,
 ) {
     LibraryScaffold(
@@ -205,46 +225,46 @@ fun LibraryContent(
         onTogglePlayPause = onTogglePlayPause,
         modifier = modifier,
     ) { padding ->
-        LazyColumn(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
                 .windowInsetsPadding(
                     WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal),
                 ),
-            contentPadding = PaddingValues(bottom = 120.dp),
         ) {
-            item {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .statusBarsPadding()
-                        .padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 8.dp),
-                ) {
-                    Text(
-                        text = stringResource(R.string.library_title),
-                        style = MaterialTheme.typography.headlineMedium,
-                        color = MaterialTheme.colorScheme.onBackground,
-                    )
-                    Text(
-                        text = pluralStringResource(
-                            R.plurals.song_count,
-                            tracks.size,
-                            tracks.size,
-                        ),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-            items(tracks, key = { it.id }) { track ->
-                TrackRow(
-                    track = track,
-                    isPlaying = nowPlaying.currentMediaId == track.id.toString(),
-                    onClick = { onTrackSelected(tracks, track.id) },
-                    modifier = Modifier.animateItem(),
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 8.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.library_title),
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = MaterialTheme.colorScheme.onBackground,
+                )
+                Text(
+                    text = pluralStringResource(
+                        R.plurals.song_count,
+                        tracks.size,
+                        tracks.size,
+                    ),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+            SongColumn(
+                tracks = tracks,
+                nowPlaying = nowPlaying,
+                favoriteIds = favoriteIds,
+                onTrackSelected = onTrackSelected,
+                onToggleFavorite = onToggleFavorite,
+                onAddToPlaylist = onAddToPlaylist,
+                contentBottomPadding = contentBottomPadding,
+                emptyMessage = stringResource(R.string.empty_library),
+                modifier = Modifier.weight(1f),
+            )
         }
     }
 }
@@ -275,13 +295,56 @@ private fun LibraryScaffold(
 }
 
 @Composable
-private fun TrackRow(
+internal fun SongColumn(
+    tracks: List<Track>,
+    nowPlaying: PlayerUiState,
+    favoriteIds: Set<Long>,
+    onTrackSelected: (List<Track>, Long) -> Unit,
+    onToggleFavorite: (Track) -> Unit,
+    onAddToPlaylist: (Track) -> Unit,
+    contentBottomPadding: Dp,
+    emptyMessage: String,
+    modifier: Modifier = Modifier,
+) {
+    if (tracks.isEmpty()) {
+        MessagePane(
+            message = emptyMessage,
+            modifier = modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp),
+        )
+    } else {
+        LazyColumn(
+            modifier = modifier,
+            contentPadding = PaddingValues(bottom = contentBottomPadding),
+        ) {
+            items(tracks, key = { it.id }) { track ->
+                TrackRow(
+                    track = track,
+                    isPlaying = nowPlaying.currentMediaId == track.id.toString(),
+                    isFavorite = track.id in favoriteIds,
+                    onClick = { onTrackSelected(tracks, track.id) },
+                    onAddToPlaylist = { onAddToPlaylist(track) },
+                    onToggleFavorite = { onToggleFavorite(track) },
+                    modifier = Modifier.animateItem(),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+internal fun TrackRow(
     track: Track,
     isPlaying: Boolean,
+    isFavorite: Boolean,
     onClick: () -> Unit,
+    onAddToPlaylist: () -> Unit,
+    onToggleFavorite: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val title = TrackDisplay.title(track.title)
+    var menuOpen by remember { mutableStateOf(false) }
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -290,8 +353,11 @@ private fun TrackRow(
             .background(
                 if (isPlaying) Color(0xFF7C5CFF).copy(alpha = 0.12f) else Color.Transparent,
             )
-            .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onAddToPlaylist,
+            )
+            .padding(start = 12.dp, top = 8.dp, bottom = 8.dp, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         AlbumArtwork(
@@ -303,28 +369,26 @@ private fun TrackRow(
         Column(
             modifier = Modifier
                 .weight(1f)
-                .padding(horizontal = Spacing.md),
+                .padding(horizontal = Spacing.md)
+                .clipToBounds(),
         ) {
-            Text(
+            TrackTitle(
                 text = title,
                 style = MaterialTheme.typography.titleMedium,
-                fontFamily = if (containsTamil(title)) NotoTamil else null,
                 fontWeight = FontWeight.SemiBold,
-                color = if (isPlaying) {
-                    Color(0xFFB9A8FF)
-                } else {
-                    MaterialTheme.colorScheme.onSurface
-                },
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.fillMaxWidth(),
             )
-            Text(
-                text = TrackDisplay.artist(track.artist) ?: stringResource(R.string.missing_artist),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            TrackDisplay.subtitle(track.artist, track.album)?.let { subtitle ->
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
         }
         if (isPlaying) {
             Icon(
@@ -340,6 +404,36 @@ private fun TrackRow(
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        IconButton(onClick = onToggleFavorite) {
+            Icon(
+                imageVector = if (isFavorite) Icons.Rounded.Favorite else Icons.Outlined.FavoriteBorder,
+                contentDescription = stringResource(
+                    if (isFavorite) R.string.unfavorite else R.string.favorite,
+                ),
+                tint = if (isFavorite) Secondary else Color.White.copy(alpha = 0.92f),
+            )
+        }
+        Box {
+            IconButton(onClick = { menuOpen = true }) {
+                Icon(
+                    imageVector = Icons.Filled.MoreVert,
+                    contentDescription = stringResource(R.string.more_actions),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            DropdownMenu(
+                expanded = menuOpen,
+                onDismissRequest = { menuOpen = false },
+            ) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.add_to_playlist)) },
+                    onClick = {
+                        menuOpen = false
+                        onAddToPlaylist()
+                    },
+                )
+            }
+        }
     }
 }
 
@@ -391,10 +485,12 @@ private fun MessagePane(message: String, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun NowPlayingBar(
+internal fun NowPlayingBar(
     state: PlayerUiState,
     onOpen: () -> Unit,
     onTogglePlayPause: () -> Unit,
+    padForNavigationBars: Boolean = true,
+    bottomPadding: Dp = Spacing.sm,
 ) {
     val progress = if (state.durationMs > 0L) {
         (state.positionMs.toFloat() / state.durationMs).coerceIn(0f, 1f)
@@ -407,8 +503,8 @@ private fun NowPlayingBar(
             .windowInsetsPadding(
                 WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal),
             )
-            .navigationBarsPadding()
-            .padding(start = Spacing.sm, end = Spacing.sm, bottom = Spacing.sm),
+            .then(if (padForNavigationBars) Modifier.navigationBarsPadding() else Modifier)
+            .padding(start = Spacing.sm, end = Spacing.sm, bottom = bottomPadding),
     ) {
         Surface(
             onClick = onOpen,
@@ -454,22 +550,23 @@ private fun NowPlayingBar(
                     ) {
                         val title = TrackDisplay.title(state.title)
                             .ifBlank { stringResource(R.string.nothing_playing) }
-                        Text(
+                        TrackTitle(
                             text = title,
                             style = MaterialTheme.typography.titleSmall,
-                            fontFamily = if (containsTamil(title)) NotoTamil else null,
                             fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.fillMaxWidth(),
                         )
-                        Text(
-                            text = TrackDisplay.artist(state.artist)
-                                ?: stringResource(R.string.missing_artist),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
+                        TrackDisplay.subtitle(state.artist, state.album)?.let { subtitle ->
+                            Text(
+                                text = subtitle,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
                     }
                     Box(
                         modifier = Modifier

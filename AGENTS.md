@@ -3,12 +3,13 @@
 ## 1. Project map
 - Single module `:app`, package `com.shibi.musicplayer` (minSdk 26, targetSdk 36). Kotlin + Jetpack Compose (Material 3) + Media3.
 - `MainActivity.kt`: entry point, `setContent { MusicPlayerTheme { MusicApp() } }`.
-- `domain/`: pure Kotlin logic (`PlaybackQueue`, `PlaybackTime`, `Track`, `AudioOutputs`), unit-tested.
+- `domain/`: pure Kotlin logic (`PlaybackQueue`, `PlaybackTime`, `Track`, `AudioOutputs`, `NavWheelMath`, `PlaylistOrder`), unit-tested. Android stays out of these types.
 - `library/`: `MusicRepository` (MediaStore) and `LibraryViewModel`.
+- `playlist/`: Room playlists (`PlaylistDatabase`, `PlaylistDao`, `PlaylistRepository`, `PlaylistViewModel`). Schema version 1, database name `playlists.db`.
 - `playback/`: `PlaybackService` (MediaSessionService), `PlayerViewModel`, `PlayerUiState`, `TrackMediaItems`, `OutputCommands`.
-- `ui/`: `MusicApp` (navigation), `LibraryScreen`, `PlayerScreen`, `AlbumArtwork`, `AudioPermission`, `OutputPickerSheet` (audio output picker), `theme/Theme.kt`.
-- Tests: `app/src/test/java/com/shibi/musicplayer/` (plain JUnit 4, no Robolectric).
-- Libraries (gradle/libs.versions.toml): AGP 9.4.0, Kotlin 2.4.10, core-ktx 1.18.0, activity-compose 1.13.0, lifecycle 2.10.0, Compose BOM 2026.06.01, navigation 2.9.8, media3 1.11.1, coil 3.5.0, coroutines 1.11.0, junit 4.13.2.
+- `ui/`: `MusicApp` (navigation), `LibraryScreen`, `PlaylistsScreen`, `PlaylistDetailScreen`, `AddToPlaylistSheet`, `NavCarousel` (3D ring, `CarouselMath`), `BrowseScreens` (Favorites, Recent, Search, Settings), `PlayerScreen`, `AlbumArtwork`, `AudioPermission`, `OutputPickerSheet` (audio output picker), `theme/Theme.kt`.
+- Tests: `app/src/test/java/com/shibi/musicplayer/` (plain JUnit 4). Room DAO tests and Roborazzi screenshots use Robolectric. Screenshot PNGs are recorded to `app/build/outputs/roborazzi/` by `recordRoborazziDebug` (plain `test` does not write them).
+- Libraries (gradle/libs.versions.toml): AGP 9.4.0, Kotlin 2.4.10, core-ktx 1.18.0, activity-compose 1.13.0, lifecycle 2.10.0, Compose BOM 2026.06.01, navigation 2.9.8, media3 1.11.1, coil 3.5.0, coroutines 1.11.0, room 2.8.5, ksp 2.3.12, junit 4.13.2.
 - Style: 4-space indent, trailing commas, one composable per concern, private helper composables, user-facing text in `res/values/strings.xml` via `stringResource`, dependencies only through the version catalog (`libs.*`).
 
 ## 2. Definition of done
@@ -82,9 +83,31 @@ After every task, append an entry below: `- [task] what went wrong -> new rule`.
 
 - [ticket V6] Dropped `verticalArrangement = Arrangement.SpaceBetween` from the player Column; `Arrangement` is still used by `SeekControl` (`SpaceBetween`) and `TransportControls` (`SpaceEvenly`), so the import had to stay -> after removing one `Arrangement` usage, check for the other call sites before pruning the import.
 
+- [playlists and wheel] `rotation.snapTo` / `animateTo` inside `awaitEachGesture` failed to compile (restricted coroutine) -> launch Animatable calls on a normal Compose scope, and accumulate the drag into a local rotation so a queued `snapTo` does not reuse a stale `Animatable.value`.
+
+- [playlists and wheel] `Icons.Rounded.QueueMusic` emitted a deprecation `w:` -> use `Icons.AutoMirrored.Rounded.QueueMusic`.
+
+- [playlists and wheel] `room-ktx` is an empty deprecated artifact since Room 2.7 -> depend on `room-runtime` only (Flow and coroutines already ship there) and `ksp` the compiler. The KSP2 plugin version is `2.3.12`, not prefixed with the Kotlin version. Room 3 (`androidx.room3`) is a different package and was not used.
+
+- [playlists and wheel] `NavDestination.route` is the pattern, so a playlist detail destination reads `playlist/{playlistId}` -> match that pattern when mapping the current route back onto the wheel.
+
+- [playlists and wheel] The dial stroke was white at 14% on `#0E0E12` (~1.5:1) and the viewport ended at the ±90° icons, so screenshots read as a bottom bar -> keep the ring near 3:1 (white ~42%, about 2.5dp) and leave arc below those icons so the circle curves back inward before the clip.
+
+- [playlists and wheel review] A stroked circle with icons sitting on the stroke still read as a bar, and Noto Tamil plus `TextOverflow.Ellipsis` drew two ellipsis marks -> draw a filled disc, put icons on an inner orbit, rotate rim ticks with `rimOffsetDegrees`, and append a single Jakarta ellipsis after measuring the line.
+
+- [carousel] Replaced the flat dial with a perspective ring. `graphicsLayer` translation moves icons; `rotationY` pivots around each icon, so the layout slot stays at the ring center and translation is applied in the layer. Drag is 1:1 along the arc (`dragItems`), then `animateDecay` and a spring snap. Haptic fires when that snap settles, not on every detent. Room favorites, recent plays, and the theme flag started at schema version 2 with `MIGRATION_1_2`.
+
+- [carousel tiles] A thin elliptical stroke with bare icons still read as flat. Each item is a glass tile on a ring of radius `0.36 * width`. Scale is `0.62 + 0.38 * ((cos θ + 1) / 2)`, alpha is 0 when `cos θ < -0.1` and otherwise lerps 0.35 to 1, `rotationY` is `-θ * 0.6` degrees clamped to ±40 with `cameraDistance` `12 * density`, and Y is `-(1 - cos θ) * 10dp`. The back is hidden; ±90° stays small and dim; the front and ±45° overlap slightly. Darken the plate in proportion to `(1 - cos θ)`; do not bitmap-blur the icon. One 13sp semibold label sits under the front tile, clear of the glow and at least 8dp above the nav inset. Title overflow is always `TextOverflow.Ellipsis` on the original characters (Tamil is a Noto span in a Jakarta paragraph, so the ellipsis glyph comes from Jakarta and the letters are never sliced). Playlist covers stay `aspectRatio(1f)` in a 2-column adaptive grid (`GridCells.Adaptive`, `minSize` 150dp). Do not drop to one column to fill the height. A filled ellipse under the front tile is the floor; do not stroke the orbit. A device-sheet screenshot on a flat field looks pure black; composite the player behind a 55% black scrim. List bottom padding has to clear the carousel. Recent searches are schema version 3 (`MIGRATION_2_3`).
+
 ## 6. Lessons learned
 - androidx.mediarouter's `MediaRouteChooserDialog` extends `androidx.appcompat.app.AppCompatDialog`, and mediarouter does not expose appcompat at compile time. Using mediarouter dialog classes requires `implementation(libs.androidx.appcompat)` in app/build.gradle.kts (catalog alias `androidx-appcompat`).
 - You cannot read the Gradle cache (~/.gradle/caches): OpenCode denies external directories and the run aborts. Do not try. Verify an API by compiling (gradlew.bat assembleDebug) instead.
 - `android.media.AudioDeviceCallback` is a top-level class (not nested in AudioManager). `AudioManager.AudioRecordingCallback` IS nested.
 - Only the repo directory is readable/writable for you. Never write or read files in %TEMP% or other outside paths; pipe Gradle output to the console or to build/.
 - Scaffold applies insets only to its content padding. Custom composables in bottomBar/topBar must handle navigation/status bar insets themselves (navigationBarsPadding()).
+- `awaitEachGesture` cannot call `Animatable` suspend functions. Launch them on `rememberCoroutineScope`.
+- Room 2.8: `implementation(libs.androidx.room.runtime)` and `ksp(libs.androidx.room.compiler)`. Do not add `room-ktx`. KSP plugin: `com.google.devtools.ksp` version `2.3.12`.
+- `NavHost` destination `route` is the pattern string (`playlist/{playlistId}`), not the filled path.
+- A decorative stroke on `#0E0E12` needs about 40% white to reach ~3:1. White at 14% disappears.
+- Noto Sans Tamil has no U+2026. `TextOverflow.Ellipsis` on that family draws the mark twice. Keep the original characters and paint Tamil as a Noto span inside a Jakarta paragraph so one Jakarta ellipsis is drawn. Do not slice the string.
+- The bottom nav is a 3D carousel of glass tiles (`CarouselMath` + `NavCarousel`), not a stroked arc. Eight sections, 45° apart, radius `0.36 * width`. At rest the front, ±45°, and ±90° are visible and symmetric; the back is hidden (`cos θ < -0.1`). Scale, alpha, `rotationY`, and the upward Y offset all come from `cos θ`. Apply scale and `rotationY` on one `graphicsLayer` (`cameraDistance` `12 * density`). Shade the plate only. One 13sp semibold label sits under the front tile. `graphicsLayer.density` is a Float; capture `LocalDensity.current.density` before the layer lambda.

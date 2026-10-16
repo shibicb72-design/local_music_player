@@ -18,11 +18,17 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -43,6 +49,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ScaffoldDefaults
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
@@ -67,6 +74,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -77,7 +85,7 @@ import com.shibi.musicplayer.domain.PlaybackTime
 import com.shibi.musicplayer.domain.TrackDisplay
 import com.shibi.musicplayer.domain.containsTamil
 import com.shibi.musicplayer.playback.PlayerUiState
-import com.shibi.musicplayer.ui.theme.NotoTamil
+import com.shibi.musicplayer.ui.theme.TextHigh
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -91,6 +99,7 @@ fun PlayerScreen(
     selectedOutputId: Int?,
     onSelectOutput: (Int?) -> Unit,
     showBack: Boolean = true,
+    includeNavigationBars: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     val backDescription = stringResource(R.string.back)
@@ -128,8 +137,8 @@ fun PlayerScreen(
                 .fillMaxSize()
                 .background(
                     Brush.verticalGradient(
-                        0f to colorScheme.background.copy(alpha = 0.30f),
-                        0.45f to colorScheme.background.copy(alpha = 0.70f),
+                        0f to colorScheme.background.copy(alpha = 0.72f),
+                        0.45f to colorScheme.background.copy(alpha = 0.78f),
                         1f to colorScheme.background,
                     ),
                 ),
@@ -137,6 +146,13 @@ fun PlayerScreen(
         Scaffold(
             containerColor = Color.Transparent,
             contentColor = colorScheme.onBackground,
+            contentWindowInsets = if (includeNavigationBars) {
+                ScaffoldDefaults.contentWindowInsets
+            } else {
+                WindowInsets.statusBars.union(
+                    WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal),
+                )
+            },
             topBar = {
                 CenterAlignedTopAppBar(
                     title = {
@@ -144,7 +160,7 @@ fun PlayerScreen(
                             text = stringResource(R.string.player_title).uppercase(),
                             style = MaterialTheme.typography.labelMedium,
                             letterSpacing = 2.sp,
-                            color = colorScheme.onSurfaceVariant,
+                            color = TextHigh,
                         )
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
@@ -180,7 +196,7 @@ fun PlayerScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(horizontal = 28.dp),
-                    horizontalAlignment = Alignment.Start,
+                    horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Spacer(Modifier.weight(1f))
                     Box(
@@ -204,26 +220,43 @@ fun PlayerScreen(
                     Spacer(Modifier.weight(1f))
                     val titleText = TrackDisplay.title(state.title)
                         .ifBlank { stringResource(R.string.nothing_playing) }
-                    Text(
-                        text = titleText,
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontFamily = if (containsTamil(titleText)) NotoTamil else null,
-                        color = colorScheme.onBackground,
-                        maxLines = 1,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .basicMarquee(),
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    TrackDisplay.artist(state.artist)?.let { artist ->
+                    if (containsTamil(titleText)) {
+                        TrackTitle(
+                            text = titleText,
+                            style = MaterialTheme.typography.headlineSmall,
+                            color = colorScheme.onBackground,
+                            textAlign = TextAlign.Start,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    } else {
                         Text(
-                            text = artist,
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = colorScheme.onSurfaceVariant,
+                            text = titleText,
+                            style = MaterialTheme.typography.headlineSmall,
+                            color = colorScheme.onBackground,
                             maxLines = 1,
+                            softWrap = false,
                             overflow = TextOverflow.Ellipsis,
+                            textAlign = TextAlign.Start,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .basicMarquee(),
                         )
                     }
+                    val subtitle = TrackDisplay.subtitle(state.artist, state.album)
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = subtitle ?: "\u00A0",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = if (subtitle == null) {
+                            Color.Transparent
+                        } else {
+                            colorScheme.onSurfaceVariant
+                        },
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Start,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                     Spacer(Modifier.height(if (compact) 12.dp else 20.dp))
                     SeekControl(
                         positionMs = state.positionMs,
@@ -350,12 +383,12 @@ private fun SeekControl(
             Text(
                 text = PlaybackTime.format(shownPosition),
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = TextHigh,
             )
             Text(
                 text = PlaybackTime.format(durationMs),
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = TextHigh,
             )
         }
     }
@@ -378,7 +411,7 @@ private fun TransportControls(
     val skipButtonSize = if (compact) 36.dp else 44.dp
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceEvenly,
+        horizontalArrangement = Arrangement.spacedBy(28.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         IconButton(

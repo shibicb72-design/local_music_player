@@ -10,6 +10,15 @@ import org.junit.Test
 
 class TrackDisplayTest {
     @Test
+    fun title_keepsTheTamilSyllableInsteadOfRewritingIt() {
+        val raw = "\u0B8E\u0BA9\u0BCD\u0BA9\u0BC8 \u0B95\u0BCA\u0B9E\u0BCD\u0B9A\u0BAE\u0BCD.mp3"
+        val title = TrackDisplay.title(raw)
+        assertEquals("\u0B8E\u0BA9\u0BCD\u0BA9\u0BC8 \u0B95\u0BCA\u0B9E\u0BCD\u0B9A\u0BAE\u0BCD", title)
+        assertTrue(title.endsWith("\u0BAE\u0BCD"))
+        assertFalse(title.contains("\u0BAA"))
+    }
+
+    @Test
     fun title_stripsTrailingExtensionCaseInsensitively() {
         assertEquals("Song", TrackDisplay.title("Song.MP3"))
         assertEquals("Song", TrackDisplay.title("Song.mp3"))
@@ -55,6 +64,59 @@ class TrackDisplayTest {
     @Test
     fun artist_returnsTrimmedValue() {
         assertEquals("Artist", TrackDisplay.artist("  Artist  "))
+    }
+
+    @Test
+    fun album_nullsBlankUnknownAndThePlaceholder() {
+        assertNull(TrackDisplay.album(null))
+        assertNull(TrackDisplay.album("  "))
+        assertNull(TrackDisplay.album("Unknown"))
+        assertNull(TrackDisplay.album("Unknown album"))
+        assertEquals("Night Highway", TrackDisplay.album(" Night Highway "))
+    }
+
+    @Test
+    fun subtitle_prefersArtistThenAlbum() {
+        assertEquals("Ella Voss", TrackDisplay.subtitle("Ella Voss", "Paper Planes"))
+        assertEquals("Night Highway", TrackDisplay.subtitle("<unknown>", "Night Highway"))
+        assertNull(TrackDisplay.subtitle("<unknown>", "Unknown album"))
+    }
+
+    @Test
+    fun tamilEllipsisCut_keepsAClusterThatAlreadyEndsOnTheBoundary() {
+        val cluster = "\u0B95\u0BCA"
+        assertEquals(0, TrackDisplay.tamilEllipsisCut(cluster, 1))
+        assertEquals(cluster.length, TrackDisplay.tamilEllipsisCut(cluster, cluster.length))
+        val line = "AB$cluster"
+        assertEquals(line.length, TrackDisplay.tamilEllipsisCut(line, line.length))
+        assertEquals(2, TrackDisplay.tamilEllipsisCut(line, line.length - 1))
+        assertEquals(0, TrackDisplay.tamilEllipsisCut(line, 0))
+        val conjunct = "A\u0B95\u0BCD\u0B95"
+        assertEquals(conjunct.length, TrackDisplay.tamilEllipsisCut(conjunct, conjunct.length))
+        assertEquals(1, TrackDisplay.tamilEllipsisCut(conjunct, conjunct.length - 1))
+    }
+
+    @Test
+    fun ellipsisLimit_keepsAFittingStringAndDropsWholeClusters() {
+        assertEquals(8, TrackDisplay.ellipsisLimit("abcdefgh") { end -> end <= 8 })
+        assertEquals(4, TrackDisplay.ellipsisLimit("abcdefgh") { end -> end <= 4 })
+        assertEquals(0, TrackDisplay.ellipsisLimit("abcdefgh") { false })
+        val cluster = "\u0B95\u0BCA"
+        val line = "AB$cluster"
+        assertEquals(line.length, TrackDisplay.ellipsisLimit(line) { true })
+        assertEquals(2, TrackDisplay.ellipsisLimit(line) { end -> end <= 2 })
+        assertEquals(1, TrackDisplay.ellipsisLimit(line) { end -> end < 2 })
+        assertEquals(0, TrackDisplay.ellipsisLimit(line) { end -> end == 0 })
+    }
+
+    @Test
+    fun dropLastGrapheme_removesTheWholeCluster() {
+        val cluster = "\u0B95\u0BCA"
+        assertEquals(0, TrackDisplay.dropLastGrapheme(cluster, cluster.length))
+        val line = "AB$cluster"
+        assertEquals(2, TrackDisplay.dropLastGrapheme(line, line.length))
+        val conjunct = "A\u0B95\u0BCD\u0B95"
+        assertEquals(1, TrackDisplay.dropLastGrapheme(conjunct, conjunct.length))
     }
 
     @Test

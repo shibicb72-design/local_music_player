@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -90,6 +91,7 @@ fun OutputPickerSheet(
         sheetState = sheetState,
         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         contentColor = MaterialTheme.colorScheme.onSurface,
+        scrimColor = OutputScrim,
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
     ) {
         OutputPickerContent(
@@ -114,7 +116,9 @@ internal fun OutputPickerContent(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .navigationBarsPadding()
+            .padding(horizontal = 16.dp)
+            .padding(top = 8.dp, bottom = 24.dp),
     ) {
         Text(
             text = stringResource(R.string.play_on),
@@ -129,7 +133,7 @@ internal fun OutputPickerContent(
                     .clip(RoundedCornerShape(16.dp))
                     .background(
                         if (selected) {
-                            Color(0xFF7C5CFF).copy(alpha = 0.16f)
+                            Color.White.copy(alpha = 0.08f)
                         } else {
                             Color.Transparent
                         },
@@ -142,7 +146,7 @@ internal fun OutputPickerContent(
                     modifier = Modifier
                         .size(40.dp)
                         .background(
-                            if (selected) Color(0xFF7C5CFF) else Color.White.copy(alpha = 0.08f),
+                            if (selected) SelectedDeviceFill else Color.White.copy(alpha = 0.08f),
                             CircleShape,
                         ),
                     contentAlignment = Alignment.Center,
@@ -159,12 +163,16 @@ internal fun OutputPickerContent(
                     Text(
                         text = output.name,
                         style = MaterialTheme.typography.titleSmall,
-                        color = if (selected) OutputAccent else MaterialTheme.colorScheme.onSurface,
+                        color = if (selected) Color.White else MaterialTheme.colorScheme.onSurface,
                     )
                     Text(
                         text = stringResource(outputSubtitle(output.kind)),
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = if (selected) {
+                            Color.White.copy(alpha = 0.82f)
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
                     )
                 }
                 if (selected) {
@@ -191,6 +199,11 @@ private fun outputSubtitle(kind: OutputKind): Int = when (kind) {
 }
 
 internal val OutputAccent = Color(0xFFB9A8FF)
+
+/** Black at 55% so the screen behind the device sheet stays visible. */
+internal val OutputScrim = Color.Black.copy(alpha = 0.55f)
+
+private val SelectedDeviceFill = Color(0xFF6E4EF0)
 
 internal fun effectiveOutput(outputs: List<AudioOutput>, selectedId: Int?): AudioOutput? =
     outputs.firstOrNull { it.id == AudioOutputs.selectedId(outputs, selectedId) }
