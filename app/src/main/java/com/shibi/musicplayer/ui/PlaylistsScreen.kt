@@ -57,7 +57,7 @@ import com.shibi.musicplayer.R
 import com.shibi.musicplayer.domain.Track
 import com.shibi.musicplayer.playlist.PlaylistSummary
 import com.shibi.musicplayer.playlist.PlaylistViewModel
-import com.shibi.musicplayer.ui.theme.TextHigh
+import com.shibi.musicplayer.ui.background.LocalBackgroundChrome
 
 data class PlaylistCardUi(
     val id: Long,
@@ -177,7 +177,7 @@ private fun PlaylistHeader(
             Text(
                 text = stringResource(R.string.playlists_title),
                 style = MaterialTheme.typography.headlineMedium,
-                color = TextHigh,
+                color = MaterialTheme.colorScheme.onBackground,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -221,8 +221,8 @@ private fun PlaylistCard(
         modifier = modifier,
         shape = RoundedCornerShape(20.dp),
         color = MaterialTheme.colorScheme.surfaceContainer,
-        contentColor = TextHigh,
-        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        border = BorderStroke(1.dp, LocalBackgroundChrome.current.cardBorder),
     ) {
         Column(modifier = Modifier.padding(10.dp)) {
             ArtCollage(
@@ -235,7 +235,7 @@ private fun PlaylistCard(
             TrackTitle(
                 text = card.name,
                 style = MaterialTheme.typography.titleSmall,
-                color = TextHigh,
+                color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
                 text = pluralStringResource(R.plurals.song_count, card.songCount, card.songCount),

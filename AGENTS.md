@@ -103,6 +103,8 @@ After every task, append an entry below: `- [task] what went wrong -> new rule`.
 
 - [two-pane mini] Overlaying the mini player and carousel inside the 0.42 list pane put the bar at mid-height of a 600dp landscape window and let the list paint behind both. A window-level overlay still left rows in the bottom padding under the chrome. Put the mini player and carousel in a full-width `Column` under the split so they consume height, matching the no-mini two-pane carousel.
 
+- [backgrounds] `TabRow` + `tabIndicatorOffset` in current material3 is deprecated and failed the zero-warning bar -> use `SecondaryTabRow` (or `PrimaryTabRow`) and its built-in indicator.
+
 ## 6. Lessons learned
 - androidx.mediarouter's `MediaRouteChooserDialog` extends `androidx.appcompat.app.AppCompatDialog`, and mediarouter does not expose appcompat at compile time. Using mediarouter dialog classes requires `implementation(libs.androidx.appcompat)` in app/build.gradle.kts (catalog alias `androidx-appcompat`).
 - You cannot read the Gradle cache (~/.gradle/caches): OpenCode denies external directories and the run aborts. Do not try. Verify an API by compiling (gradlew.bat assembleDebug) instead.

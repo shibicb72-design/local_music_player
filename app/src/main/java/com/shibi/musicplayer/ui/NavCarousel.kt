@@ -75,6 +75,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.shibi.musicplayer.R
 import com.shibi.musicplayer.domain.CarouselMath
+import com.shibi.musicplayer.ui.background.LocalBackgroundChrome
 import kotlin.math.abs
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -155,6 +156,7 @@ fun NavCarousel(
     val rotationValue = rotation.value
     val selectedIndex = math.selectedIndex(rotationValue)
     val label = stringResource(NavSection.entries[selectedIndex].labelRes)
+    val chrome = LocalBackgroundChrome.current
 
     LaunchedEffect(selected) {
         if (gestureActive) return@LaunchedEffect
@@ -295,13 +297,13 @@ fun NavCarousel(
                                 },
                             )
                             .clip(TileShape)
-                            .background(if (centered) SelectedFill else Color.White.copy(alpha = 0.12f))
+                            .background(if (centered) SelectedFill else chrome.carouselTile)
                             .border(
                                 width = 1.dp,
                                 color = if (centered) {
                                     Color.White.copy(alpha = 0.55f)
                                 } else {
-                                    Color.White.copy(alpha = 0.22f)
+                                    chrome.carouselTileBorder
                                 },
                                 shape = TileShape,
                             ),
@@ -317,7 +319,7 @@ fun NavCarousel(
                     Icon(
                         imageVector = section.icon,
                         contentDescription = null,
-                        tint = if (centered) Color.White else Color.White.copy(alpha = 0.92f),
+                        tint = if (centered) Color.White else chrome.carouselIcon,
                         modifier = Modifier.size(tileSize * 0.38f),
                     )
                 }

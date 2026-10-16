@@ -61,6 +61,13 @@ import com.shibi.musicplayer.ui.PlaylistsContent
 import com.shibi.musicplayer.ui.SearchContent
 import com.shibi.musicplayer.ui.SongListBottomPadding
 import com.shibi.musicplayer.ui.TwoPanePlayerBottomPadding
+import com.shibi.musicplayer.domain.AppBackground
+import com.shibi.musicplayer.domain.BackgroundCatalog
+import com.shibi.musicplayer.domain.BackgroundTab
+import com.shibi.musicplayer.ui.background.AppBackgroundHost
+import com.shibi.musicplayer.ui.background.BackgroundAnimalGrid
+import com.shibi.musicplayer.ui.background.BackgroundFineTuneContent
+import com.shibi.musicplayer.ui.background.BackgroundPickerContent
 import com.shibi.musicplayer.ui.theme.MusicPlayerTheme
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -654,6 +661,212 @@ class ScreenshotTest {
     }
 
     @Test
+    fun backgroundsSolid() {
+        captureRoboImage("build/outputs/roborazzi/backgrounds_solid.png") {
+            MusicPlayerTheme {
+                AppBackgroundHost(AppBackground.Solid("blush"), emptyMap(), forceStatic = true) {
+                    BackgroundPickerContent(
+                        tab = BackgroundTab.SOLID,
+                        onTabChange = {},
+                        selected = AppBackground.Solid("blush"),
+                        customColors = emptyMap(),
+                        onSelect = {},
+                        onBack = {},
+                        forceStatic = true,
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
+    fun backgroundsMulticolor() {
+        captureRoboImage("build/outputs/roborazzi/backgrounds_multicolor.png") {
+            MusicPlayerTheme {
+                AppBackgroundHost(AppBackground.Gradient("cotton_candy"), emptyMap(), forceStatic = true) {
+                    BackgroundPickerContent(
+                        tab = BackgroundTab.MULTICOLOR,
+                        onTabChange = {},
+                        selected = AppBackground.Gradient("cotton_candy"),
+                        customColors = emptyMap(),
+                        onSelect = {},
+                        onBack = {},
+                        forceStatic = true,
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
+    fun backgroundsAnimated() {
+        captureRoboImage("build/outputs/roborazzi/backgrounds_animated.png") {
+            MusicPlayerTheme {
+                AppBackgroundHost(AppBackground.Animated("waves"), emptyMap(), forceStatic = true) {
+                    BackgroundPickerContent(
+                        tab = BackgroundTab.ANIMATED,
+                        onTabChange = {},
+                        selected = AppBackground.Animated("waves"),
+                        customColors = emptyMap(),
+                        onSelect = {},
+                        onBack = {},
+                        forceStatic = true,
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
+    fun backgroundsAnimals() {
+        captureRoboImage("build/outputs/roborazzi/backgrounds_animals.png") {
+            MusicPlayerTheme {
+                AppBackgroundHost(AppBackground.Animated("unicorn"), emptyMap(), forceStatic = true) {
+                    BackgroundAnimalGrid(
+                        selected = AppBackground.Animated("unicorn"),
+                        customColors = emptyMap(),
+                        onSelect = {},
+                        forceStatic = true,
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
+    fun backgroundsFineTune() {
+        val scene = BackgroundCatalog.scene("bubbles")!!
+        captureRoboImage("build/outputs/roborazzi/backgrounds_finetune.png") {
+            MusicPlayerTheme {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    AppBackgroundHost(AppBackground.Animated(scene.id), emptyMap(), forceStatic = true) {
+                        BackgroundPickerContent(
+                            tab = BackgroundTab.ANIMATED,
+                            onTabChange = {},
+                            selected = AppBackground.Animated(scene.id),
+                            customColors = emptyMap(),
+                            onSelect = {},
+                            onBack = {},
+                            forceStatic = true,
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = 0.45f)),
+                    )
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .align(Alignment.BottomCenter),
+                        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    ) {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            BottomSheetDefaults.DragHandle(
+                                modifier = Modifier.align(Alignment.CenterHorizontally),
+                            )
+                            BackgroundFineTuneContent(
+                                scene = scene,
+                                colors = scene.defaults,
+                                onColorAt = { _, _ -> },
+                                onReset = {},
+                                forceStatic = true,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
+    fun songsBlush() = captureSongsBackground(AppBackground.Solid("blush"), "songs_blush.png")
+
+    @Test
+    fun songsMint() = captureSongsBackground(AppBackground.Solid("mint"), "songs_mint.png")
+
+    @Test
+    fun songsLavender() = captureSongsBackground(AppBackground.Solid("lavender"), "songs_lavender.png")
+
+    @Test
+    fun songsCottonCandy() =
+        captureSongsBackground(AppBackground.Gradient("cotton_candy"), "songs_cotton_candy.png")
+
+    @Test
+    fun songsSunrise() =
+        captureSongsBackground(AppBackground.Gradient("sunrise"), "songs_sunrise.png")
+
+    @Test
+    fun songsWaves() =
+        captureSongsBackground(AppBackground.Animated("waves"), "songs_waves.png")
+
+    @Test
+    fun songsBubbles() =
+        captureSongsBackground(AppBackground.Animated("bubbles"), "songs_bubbles.png")
+
+    @Test
+    fun songsUnicorn() =
+        captureSongsBackground(AppBackground.Animated("unicorn"), "songs_unicorn.png")
+
+    @Test
+    fun songsPanda() =
+        captureSongsBackground(AppBackground.Animated("panda"), "songs_panda.png")
+
+    @Test
+    @Config(qualifiers = "w900dp-h600dp-xhdpi")
+    fun twoPanePastel() {
+        captureRoboImage("build/outputs/roborazzi/two_pane_pastel.png") {
+            MusicPlayerTheme {
+                AppBackgroundHost(AppBackground.Solid("sky"), emptyMap(), forceStatic = true) {
+                    Row(modifier = Modifier.fillMaxSize()) {
+                        Column(modifier = Modifier.weight(0.42f).fillMaxSize()) {
+                            Box(modifier = Modifier.weight(1f)) {
+                                LibraryContent(
+                                    tracks = tracks,
+                                    nowPlaying = playingState,
+                                    showMiniPlayer = false,
+                                    onTrackSelected = { _, _ -> },
+                                    onOpenPlayer = {},
+                                    onTogglePlayPause = {},
+                                    favoriteIds = setOf(8L),
+                                    contentBottomPadding = SongListBottomPadding,
+                                    modifier = Modifier.fillMaxSize(),
+                                )
+                            }
+                            NavCarousel(
+                                selected = NavSection.Songs,
+                                onSelect = {},
+                                modifier = Modifier.padding(
+                                    top = TwoPaneCarouselPadding,
+                                    bottom = TwoPaneCarouselPadding,
+                                ),
+                            )
+                        }
+                        PlayerScreen(
+                            state = playingState,
+                            onBack = {},
+                            onTogglePlayPause = {},
+                            onNext = {},
+                            onPrevious = {},
+                            onSeek = {},
+                            selectedOutputId = null,
+                            onSelectOutput = {},
+                            showBack = false,
+                            includeNavigationBars = false,
+                            modifier = Modifier
+                                .weight(0.58f)
+                                .navigationBarsPadding()
+                                .padding(start = 8.dp, top = 16.dp, end = 16.dp, bottom = TwoPanePlayerBottomPadding)
+                                .clip(RoundedCornerShape(28.dp)),
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
     fun search() {
         captureRoboImage("build/outputs/roborazzi/search.png") {
             MusicPlayerTheme {
@@ -719,6 +932,16 @@ class ScreenshotTest {
                 contentBottomPadding = bottom,
                 modifier = Modifier.fillMaxSize(),
             )
+        }
+    }
+
+    private fun captureSongsBackground(background: AppBackground, fileName: String) {
+        captureRoboImage("build/outputs/roborazzi/$fileName") {
+            MusicPlayerTheme {
+                AppBackgroundHost(background, emptyMap(), forceStatic = true) {
+                    SongsWithCarousel(tracks, NavSection.Songs)
+                }
+            }
         }
     }
 

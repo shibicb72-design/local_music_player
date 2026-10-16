@@ -90,6 +90,7 @@ import com.shibi.musicplayer.domain.Track
 import com.shibi.musicplayer.domain.TrackDisplay
 import com.shibi.musicplayer.library.LibraryViewModel
 import com.shibi.musicplayer.playback.PlayerUiState
+import com.shibi.musicplayer.ui.background.LocalBackgroundChrome
 import com.shibi.musicplayer.ui.theme.DeviceGreen
 import com.shibi.musicplayer.ui.theme.Secondary
 import com.shibi.musicplayer.ui.theme.Spacing
@@ -294,6 +295,8 @@ private fun LibraryScaffold(
 ) {
     Scaffold(
         modifier = modifier,
+        containerColor = Color.Transparent,
+        contentColor = MaterialTheme.colorScheme.onBackground,
         contentWindowInsets = WindowInsets(0),
         bottomBar = {
             if (showMiniPlayer && nowPlaying.hasMedia) {
@@ -359,14 +362,13 @@ internal fun TrackRow(
 ) {
     val title = TrackDisplay.title(track.title)
     var menuOpen by remember { mutableStateOf(false) }
+    val chrome = LocalBackgroundChrome.current
     Row(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 8.dp)
             .clip(RoundedCornerShape(16.dp))
-            .background(
-                if (isPlaying) Color(0xFF7C5CFF).copy(alpha = 0.12f) else Color.Transparent,
-            )
+            .background(if (isPlaying) chrome.playingRowFill else chrome.rowFill)
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onAddToPlaylist,
@@ -424,7 +426,7 @@ internal fun TrackRow(
                 contentDescription = stringResource(
                     if (isFavorite) R.string.unfavorite else R.string.favorite,
                 ),
-                tint = if (isFavorite) Secondary else Color.White.copy(alpha = 0.92f),
+                tint = if (isFavorite) Secondary else chrome.iconMuted,
             )
         }
         Box {
@@ -528,6 +530,7 @@ internal fun NowPlayingBar(
     } else {
         DeviceGreen.copy(alpha = 0.82f)
     }
+    val chrome = LocalBackgroundChrome.current
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -541,9 +544,13 @@ internal fun NowPlayingBar(
             onClick = onOpen,
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(22.dp),
-            color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.92f),
+            color = if (chrome.isLight) {
+                chrome.frost
+            } else {
+                MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.92f)
+            },
             contentColor = MaterialTheme.colorScheme.onSurface,
-            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.10f)),
+            border = BorderStroke(1.dp, chrome.frostBorder),
             shadowElevation = 8.dp,
         ) {
             Column(modifier = Modifier.fillMaxWidth()) {
@@ -645,13 +652,13 @@ internal fun NowPlayingBar(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(2.dp)
-                        .background(Color.White.copy(alpha = 0.12f)),
+                        .background(chrome.progressTrack),
                 ) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth(progress)
                             .height(2.dp)
-                            .background(Color.White),
+                            .background(chrome.progress),
                     )
                 }
             }
@@ -681,8 +688,9 @@ private fun FavoriteHeart(
         )
         scale.animateTo(1f, spring(stiffness = Spring.StiffnessMedium))
     }
+    val chrome = LocalBackgroundChrome.current
     val tint by animateColorAsState(
-        targetValue = if (isFavorite) Secondary else Color.White.copy(alpha = 0.92f),
+        targetValue = if (isFavorite) Secondary else chrome.iconMuted,
         label = "favoriteTint",
     )
     Box(

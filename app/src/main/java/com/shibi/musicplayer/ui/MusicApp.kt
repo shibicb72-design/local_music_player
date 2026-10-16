@@ -23,6 +23,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -33,11 +34,18 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.shibi.musicplayer.R
+import com.shibi.musicplayer.background.BackgroundViewModel
+import com.shibi.musicplayer.domain.AppBackground
 import com.shibi.musicplayer.domain.Track
 import com.shibi.musicplayer.library.LibraryViewModel
 import com.shibi.musicplayer.playback.PlayerUiState
 import com.shibi.musicplayer.playback.PlayerViewModel
 import com.shibi.musicplayer.playlist.PlaylistViewModel
+import com.shibi.musicplayer.ui.background.AppBackgroundHost
+import com.shibi.musicplayer.ui.background.BackgroundPickerScreen
+import com.shibi.musicplayer.ui.background.backgroundTitleRes
+import com.shibi.musicplayer.ui.background.titleId
 
 private const val SongsRoute = "songs"
 private const val PlaylistsRoute = "playlists"
@@ -47,6 +55,7 @@ private const val FavoritesRoute = "favorites"
 private const val RecentRoute = "recent"
 private const val SearchRoute = "search"
 private const val SettingsRoute = "settings"
+private const val BackgroundsRoute = "settings/backgrounds"
 private const val PlaylistIdArg = "playlistId"
 private val TwoPaneBreakpoint = 600.dp
 
@@ -55,6 +64,7 @@ fun MusicApp(
     libraryViewModel: LibraryViewModel = viewModel(),
     playerViewModel: PlayerViewModel = viewModel(),
     playlistViewModel: PlaylistViewModel = viewModel(),
+    backgroundViewModel: BackgroundViewModel = viewModel(),
 ) {
     val playerState by playerViewModel.uiState.collectAsStateWithLifecycle()
     val selectedOutputId by playerViewModel.preferredOutputId.collectAsStateWithLifecycle()
@@ -66,6 +76,8 @@ fun MusicApp(
     val recentIds by playlistViewModel.recentTrackIds.collectAsStateWithLifecycle()
     val recentSearches by playlistViewModel.recentSearches.collectAsStateWithLifecycle()
     val darkTheme by playlistViewModel.darkTheme.collectAsStateWithLifecycle()
+    val appBackground by backgroundViewModel.selection.collectAsStateWithLifecycle()
+    val backgroundColors by backgroundViewModel.customColors.collectAsStateWithLifecycle()
     val libraryState by libraryViewModel.uiState.collectAsStateWithLifecycle()
     val tracksById = remember(libraryState.tracks) {
         libraryState.tracks.associateBy { it.id }
@@ -87,6 +99,10 @@ fun MusicApp(
         if (mapped != section) section = mapped
     }
 
+    AppBackgroundHost(
+        background = appBackground,
+        customColors = backgroundColors,
+    ) {
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val wide = maxWidth >= TwoPaneBreakpoint
         LaunchedEffect(wide) {
@@ -204,6 +220,11 @@ fun MusicApp(
                     recentTracks = recentTracks,
                     recentSearches = recentSearches,
                     darkTheme = darkTheme,
+                    appBackground = appBackground,
+                    backgroundColors = backgroundColors,
+                    onSelectBackground = backgroundViewModel::select,
+                    onBackgroundColors = backgroundViewModel::setColors,
+                    onResetBackgroundColors = backgroundViewModel::resetColors,
                     wide = false,
                     contentBottomPadding = bottomPadding,
                     activeOutputId = activeOutputId,
@@ -235,6 +256,11 @@ fun MusicApp(
                         recentTracks = recentTracks,
                         recentSearches = recentSearches,
                         darkTheme = darkTheme,
+                        appBackground = appBackground,
+                        backgroundColors = backgroundColors,
+                        onSelectBackground = backgroundViewModel::select,
+                        onBackgroundColors = backgroundViewModel::setColors,
+                        onResetBackgroundColors = backgroundViewModel::resetColors,
                         wide = true,
                         contentBottomPadding = SongListBottomPadding,
                         activeOutputId = activeOutputId,
@@ -271,6 +297,11 @@ fun MusicApp(
                         recentTracks = recentTracks,
                         recentSearches = recentSearches,
                         darkTheme = darkTheme,
+                        appBackground = appBackground,
+                        backgroundColors = backgroundColors,
+                        onSelectBackground = backgroundViewModel::select,
+                        onBackgroundColors = backgroundViewModel::setColors,
+                        onResetBackgroundColors = backgroundViewModel::resetColors,
                         wide = true,
                         contentBottomPadding = SongListBottomPadding,
                         activeOutputId = activeOutputId,
@@ -329,6 +360,7 @@ fun MusicApp(
             onDismiss = { pendingTrack = null },
         )
     }
+    }
 }
 
 @Composable
@@ -344,6 +376,11 @@ private fun AppNavHost(
     recentTracks: List<Track>,
     recentSearches: List<String>,
     darkTheme: Boolean,
+    appBackground: AppBackground,
+    backgroundColors: Map<String, List<Long>>,
+    onSelectBackground: (AppBackground) -> Unit,
+    onBackgroundColors: (String, List<Long>) -> Unit,
+    onResetBackgroundColors: (String) -> Unit,
     wide: Boolean,
     contentBottomPadding: Dp,
     activeOutputId: Int?,
@@ -444,6 +481,22 @@ private fun AppNavHost(
             SettingsScreen(
                 darkTheme = darkTheme,
                 onDarkThemeChange = playlistViewModel::setDarkTheme,
+                backgroundName = stringResource(backgroundTitleRes(appBackground.titleId())),
+                onOpenBackgrounds = {
+                    navController.navigate(BackgroundsRoute) { launchSingleTop = true }
+                },
+                contentBottomPadding = contentBottomPadding,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+        composable(BackgroundsRoute) {
+            BackgroundPickerScreen(
+                selected = appBackground,
+                customColors = backgroundColors,
+                onSelect = onSelectBackground,
+                onColorsChange = onBackgroundColors,
+                onResetColors = onResetBackgroundColors,
+                onBack = { navController.popBackStack() },
                 contentBottomPadding = contentBottomPadding,
                 modifier = Modifier.fillMaxSize(),
             )
@@ -474,6 +527,7 @@ private fun sectionForRoute(route: String?): NavSection? = when (route) {
     RecentRoute -> NavSection.Recent
     SearchRoute -> NavSection.Search
     SettingsRoute -> NavSection.Settings
+    BackgroundsRoute -> NavSection.Settings
     else -> null
 }
 
