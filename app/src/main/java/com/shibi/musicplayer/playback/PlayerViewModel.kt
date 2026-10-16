@@ -2,6 +2,7 @@ package com.shibi.musicplayer.playback
 
 import android.app.Application
 import android.content.ComponentName
+import android.os.Bundle
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -36,6 +37,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     private val _uiState = MutableStateFlow(PlayerUiState())
     val uiState: StateFlow<PlayerUiState> = _uiState.asStateFlow()
+
+    private val _preferredOutputId = MutableStateFlow<Int?>(null)
+    val preferredOutputId: StateFlow<Int?> = _preferredOutputId.asStateFlow()
 
     private val playerListener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) {
@@ -122,6 +126,14 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         publish(player)
     }
 
+    fun setOutputDevice(deviceId: Int?) {
+        _preferredOutputId.value = deviceId
+        controller?.sendCustomCommand(
+            OutputCommands.SET_OUTPUT,
+            Bundle().apply { putInt(OutputCommands.EXTRA_DEVICE_ID, deviceId ?: -1) },
+        )
+    }
+
     override fun onCleared() {
         progressJob?.cancel()
         controller?.removeListener(playerListener)
@@ -150,8 +162,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         val count = player.mediaItemCount
         val metadata = player.mediaMetadata
         _uiState.value = PlayerUiState(
+            currentMediaId = player.currentMediaItem?.mediaId,
             title = metadata.title?.toString().orEmpty(),
             artist = metadata.artist?.toString().orEmpty(),
+            album = metadata.albumTitle?.toString().orEmpty(),
             albumArtUri = metadata.artworkUri?.toString(),
             isPlaying = player.playWhenReady && player.playbackState != Player.STATE_ENDED,
             positionMs = position,
