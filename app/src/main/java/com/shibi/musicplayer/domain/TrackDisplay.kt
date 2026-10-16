@@ -44,6 +44,27 @@ object TrackDisplay {
     }
 
     /**
+     * Largest grapheme-aligned end index that fits.
+     *
+     * [fits] is asked about [text].length for the full string, then about each
+     * shorter end index. The caller measures the full string for the full
+     * length and `take(end)` plus an ellipsis for a shorter end. Returns 0 when
+     * even a single cluster plus the ellipsis does not fit.
+     */
+    fun ellipsisLimit(text: String, fits: (Int) -> Boolean): Int {
+        if (text.isEmpty()) return 0
+        if (fits(text.length)) return text.length
+        var limit = text.length
+        while (limit > 0) {
+            val next = dropLastGrapheme(text, limit)
+            if (next >= limit) return 0
+            limit = next
+            if (fits(limit)) return limit
+        }
+        return 0
+    }
+
+    /**
      * End index of the grapheme before the one that ends at [boundary].
      * A Tamil cluster is removed as a whole.
      */

@@ -82,39 +82,51 @@ class CarouselMathTest {
     }
 
     @Test
-    fun exactlyFourItemsAreVisibleAndScaleFollowsCosine() {
+    fun restLayoutIsSymmetricAboutTheFront() {
+        val radius = 200f
         val front = math.offsetRadians(0, 0f)
-        val right = math.offsetRadians(1, 0f)
-        val left = math.offsetRadians(7, 0f)
-        val peek = math.offsetRadians(2, 0f)
-        val leftLimb = math.offsetRadians(6, 0f)
-        val back = math.offsetRadians(4, 0f)
-        val rear = math.offsetRadians(3, 0f)
-
+        assertEquals(0f, math.translationX(front, radius), 0.001f)
+        assertEquals(0f, math.translationX(front, 48f), 0.001f)
         assertEquals(1f, math.scale(front), 0.001f)
-        assertEquals(CarouselMath.MIN_SCALE, math.scale((PI / 2.0).toFloat()), 0.001f)
-        assertTrue(math.scale(right) in 0.80f..0.95f)
-        assertTrue(math.scale(front) > math.scale(right))
-        assertTrue(math.scale(right) > math.scale(peek))
-
         assertEquals(1f, math.alpha(front), 0.001f)
+        assertEquals(0f, math.shade(front), 0.001f)
+
+        for (step in 0 until math.itemCount) {
+            val right = math.offsetRadians(step, 0f)
+            val left = math.offsetRadians(Math.floorMod(-step, math.itemCount), 0f)
+            assertEquals(math.scale(right), math.scale(left), 0.001f)
+            assertEquals(math.alpha(right), math.alpha(left), 0.001f)
+            assertEquals(
+                -math.translationX(right, radius),
+                math.translationX(left, radius),
+                0.01f,
+            )
+            assertEquals(-math.rotationYDegrees(right), math.rotationYDegrees(left), 0.01f)
+            if (math.scale(right) < CarouselMath.VISIBLE_MIN_SCALE) {
+                assertEquals(0f, math.alpha(right), 0.001f)
+                assertEquals(0f, math.alpha(left), 0.001f)
+            }
+        }
+
+        val right = math.offsetRadians(1, 0f)
+        val left = math.offsetRadians(math.itemCount - 1, 0f)
+        assertTrue(math.scale(right) >= CarouselMath.VISIBLE_MIN_SCALE)
+        assertEquals(math.alpha(right), math.alpha(left), 0.001f)
         assertEquals(1f, math.alpha(right), 0.001f)
-        assertEquals(1f, math.alpha(left), 0.001f)
-        assertTrue(math.alpha(peek) in 0.55f..0.95f)
-        assertEquals(0f, math.alpha(leftLimb), 0.001f)
-        assertEquals(0f, math.alpha(back), 0.001f)
-        assertEquals(0f, math.alpha(rear), 0.001f)
+        assertTrue(math.translationX(right, radius) > 0f)
+        assertTrue(math.translationX(left, radius) < 0f)
+        assertTrue(math.scale(front) > math.scale(right))
+        assertEquals(CarouselMath.MIN_SCALE, math.scale((PI / 2.0).toFloat()), 0.001f)
+        assertTrue(math.scale((PI / 2.0).toFloat()) < CarouselMath.VISIBLE_MIN_SCALE)
+        assertEquals(0f, math.alpha((PI / 2.0).toFloat()), 0.001f)
+        assertEquals(0f, math.alpha((-PI / 2.0).toFloat()), 0.001f)
+        assertTrue(math.shade(right) > math.shade(front))
+        assertTrue(math.zIndex(front) > math.zIndex(right))
+
         val visible = (0 until math.itemCount).count { index ->
             math.alpha(math.offsetRadians(index, 0f)) > 0.01f
         }
-        assertEquals(4, visible)
-
-        assertEquals(0f, math.shade(front), 0.001f)
-        assertTrue(math.shade(peek) > math.shade(right))
-        assertEquals(0f, math.blurDp(front), 0.001f)
-        assertTrue(math.blurDp(peek) > math.blurDp(right))
-        assertTrue(math.zIndex(front) > math.zIndex(right))
-        assertTrue(math.zIndex(right) > math.zIndex(peek))
+        assertEquals(3, visible)
     }
 
     @Test

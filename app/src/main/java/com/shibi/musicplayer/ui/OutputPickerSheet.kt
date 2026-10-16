@@ -91,7 +91,7 @@ fun OutputPickerSheet(
         sheetState = sheetState,
         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         contentColor = MaterialTheme.colorScheme.onSurface,
-        scrimColor = Color.Black.copy(alpha = 0.60f),
+        scrimColor = OutputScrim,
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
     ) {
         OutputPickerContent(
@@ -199,6 +199,9 @@ private fun outputSubtitle(kind: OutputKind): Int = when (kind) {
 }
 
 internal val OutputAccent = Color(0xFFB9A8FF)
+
+/** Black at 55% so the screen behind the device sheet stays visible. */
+internal val OutputScrim = Color.Black.copy(alpha = 0.55f)
 
 private val SelectedDeviceFill = Color(0xFF6E4EF0)
 

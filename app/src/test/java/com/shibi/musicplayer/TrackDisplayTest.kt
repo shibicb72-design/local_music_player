@@ -88,6 +88,19 @@ class TrackDisplayTest {
     }
 
     @Test
+    fun ellipsisLimit_keepsAFittingStringAndDropsWholeClusters() {
+        assertEquals(8, TrackDisplay.ellipsisLimit("abcdefgh") { end -> end <= 8 })
+        assertEquals(4, TrackDisplay.ellipsisLimit("abcdefgh") { end -> end <= 4 })
+        assertEquals(0, TrackDisplay.ellipsisLimit("abcdefgh") { false })
+        val cluster = "\u0B95\u0BCA"
+        val line = "AB$cluster"
+        assertEquals(line.length, TrackDisplay.ellipsisLimit(line) { true })
+        assertEquals(2, TrackDisplay.ellipsisLimit(line) { end -> end <= 2 })
+        assertEquals(1, TrackDisplay.ellipsisLimit(line) { end -> end < 2 })
+        assertEquals(0, TrackDisplay.ellipsisLimit(line) { end -> end == 0 })
+    }
+
+    @Test
     fun dropLastGrapheme_removesTheWholeCluster() {
         val cluster = "\u0B95\u0BCA"
         assertEquals(0, TrackDisplay.dropLastGrapheme(cluster, cluster.length))

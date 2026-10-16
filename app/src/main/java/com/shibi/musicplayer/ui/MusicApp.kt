@@ -275,9 +275,20 @@ fun MusicApp(
                     NavCarousel(
                         selected = section,
                         onSelect = { destination -> onSection(destination) },
-                        modifier = Modifier.windowInsetsPadding(
-                            WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal),
-                        ),
+                        modifier = Modifier
+                            .windowInsetsPadding(
+                                WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal),
+                            )
+                            .then(
+                                if (wide) {
+                                    Modifier.padding(
+                                        top = TwoPaneCarouselPadding,
+                                        bottom = TwoPaneCarouselPadding,
+                                    )
+                                } else {
+                                    Modifier
+                                },
+                            ),
                     )
                 }
             }

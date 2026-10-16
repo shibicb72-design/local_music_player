@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -368,7 +369,8 @@ internal fun TrackRow(
         Column(
             modifier = Modifier
                 .weight(1f)
-                .padding(horizontal = Spacing.md),
+                .padding(horizontal = Spacing.md)
+                .clipToBounds(),
         ) {
             TrackTitle(
                 text = title,

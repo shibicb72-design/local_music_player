@@ -1,6 +1,5 @@
 package com.shibi.musicplayer.domain
 
-import java.lang.Math.toDegrees
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.roundToInt
@@ -14,8 +13,9 @@ import kotlin.math.sin
  * angles run to the right. Screen Y grows downward, so the front item sits
  * lower than the sides.
  *
- * At rest exactly four items are visible: the front, the left neighbor, the
- * right neighbor, and a partial tile farther to the right. The rest are alpha 0.
+ * Scale, alpha, and horizontal position are mirror-symmetric about the front.
+ * At rest the front tile and its two neighbors are visible. Anything below
+ * [VISIBLE_MIN_SCALE] (the back of the ring) is alpha 0, on both sides.
  */
 class CarouselMath(val itemCount: Int) {
     init {
@@ -79,30 +79,19 @@ class CarouselMath(val itemCount: Int) {
     }
 
     /**
-     * Asymmetric window. The right-hand tile past the neighbor stays partly
-     * visible; the matching tile on the left, and everything behind, fades to 0.
+     * 0 once [scale] drops below [VISIBLE_MIN_SCALE], otherwise a symmetric fade
+     * up to 1. `alpha(angle) == alpha(-angle)` for every angle.
      */
     fun alpha(offsetRadians: Float): Float {
-        val degrees = toDegrees(offsetRadians.toDouble()).toFloat()
-        return when {
-            degrees <= LEFT_GONE_DEGREES -> 0f
-            degrees < LEFT_FULL_DEGREES -> smoothstep(LEFT_GONE_DEGREES, LEFT_FULL_DEGREES, degrees)
-            degrees <= RIGHT_FULL_DEGREES -> 1f
-            degrees < RIGHT_GONE_DEGREES -> 1f - smoothstep(RIGHT_FULL_DEGREES, RIGHT_GONE_DEGREES, degrees)
-            else -> 0f
-        }
+        val size = scale(offsetRadians)
+        if (size < VISIBLE_MIN_SCALE) return 0f
+        return ((size - VISIBLE_MIN_SCALE) / ALPHA_FADE_SPAN).coerceIn(0f, 1f)
     }
 
     /** 0 at the front, up to [SHADE] for a tile that has turned away. */
     fun shade(offsetRadians: Float): Float {
         val facing = depth(offsetRadians).coerceAtLeast(0f)
         return (1f - facing) * SHADE
-    }
-
-    /** 0 at the front, [MAX_BLUR_DP] at the side. */
-    fun blurDp(offsetRadians: Float): Float {
-        val facing = depth(offsetRadians).coerceAtLeast(0f)
-        return (1f - facing) * MAX_BLUR_DP
     }
 
     fun zIndex(offsetRadians: Float): Float = depth(offsetRadians)
@@ -123,19 +112,11 @@ class CarouselMath(val itemCount: Int) {
         return -deltaPx / arcPerItem
     }
 
-    private fun smoothstep(edge0: Float, edge1: Float, x: Float): Float {
-        val t = ((x - edge0) / (edge1 - edge0)).coerceIn(0f, 1f)
-        return t * t * (3f - 2f * t)
-    }
-
     companion object {
         const val MIN_SCALE = 0.65f
+        const val VISIBLE_MIN_SCALE = 0.70f
+        const val ALPHA_FADE_SPAN = 0.08f
         const val SHADE = 0.35f
-        const val MAX_BLUR_DP = 6f
         const val TILT_DEGREES = 48f
-        const val LEFT_GONE_DEGREES = -72f
-        const val LEFT_FULL_DEGREES = -50f
-        const val RIGHT_FULL_DEGREES = 78f
-        const val RIGHT_GONE_DEGREES = 120f
     }
 }

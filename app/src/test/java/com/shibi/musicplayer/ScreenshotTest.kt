@@ -45,6 +45,8 @@ import com.shibi.musicplayer.ui.NavCarousel
 import com.shibi.musicplayer.ui.NavSection
 import com.shibi.musicplayer.ui.NowPlayingBar
 import com.shibi.musicplayer.ui.OutputPickerContent
+import com.shibi.musicplayer.ui.OutputScrim
+import com.shibi.musicplayer.ui.TwoPaneCarouselPadding
 import com.shibi.musicplayer.ui.PlayerScreen
 import com.shibi.musicplayer.ui.PlaylistCardUi
 import com.shibi.musicplayer.ui.PlaylistDetailContent
@@ -150,15 +152,21 @@ class ScreenshotTest {
     fun deviceSheet() {
         captureRoboImage("build/outputs/roborazzi/device_sheet.png") {
             MusicPlayerTheme {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color(0xFF0E0E12)),
-                ) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    PlayerScreen(
+                        state = englishState,
+                        onBack = {},
+                        onTogglePlayPause = {},
+                        onNext = {},
+                        onPrevious = {},
+                        onSeek = {},
+                        selectedOutputId = null,
+                        onSelectOutput = {},
+                    )
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .background(Color.Black.copy(alpha = 0.60f)),
+                            .background(OutputScrim),
                     )
                     Surface(
                         modifier = Modifier
@@ -206,6 +214,10 @@ class ScreenshotTest {
                         NavCarousel(
                             selected = NavSection.Songs,
                             onSelect = {},
+                            modifier = Modifier.padding(
+                                top = TwoPaneCarouselPadding,
+                                bottom = TwoPaneCarouselPadding,
+                            ),
                         )
                     }
                     PlayerScreen(
