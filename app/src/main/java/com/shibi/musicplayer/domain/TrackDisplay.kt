@@ -1,8 +1,5 @@
 package com.shibi.musicplayer.domain
 
-import java.text.BreakIterator
-import java.util.Locale
-
 object TrackDisplay {
     private val AUDIO_EXTENSIONS = setOf(
         "mp3",
@@ -36,11 +33,13 @@ object TrackDisplay {
     /**
      * Index at which a Tamil line should be cut so a following ellipsis fits.
      * The cut is always on a grapheme boundary, one cluster before [visibleEnd].
+     * Combining marks and a Tamil virama stay with the preceding letter. JDK 17's
+     * [java.text.BreakIterator] splits those marks into their own characters.
      */
     fun tamilEllipsisCut(text: String, visibleEnd: Int): Int {
         if (text.isEmpty() || visibleEnd <= 0) return 0
         val boundary = graphemeBoundaryAtOrBefore(text, visibleEnd.coerceAtMost(text.length))
-        return previousGrapheme(text, boundary)
+        return previousGraphemeStart(text, boundary)
     }
 
     private fun knownName(raw: String?, unknownAlbum: Boolean): String? {
@@ -53,20 +52,56 @@ object TrackDisplay {
     }
 
     private fun graphemeBoundaryAtOrBefore(text: String, index: Int): Int {
-        val iterator = BreakIterator.getCharacterInstance(Locale.ROOT)
-        iterator.setText(text)
-        if (iterator.isBoundary(index)) return index
-        val previous = iterator.preceding(index)
-        return if (previous == BreakIterator.DONE) 0 else previous
+        if (index <= 0) return 0
+        if (index >= text.length) return text.length
+        return graphemeStart(text, index)
     }
 
-    private fun previousGrapheme(text: String, index: Int): Int {
-        if (index <= 0) return 0
-        val iterator = BreakIterator.getCharacterInstance(Locale.ROOT)
-        iterator.setText(text)
-        val previous = iterator.preceding(index)
-        return if (previous == BreakIterator.DONE) 0 else previous
+    private fun previousGraphemeStart(text: String, boundary: Int): Int {
+        if (boundary <= 0) return 0
+        return graphemeStart(text, previousCodePointIndex(text, boundary))
     }
+
+    /** Start of the grapheme that contains [index]. */
+    private fun graphemeStart(text: String, index: Int): Int {
+        var cursor = codePointStart(text, index.coerceIn(0, text.length))
+        if (cursor >= text.length) return text.length
+        while (cursor > 0 && continuesGrapheme(text, cursor)) {
+            cursor = previousCodePointIndex(text, cursor)
+        }
+        return cursor
+    }
+
+    private fun continuesGrapheme(text: String, index: Int): Boolean {
+        val current = Character.codePointAt(text, index)
+        if (isCombiningMark(current)) return true
+        val previous = Character.codePointAt(text, previousCodePointIndex(text, index))
+        return previous == TAMIL_VIRAMA
+    }
+
+    private fun isCombiningMark(codePoint: Int): Boolean {
+        val type = Character.getType(codePoint)
+        return type == Character.NON_SPACING_MARK.toInt() ||
+            type == Character.COMBINING_SPACING_MARK.toInt() ||
+            type == Character.ENCLOSING_MARK.toInt() ||
+            codePoint == ZWJ ||
+            codePoint == ZWNJ
+    }
+
+    private fun codePointStart(text: String, index: Int): Int {
+        if (index <= 0 || index >= text.length) return index
+        return if (Character.isLowSurrogate(text[index])) index - 1 else index
+    }
+
+    private fun previousCodePointIndex(text: String, index: Int): Int {
+        if (index <= 1) return 0
+        val before = index - 1
+        return if (Character.isLowSurrogate(text[before])) before - 1 else before
+    }
+
+    private const val TAMIL_VIRAMA = 0x0BCD
+    private const val ZWJ = 0x200D
+    private const val ZWNJ = 0x200C
 }
 
 fun containsTamil(text: String): Boolean = text.any { it.code in 0x0B80..0x0BFF }

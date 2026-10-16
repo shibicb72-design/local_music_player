@@ -81,6 +81,8 @@ class TrackDisplayTest {
         val line = "AB$cluster"
         assertEquals(2, TrackDisplay.tamilEllipsisCut(line, line.length))
         assertEquals(0, TrackDisplay.tamilEllipsisCut(line, 0))
+        val conjunct = "A\u0B95\u0BCD\u0B95"
+        assertEquals(1, TrackDisplay.tamilEllipsisCut(conjunct, conjunct.length))
     }
 
     @Test
