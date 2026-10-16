@@ -1,10 +1,21 @@
 package com.shibi.musicplayer
 
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.LinearGradient
+import android.graphics.Paint
+import android.graphics.Shader
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import coil3.annotation.ExperimentalCoilApi
+import coil3.asImage
+import coil3.compose.AsyncImagePreviewHandler
+import coil3.compose.LocalAsyncImagePreviewHandler
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.shibi.musicplayer.domain.AudioOutput
 import com.shibi.musicplayer.domain.OutputKind
@@ -19,7 +30,7 @@ import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
-@OptIn(ExperimentalTestApi::class)
+@OptIn(ExperimentalTestApi::class, ExperimentalCoilApi::class)
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35], qualifiers = "w411dp-h891dp-xxhdpi")
@@ -73,6 +84,32 @@ class ScreenshotTest {
                     selectedOutputId = null,
                     onSelectOutput = {},
                 )
+            }
+        }
+    }
+
+    @Test
+    fun nowPlayingArt() {
+        val bitmap = createArtBitmap()
+        captureRoboImage("build/outputs/roborazzi/now_playing_art.png") {
+            CompositionLocalProvider(
+                LocalInspectionMode provides true,
+                LocalAsyncImagePreviewHandler provides AsyncImagePreviewHandler {
+                    bitmap.asImage()
+                },
+            ) {
+                MusicPlayerTheme {
+                    PlayerScreen(
+                        state = englishState.copy(albumArtUri = "test://art"),
+                        onBack = {},
+                        onTogglePlayPause = {},
+                        onNext = {},
+                        onPrevious = {},
+                        onSeek = {},
+                        selectedOutputId = null,
+                        onSelectOutput = {},
+                    )
+                }
             }
         }
     }
@@ -136,6 +173,28 @@ class ScreenshotTest {
                 }
             }
         }
+    }
+
+    private fun createArtBitmap(): Bitmap {
+        val bitmap = Bitmap.createBitmap(600, 600, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+        paint.shader = LinearGradient(
+            0f,
+            0f,
+            600f,
+            600f,
+            0xFFFF5C8A.toInt(),
+            0xFF3D2BFF.toInt(),
+            Shader.TileMode.CLAMP,
+        )
+        canvas.drawRect(0f, 0f, 600f, 600f, paint)
+        paint.shader = null
+        paint.color = 0x40FFFFFF
+        canvas.drawCircle(150f, 170f, 95f, paint)
+        canvas.drawCircle(430f, 300f, 130f, paint)
+        canvas.drawCircle(280f, 470f, 70f, paint)
+        return bitmap
     }
 
     private companion object {

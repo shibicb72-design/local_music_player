@@ -31,6 +31,7 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -79,6 +80,8 @@ fun OutputPickerSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        contentColor = MaterialTheme.colorScheme.onSurface,
     ) {
         OutputPickerContent(
             outputs = outputs,
@@ -106,16 +109,28 @@ internal fun OutputPickerContent(
             modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
         )
         outputs.forEach { output ->
+            val selected = output.id == effective?.id
             ListItem(
-                headlineContent = { Text(output.name) },
+                headlineContent = {
+                    Text(
+                        text = output.name,
+                        color = if (selected) OutputAccent else Color.Unspecified,
+                    )
+                },
                 leadingContent = {
                     Icon(
                         imageVector = iconFor(output.kind),
                         contentDescription = null,
                     )
                 },
-                trailingContent = if (output.id == effective?.id) {
-                    { Icon(imageVector = Icons.Filled.Check, contentDescription = null) }
+                trailingContent = if (selected) {
+                    {
+                        Icon(
+                            imageVector = Icons.Filled.Check,
+                            contentDescription = null,
+                            tint = OutputAccent,
+                        )
+                    }
                 } else {
                     null
                 },
@@ -127,6 +142,8 @@ internal fun OutputPickerContent(
         Spacer(Modifier.height(24.dp))
     }
 }
+
+internal val OutputAccent = Color(0xFFB9A8FF)
 
 internal fun effectiveOutput(outputs: List<AudioOutput>, selectedId: Int?): AudioOutput? =
     outputs.firstOrNull { it.id == AudioOutputs.selectedId(outputs, selectedId) }

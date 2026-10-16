@@ -68,6 +68,10 @@ After every task, append an entry below: `- [task] what went wrong -> new rule`.
 
 - [ticket V3] Needed a full-build warning sweep but `clean` deletes `build/`, so a log redirect into `build/` had to be created after `clean` and before `assembleDebug` (`gradlew clean; New-Item -ItemType Directory -Force build; gradlew assembleDebug test | Tee-Object build\v3-build.log`) -> run `clean` as its own step, recreate `build/`, then tee the real build into it so `Select-String '^w:'` still has a file to read.
 
+- [ticket V4] The first clean build emitted three `w:` lines on the screenshot test: coil3's `AsyncImagePreviewHandler { ... }` factory and `Bitmap.asImage()` are `@ExperimentalCoilApi` -> whenever you use the coil3 preview/testing API (`AsyncImagePreviewHandler`, `LocalAsyncImagePreviewHandler`, `coil3.asImage`) add `@OptIn(ExperimentalCoilApi::class)` up-front, since Kotlin does not warn on a redundant `@OptIn`.
+
+- [ticket V4] `SliderDefaults.Track` in material3 1.4.0 does expose `thumbTrackGapSize` and `drawStopIndicator`, so the ticket's fallback ("drop just those parameters") was never needed -> write the ticket's exact call and let the compiler confirm, rather than pre-emptively omitting parameters.
+
 ## 6. Lessons learned
 - androidx.mediarouter's `MediaRouteChooserDialog` extends `androidx.appcompat.app.AppCompatDialog`, and mediarouter does not expose appcompat at compile time. Using mediarouter dialog classes requires `implementation(libs.androidx.appcompat)` in app/build.gradle.kts (catalog alias `androidx-appcompat`).
 - You cannot read the Gradle cache (~/.gradle/caches): OpenCode denies external directories and the run aborts. Do not try. Verify an API by compiling (gradlew.bat assembleDebug) instead.
