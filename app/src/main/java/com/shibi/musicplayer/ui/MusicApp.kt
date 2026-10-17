@@ -62,6 +62,7 @@ private const val SearchRoute = SectionRoutes.Search
 private const val SettingsRoute = SectionRoutes.Settings
 private const val BackgroundsRoute = SectionRoutes.Backgrounds
 private const val LicensesRoute = SectionRoutes.Licenses
+private const val VideosRoute = SectionRoutes.Videos
 private const val PlaylistIdArg = "playlistId"
 private val TwoPaneBreakpoint = 600.dp
 
@@ -161,6 +162,9 @@ fun MusicApp(
                 }
                 NavSection.Settings -> {
                     if (route != SettingsRoute) navController.openSection(SettingsRoute)
+                }
+                NavSection.Videos -> {
+                    if (route != VideosRoute) navController.openSection(VideosRoute)
                 }
             }
         }
@@ -574,6 +578,15 @@ private fun AppNavHost(
         composable(LicensesRoute) {
             LicensesScreen(
                 onBack = { navController.popBackStack() },
+                contentBottomPadding = contentBottomPadding,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+        composable(VideosRoute) {
+            // The video library (and its permission request) lives only in this destination.
+            VideosScreen(
+                // V4 adds the player; until then a tap does nothing.
+                onVideoClick = {},
                 contentBottomPadding = contentBottomPadding,
                 modifier = Modifier.fillMaxSize(),
             )

@@ -30,6 +30,7 @@ import androidx.compose.material.icons.rounded.PlayCircle
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Speaker
+import androidx.compose.material.icons.rounded.VideoLibrary
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -105,6 +106,9 @@ enum class NavSection(
     Recent(R.string.nav_recent, Icons.Rounded.History),
     Search(R.string.nav_search, Icons.Rounded.Search),
     Settings(R.string.nav_settings, Icons.Rounded.Settings),
+
+    // Last, so at rest it is the left neighbour of Songs.
+    Videos(R.string.nav_videos, Icons.Rounded.VideoLibrary),
 }
 
 /** Tile ring only. About half the old 156dp floor after the compact ring. */
