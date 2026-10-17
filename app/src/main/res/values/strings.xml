@@ -251,4 +251,8 @@
         <item quantity="one">%d playlist</item>
         <item quantity="other">%d playlists</item>
     </plurals>
+    <string name="pip_back_10">Back 10 seconds</string>
+    <string name="pip_forward_10">Forward 10 seconds</string>
+    <string name="pip_play">Play</string>
+    <string name="pip_pause">Pause</string>
 </resources>

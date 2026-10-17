@@ -98,11 +98,14 @@ fun MusicApp(
     val playerState by playerViewModel.uiState.collectAsStateWithLifecycle()
     val videoState by videoViewModel.uiState.collectAsStateWithLifecycle()
     val videoEngine by videoViewModel.engine.collectAsStateWithLifecycle()
+    val inPip by videoViewModel.inPip.collectAsStateWithLifecycle()
     val brightnessSwipe by videoViewModel.brightnessSwipe.collectAsStateWithLifecycle()
     val trackSheet by videoViewModel.trackSheet.collectAsStateWithLifecycle()
     // The tracks sheet, over the box, the pane or fullscreen; closing the video closes it.
     var showTracks by rememberSaveable { mutableStateOf(false) }
     val tracksOpen = showTracks && videoState.isActive
+    // While in picture-in-picture only the video is on screen; nothing else may be composed.
+    val pipOnly = inPip && videoState.isActive
     var musicPausedByVideo by rememberSaveable { mutableStateOf(false) }
     val selectedOutputId by playerViewModel.preferredOutputId.collectAsStateWithLifecycle()
     val playlistState by playlistViewModel.state.collectAsStateWithLifecycle()
@@ -256,6 +259,13 @@ fun MusicApp(
                 select(NavSection.Videos)
                 navController.openSection(VideosRoute)
             }
+        }
+
+        // Returning from the PiP window taps back into the video, which reopens fullscreen.
+        var wasInPip by remember { mutableStateOf(false) }
+        LaunchedEffect(inPip) {
+            if (wasInPip && !inPip && videoState.isActive) openFullscreen()
+            wasInPip = inPip
         }
 
         fun playQueue(
@@ -430,6 +440,10 @@ fun MusicApp(
             }
         }
 
+        // While in picture-in-picture only the video is drawn, so a single VideoSurface exists.
+        if (pipOnly) {
+            PipVideoLayout(surface = { videoEngine?.let { VideoSurface(it) } })
+        } else {
         // Under fullscreen the layout stays composed (the NavHost keeps its state) but silent.
         Box(
             modifier = Modifier
@@ -596,9 +610,10 @@ fun MusicApp(
                 onStartOver = videoViewModel::startOver,
             )
         }
+        }
     }
 
-    if (tracksOpen) {
+    if (tracksOpen && !pipOnly) {
         TrackSheet(
             state = trackSheet,
             actions = TrackSheetActions(
