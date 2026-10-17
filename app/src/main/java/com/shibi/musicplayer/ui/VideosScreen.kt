@@ -102,6 +102,8 @@ fun VideosScreen(
     onTogglePlayPause: () -> Unit = {},
     onSeek: (Long) -> Unit = {},
     onCloseVideo: () -> Unit = {},
+    // False in two-pane: the video plays in the right pane and the list only marks its row.
+    showInlinePlayer: Boolean = true,
     viewModel: VideoLibraryViewModel = viewModel(),
 ) {
     val context = LocalContext.current
@@ -133,7 +135,7 @@ fun VideosScreen(
         contentBottomPadding = contentBottomPadding,
         modifier = modifier,
         playingVideoId = video.video?.id,
-        player = if (video.isActive) {
+        player = if (video.isActive && showInlinePlayer) {
             { maxHeight ->
                 InlineVideoPlayer(
                     state = video,
