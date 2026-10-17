@@ -199,6 +199,7 @@
     <string name="video_seek_back_10">Back 10 seconds</string>
     <string name="video_seek_forward_10">Forward 10 seconds</string>
     <string name="video_session_error">Couldn\'t keep the video playing in the background.</string>
+    <string name="open_with_error">Theatrum can\'t open that file.</string>
     <string name="tracks_audio">Audio</string>
     <string name="tracks_subtitles">Subtitles</string>
     <string name="tracks_off">Off</string>

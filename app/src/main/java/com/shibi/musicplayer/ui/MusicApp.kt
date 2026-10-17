@@ -94,6 +94,8 @@ fun MusicApp(
     videoViewModel: VideoViewModel = viewModel(),
     // Taps on the video's notification or lock-screen card.
     openVideoRequests: Flow<Unit> = emptyFlow(),
+    // Videos opened from another app (Files, Gallery) through "Open with Theatrum".
+    externalVideos: Flow<Video> = emptyFlow(),
 ) {
     val playerState by playerViewModel.uiState.collectAsStateWithLifecycle()
     val videoState by videoViewModel.uiState.collectAsStateWithLifecycle()
@@ -351,6 +353,15 @@ fun MusicApp(
                     select(NavSection.Videos)
                     if (current != VideosRoute) navController.openSection(VideosRoute)
                 }
+            }
+        }
+
+        // A video opened from another app (Files, Gallery) plays straight into fullscreen;
+        // Back from fullscreen lands on Videos when folded.
+        LaunchedEffect(externalVideos) {
+            externalVideos.collect { video ->
+                playVideo(video)
+                openFullscreen()
             }
         }
 

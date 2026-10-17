@@ -6,9 +6,12 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.res.Configuration
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
+import android.provider.OpenableColumns
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -19,14 +22,20 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.shibi.musicplayer.diagnostics.ErrorLog
 import com.shibi.musicplayer.domain.BackgroundPolicy
+import com.shibi.musicplayer.domain.ExternalVideo
+import com.shibi.musicplayer.domain.ExternalVideoRequest
+import com.shibi.musicplayer.domain.Video
 import com.shibi.musicplayer.playlist.PlaylistViewModel
 import com.shibi.musicplayer.ui.MusicApp
 import com.shibi.musicplayer.ui.theme.MusicPlayerTheme
 import com.shibi.musicplayer.video.PipParamsFactory
 import com.shibi.musicplayer.video.VideoViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -36,6 +45,18 @@ class MainActivity : ComponentActivity() {
 
     /** Taps on the video's notification or lock-screen card (V8). */
     private val openVideoRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+
+    /**
+     * Videos opened from another app (Files, Gallery). A Channel, not a SharedFlow with replay,
+     * so a video is played exactly once even when the composable's collector restarts.
+     */
+    private val externalVideos = Channel<Video>(Channel.BUFFERED)
+
+    /**
+     * Hoisted out of `setContent`: built there, every recomposition (a dark-theme change, say)
+     * made a new Flow and restarted `MusicApp`'s collector.
+     */
+    private val externalVideoFlow = externalVideos.receiveAsFlow()
 
     /** True while the activity is in picture-in-picture, so `onStop` can tell the policy. */
     private var pipActive = false
@@ -58,9 +79,14 @@ class MainActivity : ComponentActivity() {
             val playlistViewModel: PlaylistViewModel = viewModel()
             val darkTheme = playlistViewModel.darkTheme.collectAsStateWithLifecycle()
             MusicPlayerTheme(darkTheme = darkTheme.value) {
-                MusicApp(playlistViewModel = playlistViewModel, openVideoRequests = openVideoRequests)
+                MusicApp(
+                    playlistViewModel = playlistViewModel,
+                    openVideoRequests = openVideoRequests,
+                    externalVideos = externalVideoFlow,
+                )
             }
         }
+        if (savedInstanceState == null) handleExternalVideo(intent)
         ContextCompat.registerReceiver(
             this,
             pipReceiver,
@@ -89,6 +115,7 @@ class MainActivity : ComponentActivity() {
         setIntent(intent)
         // Only a request to show the video; there is nothing in the intent to trust or forward.
         if (intent.action == ActionOpenVideo) openVideoRequests.tryEmit(Unit)
+        handleExternalVideo(intent)
     }
 
     override fun onStart() {
@@ -156,8 +183,91 @@ class MainActivity : ComponentActivity() {
         ErrorLog.get(this).log(step = step, error = e, shown = null, media = null)
     }
 
+    /**
+     * An "open with" request from another app (Files, Gallery). Only a content or file video is
+     * played; nothing from the incoming intent is launched or forwarded. Rejections show a toast
+     * and go to the error log (without the address).
+     */
+    private fun handleExternalVideo(intent: Intent?) {
+        if (intent == null) return
+        val request = ExternalVideo.parse(intent.action, intent.data?.toString(), intent.type)
+            ?: return
+        when (request) {
+            is ExternalVideoRequest.Rejected -> {
+                Toast.makeText(this, R.string.open_with_error, Toast.LENGTH_SHORT).show()
+                ErrorLog.get(this).log(
+                    step = "Open with Theatrum",
+                    error = IllegalArgumentException(request.reason),
+                    shown = getString(R.string.open_with_error),
+                    media = null,
+                )
+            }
+
+            is ExternalVideoRequest.Accepted -> {
+                val uri = intent.data ?: return
+                if (intent.flags and Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION != 0) {
+                    try {
+                        contentResolver.takePersistableUriPermission(
+                            uri,
+                            Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                        )
+                    } catch (e: SecurityException) {
+                        // The one-time grant still lets it play now.
+                    }
+                }
+                val declaredType = intent.type
+                lifecycleScope.launch(Dispatchers.IO) {
+                    val video = readExternalVideo(uri, declaredType)
+                    externalVideos.send(video)
+                }
+            }
+        }
+    }
+
+    /** Reads the display name and size for an external address, then builds its [Video] row. */
+    private fun readExternalVideo(uri: Uri, declaredType: String?): Video {
+        var name: String? = null
+        var size: Long? = null
+        try {
+            contentResolver.query(
+                uri,
+                arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE),
+                null,
+                null,
+                null,
+            )?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                    if (nameIndex != -1 && !cursor.isNull(nameIndex)) name = cursor.getString(nameIndex)
+                    val sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE)
+                    if (sizeIndex != -1 && !cursor.isNull(sizeIndex)) size = cursor.getLong(sizeIndex)
+                }
+            }
+        } catch (e: SecurityException) {
+            // No name or size; the video still plays.
+        } catch (e: IllegalArgumentException) {
+            // No name or size; the video still plays.
+        } catch (e: UnsupportedOperationException) {
+            // No name or size; the video still plays.
+        }
+        val type = declaredType ?: queryType(uri)
+        return ExternalVideo.videoFor(uri.toString(), name, size, type)
+    }
+
+    /** The provider's own type for the address; null when it is not declared or not readable. */
+    private fun queryType(uri: Uri): String? = try {
+        contentResolver.getType(uri)
+    } catch (e: SecurityException) {
+        null
+    } catch (e: IllegalArgumentException) {
+        null
+    } catch (e: UnsupportedOperationException) {
+        null
+    }
+
     companion object {
         /** The video session's activity intent: open the app where the video is. */
         const val ActionOpenVideo = "com.shibi.musicplayer.action.OPEN_VIDEO"
     }
 }
+
