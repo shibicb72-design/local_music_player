@@ -8,6 +8,7 @@ import android.database.MatrixCursor
 import android.net.Uri
 import android.os.Looper
 import android.provider.MediaStore
+import com.shibi.musicplayer.diagnostics.ErrorLogger
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.shibi.musicplayer.domain.Video
 import com.shibi.musicplayer.domain.VideoAccess
@@ -210,19 +211,49 @@ class VideoRepositoryTest {
     fun viewModelReportsAQueryFailureWithoutCrashing() {
         shadowOf(application).grantPermissions(Manifest.permission.READ_MEDIA_VIDEO)
         provider.failure = SecurityException("revoked")
+        val logged = mutableListOf<Pair<String, Throwable?>>()
 
-        val viewModel = newViewModel()
+        val viewModel = newViewModel(logger = { step, error, shown, _ ->
+            logged += step to error
+            assertEquals("Could not read videos from this device.", shown)
+        })
         viewModel.refresh()
         idleMain()
 
         assertTrue(viewModel.uiState.value.hasError)
         assertFalse(viewModel.uiState.value.isLoading)
+        // The list shows the short message; the real exception goes to the error log.
+        val (step, error) = logged.single()
+        assertTrue(step, step.startsWith("Scan videos"))
+        assertEquals("revoked", error?.message)
     }
 
-    private fun newViewModel() = VideoLibraryViewModel(
+    @Test
+    fun theSameScanFailureAgainIsLoggedOnce() {
+        shadowOf(application).grantPermissions(Manifest.permission.READ_MEDIA_VIDEO)
+        provider.failure = SecurityException("revoked")
+        var count = 0
+        val viewModel = newViewModel(logger = { _, _, _, _ -> count++ })
+        repeat(3) {
+            viewModel.refresh()
+            idleMain()
+        }
+        assertEquals(1, count)
+        // A scan that works resets it, so the next failure is logged again.
+        provider.failure = null
+        viewModel.refresh()
+        idleMain()
+        provider.failure = SecurityException("revoked")
+        viewModel.refresh()
+        idleMain()
+        assertEquals(2, count)
+    }
+
+    private fun newViewModel(logger: ErrorLogger = ErrorLogger.None) = VideoLibraryViewModel(
         application = application,
         repository = VideoRepository(application),
         ioDispatcher = Dispatchers.Unconfined,
+        errorLogger = logger,
     )
 
     private fun idleMain() {

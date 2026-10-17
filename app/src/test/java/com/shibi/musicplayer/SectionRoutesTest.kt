@@ -39,6 +39,9 @@ class SectionRoutesTest {
         assertEquals(NavSection.Playlists, SectionRoutes.sectionFor(SectionRoutes.PlaylistDetail))
         assertEquals(NavSection.Settings, SectionRoutes.sectionFor(SectionRoutes.Backgrounds))
         assertEquals(NavSection.Settings, SectionRoutes.sectionFor(SectionRoutes.Licenses))
+        // Settings > Debugging / Error log keeps the ring on Settings.
+        assertEquals(NavSection.Settings, SectionRoutes.sectionFor(SectionRoutes.ErrorLog))
+        assertTrue(SectionRoutes.ErrorLog.startsWith("settings/"))
         assertNull(SectionRoutes.sectionFor(null))
         assertNull(SectionRoutes.sectionFor("unknown"))
     }

@@ -110,6 +110,8 @@ class TwoPaneVideoScreenshotTest {
                                     onClose = {},
                                     surface = { VideoSurface(engine) },
                                     initialControlsVisible = controls,
+                                    // V7: the pane offers the tracks sheet, as in the app.
+                                    onOpenTracks = {},
                                     modifier = Modifier
                                         .fillMaxHeight()
                                         .padding(start = 8.dp, top = 16.dp, end = 16.dp, bottom = TwoPanePlayerBottomPadding)

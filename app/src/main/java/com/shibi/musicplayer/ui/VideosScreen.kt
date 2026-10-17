@@ -103,6 +103,8 @@ fun VideosScreen(
     onSeek: (Long) -> Unit = {},
     onCloseVideo: () -> Unit = {},
     onFullscreen: () -> Unit = {},
+    onOpenTracks: (() -> Unit)? = null,
+    holdControls: Boolean = false,
     // False in two-pane: the video plays in the right pane and the list only marks its row.
     showInlinePlayer: Boolean = true,
     viewModel: VideoLibraryViewModel = viewModel(),
@@ -146,6 +148,8 @@ fun VideosScreen(
                     onClose = onCloseVideo,
                     surface = { videoEngine?.let { engine -> VideoSurface(engine) } },
                     onFullscreen = onFullscreen,
+                    onOpenTracks = onOpenTracks,
+                    holdControls = holdControls,
                 )
             }
         } else {

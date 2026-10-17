@@ -125,6 +125,8 @@ class InlineVideoScreenshotTest {
                             }
                         },
                         initialControlsVisible = controls,
+                        // V7: the box offers the tracks sheet, as in the app.
+                        onOpenTracks = {},
                     )
                 },
             )

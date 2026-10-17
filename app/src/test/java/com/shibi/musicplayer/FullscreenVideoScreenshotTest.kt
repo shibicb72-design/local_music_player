@@ -87,6 +87,8 @@ class FullscreenVideoScreenshotTest {
                         volume = null,
                         brightness = null,
                         initialControlsVisible = controls,
+                        // V7: the tracks button V6 kept hidden.
+                        onOpenTracks = {},
                         initialChip = chip,
                         modifier = Modifier.fillMaxSize(),
                     )

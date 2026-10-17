@@ -399,6 +399,7 @@ fun SettingsScreen(
     onOpenLicenses: () -> Unit = {},
     brightnessSwipe: Boolean = true,
     onBrightnessSwipeChange: (Boolean) -> Unit = {},
+    onOpenErrorLog: () -> Unit = {},
     contentBottomPadding: Dp = 0.dp,
     modifier: Modifier = Modifier,
 ) {
@@ -410,6 +411,7 @@ fun SettingsScreen(
         onOpenLicenses = onOpenLicenses,
         brightnessSwipe = brightnessSwipe,
         onBrightnessSwipeChange = onBrightnessSwipeChange,
+        onOpenErrorLog = onOpenErrorLog,
         contentBottomPadding = contentBottomPadding,
         modifier = modifier,
     )
@@ -424,6 +426,7 @@ internal fun SettingsContent(
     onOpenLicenses: () -> Unit = {},
     brightnessSwipe: Boolean = true,
     onBrightnessSwipeChange: (Boolean) -> Unit = {},
+    onOpenErrorLog: () -> Unit = {},
     contentBottomPadding: Dp = 0.dp,
     modifier: Modifier = Modifier,
 ) {
@@ -432,6 +435,39 @@ internal fun SettingsContent(
         subtitle = stringResource(R.string.settings_about),
         modifier = modifier.padding(bottom = contentBottomPadding),
     ) {
+        // Scrolls on short screens; on tall ones everything fits and nothing moves.
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState()),
+        ) {
+            SettingsCards(
+                darkTheme = darkTheme,
+                onDarkThemeChange = onDarkThemeChange,
+                backgroundName = backgroundName,
+                onOpenBackgrounds = onOpenBackgrounds,
+                onOpenLicenses = onOpenLicenses,
+                brightnessSwipe = brightnessSwipe,
+                onBrightnessSwipeChange = onBrightnessSwipeChange,
+                onOpenErrorLog = onOpenErrorLog,
+            )
+        }
+    }
+}
+
+@Composable
+private fun SettingsCards(
+    darkTheme: Boolean,
+    onDarkThemeChange: (Boolean) -> Unit,
+    backgroundName: String,
+    onOpenBackgrounds: () -> Unit,
+    onOpenLicenses: () -> Unit,
+    brightnessSwipe: Boolean,
+    onBrightnessSwipeChange: (Boolean) -> Unit,
+    onOpenErrorLog: () -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
         ContrastSurface(
             modifier = Modifier
                 .fillMaxWidth()
@@ -516,6 +552,40 @@ internal fun SettingsContent(
                 Switch(
                     checked = brightnessSwipe,
                     onCheckedChange = onBrightnessSwipeChange,
+                )
+            }
+        }
+        Spacer(Modifier.height(16.dp))
+        // Every error lands here; error screens themselves only show a short message.
+        ContrastSurface(
+            onClick = onOpenErrorLog,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp),
+            shape = MaterialTheme.shapes.large,
+            color = MaterialTheme.colorScheme.surfaceContainer,
+        ) {
+            Row(
+                modifier = Modifier.padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(R.string.settings_error_log),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = stringResource(R.string.settings_error_log_body),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Icon(
+                    imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }

@@ -7,6 +7,8 @@ import android.os.ParcelFileDescriptor
 import android.view.View
 import com.shibi.musicplayer.domain.AspectMode
 import com.shibi.musicplayer.domain.InlineVideoBox
+import java.io.Closeable
+import java.io.FileNotFoundException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -23,6 +25,7 @@ import org.videolan.libvlc.util.VLCVideoLayout
  * MediaStore hands out `content://` URIs, which libVLC cannot open itself. The engine opens
  * a read-only [ParcelFileDescriptor] through the ContentResolver and gives libVLC the
  * descriptor (`fd://N`); the descriptor stays open until the next [load] or [release].
+ * Files loaded from the tracks sheet arrive already as `file://` or `fd://` locations.
  *
  * Events arrive on the main thread (the player is created there).
  */
@@ -31,6 +34,8 @@ internal class VlcVideoEngine(context: Context) : VideoEngine {
     private val appContext = context.applicationContext
     private val _state = MutableStateFlow(VideoEngineState())
     override val state: StateFlow<VideoEngineState> = _state.asStateFlow()
+    private val _tracks = MutableStateFlow(TrackSnapshot())
+    override val tracks: StateFlow<TrackSnapshot> = _tracks.asStateFlow()
 
     private var libVlc: LibVLC? = null
     private var player: MediaPlayer? = null
@@ -39,49 +44,78 @@ internal class VlcVideoEngine(context: Context) : VideoEngine {
     private var released = false
     private var aspectMode = AspectMode.Default
 
+    private var options = EngineOptions()
+
+    /** The text size [libVlc] was created with: it is a LibVLC-wide option. */
+    private var libVlcTextSize: SubtitleTextSize? = null
+    private var currentUri: String? = null
+
+    /** Files loaded from the sheet for the current video, re-added when it reopens. */
+    private val externals = mutableListOf<ExternalTrack>()
+
+    /** Loaded files whose track has not shown up yet, matched to the next new track of their type. */
+    private val awaitingTrack = ArrayDeque<ExternalTrack>()
+    private val externalNames = mutableMapOf<Int, String>()
+
+    /** What to put back once a reopened video plays again. */
+    private var restore: Restore? = null
+
     /** libVLC's Android vout needs a surface before the first frame; play waits for a view. */
     private var playWhenAttached = false
 
     private val listener = MediaPlayer.EventListener { event ->
-        val mapped = when (event.type) {
-            MediaPlayer.Event.Opening -> VideoEngineEvent.Opening
-            MediaPlayer.Event.Buffering -> VideoEngineEvent.Buffering(event.buffering)
-            MediaPlayer.Event.Playing -> VideoEngineEvent.Playing
-            MediaPlayer.Event.Paused -> VideoEngineEvent.Paused
-            MediaPlayer.Event.Stopped -> VideoEngineEvent.Stopped
-            MediaPlayer.Event.EndReached -> VideoEngineEvent.Ended
-            MediaPlayer.Event.EncounteredError -> VideoEngineEvent.Failed(VideoError.Playback)
-            MediaPlayer.Event.TimeChanged -> VideoEngineEvent.Time(event.timeChanged)
-            MediaPlayer.Event.LengthChanged -> VideoEngineEvent.Length(event.lengthChanged)
-            MediaPlayer.Event.Vout -> if (event.voutCount > 0) currentSize() else null
-            else -> null
+        when (event.type) {
+            MediaPlayer.Event.ESAdded -> {
+                onTrackAdded(event.esChangedType, event.esChangedID)
+                refreshTracks()
+            }
+            MediaPlayer.Event.ESDeleted, MediaPlayer.Event.ESSelected -> refreshTracks()
+            MediaPlayer.Event.Playing -> {
+                dispatch(VideoEngineEvent.Playing)
+                restoreTracks()
+                refreshTracks()
+            }
+            MediaPlayer.Event.Paused -> {
+                dispatch(VideoEngineEvent.Paused)
+                // A reopened paused video starts paused and may never report Playing.
+                restoreTracks()
+            }
+            MediaPlayer.Event.EncounteredError -> {
+                refreshTracks()
+                dispatch(
+                    VideoEngineEvent.Failed(
+                        VideoError.Playback,
+                        VideoPlaybackException("libVLC reported EncounteredError while playing"),
+                    ),
+                )
+            }
+            else -> {
+                val mapped = when (event.type) {
+                    MediaPlayer.Event.Opening -> VideoEngineEvent.Opening
+                    MediaPlayer.Event.Buffering -> VideoEngineEvent.Buffering(event.buffering)
+                    MediaPlayer.Event.Stopped -> VideoEngineEvent.Stopped
+                    MediaPlayer.Event.EndReached -> VideoEngineEvent.Ended
+                    MediaPlayer.Event.TimeChanged -> VideoEngineEvent.Time(event.timeChanged)
+                    MediaPlayer.Event.LengthChanged -> VideoEngineEvent.Length(event.lengthChanged)
+                    MediaPlayer.Event.Vout -> if (event.voutCount > 0) currentSize() else null
+                    else -> null
+                }
+                if (mapped != null) dispatch(mapped)
+            }
         }
-        if (mapped != null) dispatch(mapped)
     }
 
     override fun load(uri: String) {
         if (released) return
-        val mediaPlayer = ensurePlayer()
-        val vlc = libVlc ?: return
-        mediaPlayer.stop()
-        closeDescriptor()
+        restore = null
+        currentUri = uri
         dispatch(VideoEngineEvent.Opening)
-        val opened = runCatching {
-            appContext.contentResolver.openFileDescriptor(Uri.parse(uri), "r")
-        }.getOrNull()
-        if (opened == null) {
-            dispatch(VideoEngineEvent.Failed(VideoError.CannotOpen))
-            return
-        }
-        descriptor = opened
-        val media = Media(vlc, opened.fileDescriptor)
-        // Hardware decoding first; libVLC falls back to software on its own (force = false).
-        media.setHWDecoderEnabled(true, false)
-        media.addOption(":file-caching=$FileCachingMs")
-        mediaPlayer.setMedia(media)
-        // The player holds its own reference.
-        media.release()
-        startOrDefer(mediaPlayer)
+        _tracks.value = TrackSnapshot()
+        val mediaPlayer = ensurePlayer() ?: return
+        mediaPlayer.stop()
+        // A new video starts with no loaded files; their descriptors close after the stop.
+        closeExternals()
+        openMedia(mediaPlayer, uri)
     }
 
     override fun play() {
@@ -90,6 +124,8 @@ internal class VlcVideoEngine(context: Context) : VideoEngine {
             // After the end libVLC keeps the finished input; stop it to start over.
             VideoStatus.Ended -> {
                 mediaPlayer.stop()
+                // Files loaded while it played lived on that input; the media gets them again.
+                externals.forEach { track -> mediaPlayer.addSlave(track.kind.slaveType(), track.location, false) }
                 startOrDefer(mediaPlayer)
             }
             VideoStatus.Error -> Unit
@@ -99,6 +135,8 @@ internal class VlcVideoEngine(context: Context) : VideoEngine {
 
     override fun pause() {
         playWhenAttached = false
+        // A pause while a reopen is still starting must stick once it plays.
+        restore = restore?.copy(play = false)
         val mediaPlayer = player ?: return
         if (mediaPlayer.isPlaying) mediaPlayer.pause()
     }
@@ -116,22 +154,65 @@ internal class VlcVideoEngine(context: Context) : VideoEngine {
         if (attached != null) player?.applyScale()
     }
 
+    override fun configure(options: EngineOptions) {
+        if (options == this.options) return
+        this.options = options
+        val uri = currentUri ?: return
+        val mediaPlayer = player ?: return
+        if (released || _state.value.status == VideoStatus.Error) return
+        reopen(mediaPlayer, uri)
+    }
+
+    override fun selectAudioTrack(id: Int) {
+        player?.setAudioTrack(id)
+        refreshTracks()
+    }
+
+    override fun selectSubtitleTrack(id: Int) {
+        player?.setSpuTrack(id)
+        refreshTracks()
+    }
+
+    override fun setAudioDelay(delayMs: Long) {
+        player?.setAudioDelay(delayMs * UsPerMs)
+        refreshTracks()
+    }
+
+    override fun setSubtitleDelay(delayMs: Long) {
+        player?.setSpuDelay(delayMs * UsPerMs)
+        refreshTracks()
+    }
+
+    override fun addExternalTrack(
+        kind: ExternalTrackKind,
+        location: String,
+        name: String,
+        resource: Closeable?,
+    ): Boolean {
+        val mediaPlayer = player ?: return false
+        if (released) return false
+        val added = mediaPlayer.addSlave(kind.slaveType(), location, true)
+        if (added) {
+            // A file of this kind still waiting never produced a track; the next new track is this one's.
+            awaitingTrack.removeAll { it.kind == kind }
+            val track = ExternalTrack(kind, location, name, resource)
+            externals += track
+            awaitingTrack += track
+        }
+        return added
+    }
+
     override fun release() {
         if (released) return
         released = true
         playWhenAttached = false
-        player?.let { mediaPlayer ->
-            mediaPlayer.setEventListener(null)
-            if (attached != null) mediaPlayer.detachViews()
-            mediaPlayer.stop()
-            mediaPlayer.release()
-        }
-        attached = null
-        player = null
-        libVlc?.release()
-        libVlc = null
+        restore = null
+        releasePlayer()
         closeDescriptor()
+        closeExternals()
+        currentUri = null
         _state.value = VideoEngineState()
+        _tracks.value = TrackSnapshot()
     }
 
     override fun createView(context: Context): View =
@@ -141,7 +222,7 @@ internal class VlcVideoEngine(context: Context) : VideoEngine {
         if (released) return
         val layout = view as? VLCVideoLayout ?: return
         if (attached === layout) return
-        val mediaPlayer = ensurePlayer()
+        val mediaPlayer = ensurePlayer() ?: return
         if (attached != null) mediaPlayer.detachViews()
         // Texture view in every layout (box, pane, fullscreen): it clips and z-orders with
         // Compose (a SurfaceView would not), and a layout switch is one re-attach path.
@@ -161,13 +242,188 @@ internal class VlcVideoEngine(context: Context) : VideoEngine {
         attached = null
     }
 
-    private fun ensurePlayer(): MediaPlayer = player ?: run {
-        val vlc = LibVLC(appContext, Options)
-        libVlc = vlc
-        MediaPlayer(vlc).also { created ->
+    /** Null only if libVLC itself cannot start; the state then says why. */
+    private fun ensurePlayer(): MediaPlayer? {
+        player?.let { return it }
+        val vlc = try {
+            createLibVlc()
+        } catch (error: Exception) {
+            dispatch(VideoEngineEvent.Failed(VideoError.Playback, error))
+            return null
+        }
+        return MediaPlayer(vlc).also { created ->
             created.setEventListener(listener)
             player = created
         }
+    }
+
+    private fun createLibVlc(): LibVLC {
+        val textSize = options.subtitleTextSize
+        val created = try {
+            LibVLC(appContext, libVlcOptions(textSize))
+        } catch (error: IllegalStateException) {
+            // A text-size option this build does not know must never stop playback.
+            if (textSize.relativeFontSize == null) throw error
+            LibVLC(appContext, libVlcOptions(SubtitleTextSize.Default))
+        }
+        libVlc = created
+        libVlcTextSize = textSize
+        return created
+    }
+
+    private fun openMedia(mediaPlayer: MediaPlayer, uri: String, resume: Restore? = null) {
+        val vlc = libVlc ?: return
+        val opened = try {
+            appContext.contentResolver.openFileDescriptor(Uri.parse(uri), "r")
+                ?: throw FileNotFoundException("The content resolver returned no file descriptor")
+        } catch (error: Exception) {
+            closeDescriptor()
+            dispatch(VideoEngineEvent.Failed(VideoError.CannotOpen, error))
+            return
+        }
+        val media = try {
+            Media(vlc, opened.fileDescriptor)
+        } catch (error: Exception) {
+            runCatching { opened.close() }
+            closeDescriptor()
+            dispatch(VideoEngineEvent.Failed(VideoError.CannotOpen, error))
+            return
+        }
+        // Hardware decoding first (libVLC falls back to software itself), or software only.
+        media.setHWDecoderEnabled(options.hardwareDecoding, false)
+        media.addOption(":file-caching=$FileCachingMs")
+        if (resume != null) {
+            // libVLC starts at the saved position itself, and paused if it was paused.
+            if (resume.positionMs > 0L) media.addOption(":start-time=${resume.positionMs / 1000.0}")
+            if (!resume.play) media.addOption(":start-paused")
+        }
+        mediaPlayer.setMedia(media)
+        // The player holds its own reference.
+        media.release()
+        // The previous descriptor stays open until the new media holds its own.
+        closeDescriptor()
+        descriptor = opened
+        // Before the input starts they become the media's slaves; they open with it.
+        externals.forEach { track -> mediaPlayer.addSlave(track.kind.slaveType(), track.location, false) }
+        startOrDefer(mediaPlayer)
+    }
+
+    /**
+     * Decoding or text size changed: open the same video again at the same position and play
+     * state, and put back the chosen tracks and the delays as they reappear. A text-size
+     * change needs a new [LibVLC], since it is a LibVLC-wide option. Loaded files are expected
+     * to come back with the same track ids (same file, same order), so their names stay; this
+     * is not yet checked on a device.
+     */
+    private fun reopen(current: MediaPlayer, uri: String) {
+        // A reopen still starting has not got its tracks back yet; keep what it is restoring.
+        val saved = restore ?: Restore(
+            positionMs = _state.value.positionMs,
+            play = current.isPlaying || playWhenAttached || _state.value.status == VideoStatus.Buffering,
+            audioId = current.audioTrack,
+            subtitleId = current.spuTrack,
+            audioDelayUs = current.audioDelay,
+            subtitleDelayUs = current.spuDelay,
+        )
+        val layout = attached
+        var mediaPlayer = current
+        if (options.subtitleTextSize != libVlcTextSize) {
+            releasePlayer()
+            mediaPlayer = ensurePlayer() ?: return
+            if (layout != null) attach(layout)
+        } else {
+            mediaPlayer.stop()
+        }
+        playWhenAttached = false
+        restore = saved
+        _state.value = _state.value.copy(status = VideoStatus.Buffering)
+        openMedia(mediaPlayer, uri, saved)
+    }
+
+    /**
+     * Tracks and delays live on the running input, so they go back once it plays (or starts
+     * paused). libVLC opens a video's slaves before it reports either, so every track the
+     * user had chosen exists by then.
+     */
+    private fun restoreTracks() {
+        val saved = restore ?: return
+        val mediaPlayer = player ?: return
+        restore = null
+        if (saved.audioId != TrackMapping.DisabledId) mediaPlayer.setAudioTrack(saved.audioId)
+        mediaPlayer.setSpuTrack(saved.subtitleId)
+        mediaPlayer.setAudioDelay(saved.audioDelayUs)
+        mediaPlayer.setSpuDelay(saved.subtitleDelayUs)
+        // Paused while it was starting: it opened playing, so pause it now.
+        if (!saved.play && mediaPlayer.isPlaying) mediaPlayer.pause()
+        refreshTracks()
+    }
+
+    private fun onTrackAdded(type: Int, id: Int) {
+        val kind = when (type) {
+            IMedia.Track.Type.Audio -> ExternalTrackKind.Audio
+            IMedia.Track.Type.Text -> ExternalTrackKind.Subtitle
+            else -> return
+        }
+        // A reopened video: its loaded files come back with the ids they had.
+        if (restore != null) return
+        val awaited = awaitingTrack.firstOrNull { it.kind == kind } ?: return
+        awaitingTrack.remove(awaited)
+        externalNames[id] = awaited.name
+    }
+
+    private fun refreshTracks() {
+        val mediaPlayer = player ?: return
+        _tracks.value = TrackSnapshot(
+            audio = mediaPlayer.audioTracks.orEmpty().map { RawTrackDescription(it.id, it.name) },
+            subtitles = mediaPlayer.spuTracks.orEmpty().map { RawTrackDescription(it.id, it.name) },
+            mediaTracks = mediaTracks(mediaPlayer),
+            selectedAudioId = mediaPlayer.audioTrack,
+            selectedSubtitleId = mediaPlayer.spuTrack,
+            audioDelayMs = mediaPlayer.audioDelay / UsPerMs,
+            subtitleDelayMs = mediaPlayer.spuDelay / UsPerMs,
+            externalNames = externalNames.toMap(),
+        )
+    }
+
+    private fun mediaTracks(mediaPlayer: MediaPlayer): List<RawMediaTrack> {
+        val media = mediaPlayer.media ?: return emptyList()
+        return try {
+            (0 until media.trackCount).mapNotNull { index -> media.getTrack(index)?.toRaw() }
+        } finally {
+            media.release()
+        }
+    }
+
+    private fun IMedia.Track.toRaw(): RawMediaTrack = RawMediaTrack(
+        id = id,
+        language = language,
+        codec = codec,
+        description = description,
+        type = when (type) {
+            IMedia.Track.Type.Audio -> MediaTrackType.Audio
+            IMedia.Track.Type.Video -> MediaTrackType.Video
+            IMedia.Track.Type.Text -> MediaTrackType.Text
+            else -> MediaTrackType.Unknown
+        },
+        info = when (this) {
+            is IMedia.VideoTrack -> "${width}x$height"
+            is IMedia.AudioTrack -> "${channels}ch $rate Hz"
+            else -> null
+        },
+    )
+
+    private fun releasePlayer() {
+        player?.let { mediaPlayer ->
+            mediaPlayer.setEventListener(null)
+            if (attached != null) mediaPlayer.detachViews()
+            mediaPlayer.stop()
+            mediaPlayer.release()
+        }
+        attached = null
+        player = null
+        libVlc?.release()
+        libVlc = null
+        libVlcTextSize = null
     }
 
     private fun MediaPlayer.applyScale() {
@@ -204,10 +460,42 @@ internal class VlcVideoEngine(context: Context) : VideoEngine {
         descriptor = null
     }
 
+    private fun closeExternals() {
+        externals.forEach { track -> runCatching { track.resource?.close() } }
+        externals.clear()
+        awaitingTrack.clear()
+        externalNames.clear()
+    }
+
+    private class ExternalTrack(
+        val kind: ExternalTrackKind,
+        val location: String,
+        val name: String,
+        val resource: Closeable?,
+    )
+
+    private data class Restore(
+        val positionMs: Long,
+        val play: Boolean,
+        val audioId: Int,
+        val subtitleId: Int,
+        val audioDelayUs: Long,
+        val subtitleDelayUs: Long,
+    )
+
     private companion object {
         /** Local files: a short read-ahead starts fast and still covers slow SD cards. */
         const val FileCachingMs = 300
+        const val UsPerMs = 1_000L
 
-        val Options = listOf("--file-caching=$FileCachingMs")
+        fun libVlcOptions(textSize: SubtitleTextSize): List<String> = buildList {
+            add("--file-caching=$FileCachingMs")
+            textSize.relativeFontSize?.let { add("--freetype-rel-fontsize=$it") }
+        }
+
+        fun ExternalTrackKind.slaveType(): Int = when (this) {
+            ExternalTrackKind.Audio -> IMedia.Slave.Type.Audio
+            ExternalTrackKind.Subtitle -> IMedia.Slave.Type.Subtitle
+        }
     }
 }

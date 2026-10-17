@@ -39,6 +39,8 @@ internal fun VideoPane(
     surface: @Composable () -> Unit,
     modifier: Modifier = Modifier,
     onFullscreen: () -> Unit = {},
+    onOpenTracks: (() -> Unit)? = null,
+    holdControls: Boolean = false,
     initialControlsVisible: Boolean = false,
 ) {
     ContrastSurface(
@@ -60,6 +62,8 @@ internal fun VideoPane(
                     onClose = onClose,
                     surface = surface,
                     onFullscreen = onFullscreen,
+                    onOpenTracks = onOpenTracks,
+                    holdControls = holdControls,
                     initialControlsVisible = initialControlsVisible,
                     modifier = Modifier
                         .fillMaxWidth()
