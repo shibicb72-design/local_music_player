@@ -345,7 +345,7 @@ internal fun PlaylistDetailContent(
                 modifier = Modifier.weight(1f),
                 contentPadding = PaddingValues(bottom = contentBottomPadding),
             ) {
-                items(shown, key = { it.trackId }) { song ->
+                items(shown, key = { it.trackId }, contentType = { "playlist_song" }) { song ->
                     val dragging = draggingId == song.trackId
                     PlaylistSongLine(
                         song = song,

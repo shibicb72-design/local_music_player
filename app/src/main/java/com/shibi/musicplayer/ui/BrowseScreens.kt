@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fitInside
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
@@ -46,6 +47,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.WindowInsetsRulers
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -246,7 +248,9 @@ internal fun SearchContent(
     SectionFrame(
         title = stringResource(R.string.search_title),
         subtitle = subtitle,
-        modifier = modifier,
+        // Results end at the keyboard's top edge, never under it, folded or not.
+        // Only the overlap is removed, so the chrome slot under the list is not counted twice.
+        modifier = modifier.fitInside(WindowInsetsRulers.Ime.current),
     ) {
         OutlinedTextField(
             value = query,
@@ -332,7 +336,7 @@ private fun RecentSearches(
                 .fillMaxWidth(),
             contentPadding = PaddingValues(bottom = contentBottomPadding),
         ) {
-            items(queries, key = { it }) { query ->
+            items(queries, key = { it }, contentType = { "recent_search" }) { query ->
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()

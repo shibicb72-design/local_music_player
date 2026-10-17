@@ -7,6 +7,7 @@ import android.media.AudioRecordingConfiguration
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.Process
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.Player
@@ -83,15 +84,18 @@ class PlaybackService : MediaSessionService() {
                     override fun onConnect(
                         session: MediaSession,
                         controller: MediaSession.ControllerInfo,
-                    ): MediaSession.ConnectionResult =
-                        MediaSession.ConnectionResult.AcceptedResultBuilder(session, controller)
-                            .setAvailableSessionCommands(
-                                MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS
-                                    .buildUpon()
-                                    .add(OutputCommands.SET_OUTPUT)
-                                    .build(),
-                            )
+                    ): MediaSession.ConnectionResult {
+                        val defaults = MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS
+                        // Media3 drops custom commands a controller was not granted here.
+                        val commands = if (isTrusted(controller)) {
+                            defaults.buildUpon().add(OutputCommands.SET_OUTPUT).build()
+                        } else {
+                            defaults
+                        }
+                        return MediaSession.ConnectionResult.AcceptedResultBuilder(session, controller)
+                            .setAvailableSessionCommands(commands)
                             .build()
+                    }
 
                     override fun onCustomCommand(
                         session: MediaSession,
@@ -100,6 +104,12 @@ class PlaybackService : MediaSessionService() {
                         args: Bundle,
                     ): ListenableFuture<SessionResult> {
                         if (customCommand.customAction == OutputCommands.ACTION_SET_OUTPUT) {
+                            // Re-checked here so the grant in onConnect is never the only guard.
+                            if (!isTrusted(controller)) {
+                                return Futures.immediateFuture(
+                                    SessionResult(SessionResult.RESULT_ERROR_PERMISSION_DENIED),
+                                )
+                            }
                             val id = args.getInt(OutputCommands.EXTRA_DEVICE_ID, -1)
                             val device = if (id == -1) {
                                 null
@@ -166,6 +176,14 @@ class PlaybackService : MediaSessionService() {
         mediaSession = null
         super.onDestroy()
     }
+
+    private fun isTrusted(controller: MediaSession.ControllerInfo): Boolean =
+        SessionCommandPolicy.allowsCustomCommands(
+            controllerUid = controller.uid,
+            controllerPackage = controller.packageName,
+            appUid = Process.myUid(),
+            appPackage = packageName,
+        )
 
     private inline fun applyMicAutoPauseGuard(action: () -> Unit) {
         micAutoPauseGuard = true
