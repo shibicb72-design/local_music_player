@@ -42,6 +42,7 @@ internal fun VideoPane(
     onOpenTracks: (() -> Unit)? = null,
     holdControls: Boolean = false,
     initialControlsVisible: Boolean = false,
+    onStartOver: () -> Unit = {},
 ) {
     ContrastSurface(
         color = Color.Black,
@@ -65,6 +66,7 @@ internal fun VideoPane(
                     onOpenTracks = onOpenTracks,
                     holdControls = holdControls,
                     initialControlsVisible = initialControlsVisible,
+                    onStartOver = onStartOver,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(layout.videoHeight.dp),

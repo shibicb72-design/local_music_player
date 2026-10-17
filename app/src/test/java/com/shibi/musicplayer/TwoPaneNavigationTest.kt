@@ -29,6 +29,7 @@ import com.shibi.musicplayer.playback.PlaybackService
 import com.shibi.musicplayer.ui.InlineVideoTag
 import com.shibi.musicplayer.ui.VideoPaneTag
 import com.shibi.musicplayer.video.VideoEngineEvent
+import com.shibi.musicplayer.video.VideoProgressHooks
 import com.shibi.musicplayer.video.VideoStatus
 import com.shibi.musicplayer.video.VideoViewModel
 import org.junit.Assert.assertEquals
@@ -80,11 +81,13 @@ class TwoPaneNavigationTest {
                         )
                         Robolectric.buildContentProvider(FakeMediaStore::class.java).create(MediaStore.AUTHORITY)
                         VideoViewModel.testEngineFactory = { FakeVideoEngine().also(engines::add) }
+                        VideoViewModel.testProgress = { VideoProgressHooks.None }
                     }
                     try {
                         base.evaluate()
                     } finally {
                         VideoViewModel.testEngineFactory = null
+                        VideoViewModel.testProgress = null
                     }
                 }
             }

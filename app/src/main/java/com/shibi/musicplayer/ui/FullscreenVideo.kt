@@ -133,6 +133,7 @@ internal fun FullscreenVideo(
     modifier: Modifier = Modifier,
     onOpenTracks: (() -> Unit)? = null,
     holdControls: Boolean = false,
+    onStartOver: () -> Unit = {},
 ) {
     val activity = LocalActivity.current
     val context = LocalContext.current
@@ -158,6 +159,7 @@ internal fun FullscreenVideo(
         modifier = modifier,
         onOpenTracks = onOpenTracks,
         holdControls = holdControls,
+        onStartOver = onStartOver,
     )
 }
 
@@ -221,6 +223,8 @@ internal fun FullscreenVideoContent(
     onOpenTracks: (() -> Unit)? = null,
     /** The tracks sheet is open: the controls stay up behind it. */
     holdControls: Boolean = false,
+    /** The resume chip's Start over. */
+    onStartOver: () -> Unit = {},
 ) {
     ContrastSurface(
         color = Color.Black,
@@ -392,6 +396,15 @@ internal fun FullscreenVideoContent(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .padding(top = 72.dp),
+            )
+            // Bottom left, above the seek bar, apart from the gesture chips at the top.
+            ResumeChipSlot(
+                resumedAtMs = state.resumedAtMs,
+                onStartOver = onStartOver,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .windowInsetsPadding(WindowInsets.displayCutout)
+                    .padding(start = 16.dp, bottom = 88.dp),
             )
         }
     }

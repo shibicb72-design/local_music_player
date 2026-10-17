@@ -408,6 +408,7 @@ fun MusicApp(
                     onFullscreen = ::openFullscreen,
                     onOpenTracks = openTracks,
                     holdControls = tracksOpen,
+                    onStartOver = videoViewModel::startOver,
                     modifier = paneModifier,
                 )
             } else {
@@ -592,6 +593,7 @@ fun MusicApp(
                 surface = { engine?.let { VideoSurface(it) } },
                 onOpenTracks = openTracks,
                 holdControls = tracksOpen,
+                onStartOver = videoViewModel::startOver,
             )
         }
     }
@@ -845,10 +847,13 @@ private fun AppNavHost(
         composable(VideosRoute) {
             // The video library (and its permission request) lives only in this destination.
             // Folded, the video plays in a box above the list; unfolded, in the right pane.
+            val savedProgress by videoViewModel.savedProgress.collectAsStateWithLifecycle()
             VideosScreen(
                 onVideoClick = onPlayVideo,
                 contentBottomPadding = contentBottomPadding,
                 video = videoState,
+                savedProgress = savedProgress,
+                onStartOver = videoViewModel::startOver,
                 videoEngine = videoEngine,
                 onTogglePlayPause = videoViewModel::togglePlayPause,
                 onSeek = videoViewModel::seekTo,

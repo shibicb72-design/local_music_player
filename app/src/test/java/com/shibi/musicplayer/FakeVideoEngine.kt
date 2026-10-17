@@ -56,9 +56,10 @@ class FakeVideoEngine(
         _state.value = VideoStateReducer.reduce(_state.value, event)
     }
 
-    override fun load(uri: String) {
-        calls += "load:$uri"
+    override fun load(uri: String, startMs: Long) {
+        calls += if (startMs > 0L) "load:$uri@$startMs" else "load:$uri"
         emit(VideoEngineEvent.Opening)
+        if (startMs > 0L) emit(VideoEngineEvent.Time(startMs))
     }
 
     override fun play() {
