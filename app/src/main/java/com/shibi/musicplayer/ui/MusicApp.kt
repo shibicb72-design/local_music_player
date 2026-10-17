@@ -20,6 +20,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -39,8 +40,10 @@ import com.shibi.musicplayer.background.BackgroundViewModel
 import com.shibi.musicplayer.domain.AppBackground
 import com.shibi.musicplayer.domain.AudioOutput
 import com.shibi.musicplayer.domain.LikeShufflePicker
+import com.shibi.musicplayer.domain.PlaybackArbiter
 import com.shibi.musicplayer.domain.ShuffleContext
 import com.shibi.musicplayer.domain.Track
+import com.shibi.musicplayer.domain.Video
 import com.shibi.musicplayer.domain.shownWith
 import com.shibi.musicplayer.library.LibraryViewModel
 import com.shibi.musicplayer.playback.PlayerUiState
@@ -50,6 +53,10 @@ import com.shibi.musicplayer.ui.background.AppBackgroundHost
 import com.shibi.musicplayer.ui.background.BackgroundPickerScreen
 import com.shibi.musicplayer.ui.background.backgroundTitleRes
 import com.shibi.musicplayer.ui.background.titleId
+import com.shibi.musicplayer.video.VideoEngine
+import com.shibi.musicplayer.video.VideoStatus
+import com.shibi.musicplayer.video.VideoUiState
+import com.shibi.musicplayer.video.VideoViewModel
 
 private const val SongsRoute = SectionRoutes.Songs
 private const val PlaylistsRoute = SectionRoutes.Playlists
@@ -72,8 +79,13 @@ fun MusicApp(
     playerViewModel: PlayerViewModel = viewModel(),
     playlistViewModel: PlaylistViewModel = viewModel(),
     backgroundViewModel: BackgroundViewModel = viewModel(),
+    // Activity-scoped, so a fold or unfold keeps the video playing. Creates no engine yet.
+    videoViewModel: VideoViewModel = viewModel(),
 ) {
     val playerState by playerViewModel.uiState.collectAsStateWithLifecycle()
+    val videoState by videoViewModel.uiState.collectAsStateWithLifecycle()
+    val videoEngine by videoViewModel.engine.collectAsStateWithLifecycle()
+    var musicPausedByVideo by rememberSaveable { mutableStateOf(false) }
     val selectedOutputId by playerViewModel.preferredOutputId.collectAsStateWithLifecycle()
     val playlistState by playlistViewModel.state.collectAsStateWithLifecycle()
     val favoriteIds by playlistViewModel.favoriteIds.collectAsStateWithLifecycle()
@@ -108,6 +120,48 @@ fun MusicApp(
         section = next
     }
 
+    fun closeVideo() {
+        videoViewModel.close()
+        musicPausedByVideo = false
+    }
+
+    fun playVideo(video: Video) {
+        val decision = PlaybackArbiter.onVideoStart(playerViewModel.uiState.value.isPlaying)
+        if (decision.pauseMusic) {
+            playerViewModel.pause()
+            musicPausedByVideo = true
+        }
+        videoViewModel.open(video)
+    }
+
+    // Music started by any path (notification, lock screen, Now Playing) closes the video.
+    LaunchedEffect(playerViewModel, videoViewModel) {
+        var wasPlaying = playerViewModel.uiState.value.isPlaying
+        playerViewModel.uiState.collect { music ->
+            val decision = PlaybackArbiter.onMusicPlayingChanged(
+                wasPlaying = wasPlaying,
+                isPlaying = music.isPlaying,
+                videoActive = videoViewModel.uiState.value.isActive,
+            )
+            wasPlaying = music.isPlaying
+            if (decision.closeVideo) closeVideo()
+        }
+    }
+    LaunchedEffect(videoState.status) {
+        if (videoState.status == VideoStatus.Ended) {
+            val decision = PlaybackArbiter.onVideoEnded(musicPausedByVideo)
+            if (decision.resumeMusic && !playerViewModel.uiState.value.isPlaying) {
+                playerViewModel.togglePlayPause()
+            }
+        }
+    }
+    // The inline box lives on the Videos route; leaving it pauses the video (V5 moves it).
+    LaunchedEffect(route) {
+        if (route != null && SectionRoutes.sectionFor(route) != NavSection.Videos) {
+            videoViewModel.pause()
+        }
+    }
+
     // Dark theme paints the dark default over the chosen backdrop without rewriting it.
     AppBackgroundHost(
         background = appBackground.shownWith(darkTheme),
@@ -118,7 +172,8 @@ fun MusicApp(
         val sections = SectionRoutes.sectionsFor(expanded = wide)
         // Pure, so the first expanded frame already shows the fallback: the ring never spins in.
         val carouselSection = SectionRoutes.selectionFor(wide, section, previousSection)
-        val showMini = playerState.hasMedia && route != PlayerRoute
+        // A second play button would fight the video; the bar returns when it closes.
+        val showMini = playerState.hasMedia && route != PlayerRoute && !videoState.isActive
         val activeOutputId = playbackRoute.activeDeviceId
 
         fun playQueue(
@@ -127,6 +182,7 @@ fun MusicApp(
             context: ShuffleContext = ShuffleContext.ALL_SONGS,
         ) {
             if (tracks.isEmpty()) return
+            if (PlaybackArbiter.onMusicStart(videoViewModel.uiState.value.isActive).closeVideo) closeVideo()
             playerViewModel.playTrack(tracks, startId, context)
             playlistViewModel.recordPlay(startId)
             if (!wide) {
@@ -270,6 +326,11 @@ fun MusicApp(
                         navController.openPlayer()
                     },
                     onAddToPlaylist = { pendingTrack = it },
+                    videoState = videoState,
+                    videoEngine = videoEngine,
+                    onPlayVideo = ::playVideo,
+                    videoViewModel = videoViewModel,
+                    onCloseVideo = ::closeVideo,
                     modifier = Modifier.fillMaxSize(),
                 )
             }
@@ -309,6 +370,11 @@ fun MusicApp(
                         onPlayQueue = { tracks, startId, context -> playQueue(tracks, startId, context) },
                         onOpenPlayer = {},
                         onAddToPlaylist = { pendingTrack = it },
+                        videoState = videoState,
+                        videoEngine = videoEngine,
+                        onPlayVideo = ::playVideo,
+                        videoViewModel = videoViewModel,
+                        onCloseVideo = ::closeVideo,
                         modifier = Modifier.fillMaxHeight(),
                     )
                     }
@@ -357,6 +423,11 @@ fun MusicApp(
                         onPlayQueue = { tracks, startId, context -> playQueue(tracks, startId, context) },
                         onOpenPlayer = {},
                         onAddToPlaylist = { pendingTrack = it },
+                        videoState = videoState,
+                        videoEngine = videoEngine,
+                        onPlayVideo = ::playVideo,
+                        videoViewModel = videoViewModel,
+                        onCloseVideo = ::closeVideo,
                         modifier = Modifier.fillMaxSize(),
                     )
                     }
@@ -435,6 +506,11 @@ private fun AppNavHost(
     onPlayQueue: (List<Track>, Long, ShuffleContext) -> Unit,
     onOpenPlayer: () -> Unit,
     onAddToPlaylist: (Track) -> Unit,
+    videoState: VideoUiState,
+    videoEngine: VideoEngine?,
+    onPlayVideo: (Video) -> Unit,
+    videoViewModel: VideoViewModel,
+    onCloseVideo: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     NavHost(
@@ -584,10 +660,15 @@ private fun AppNavHost(
         }
         composable(VideosRoute) {
             // The video library (and its permission request) lives only in this destination.
+            // Folded and, until V5 moves it to the right pane, in the two-pane left pane too.
             VideosScreen(
-                // V4 adds the player; until then a tap does nothing.
-                onVideoClick = {},
+                onVideoClick = onPlayVideo,
                 contentBottomPadding = contentBottomPadding,
+                video = videoState,
+                videoEngine = videoEngine,
+                onTogglePlayPause = videoViewModel::togglePlayPause,
+                onSeek = videoViewModel::seekTo,
+                onCloseVideo = onCloseVideo,
                 modifier = Modifier.fillMaxSize(),
             )
         }

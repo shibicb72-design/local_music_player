@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
@@ -18,9 +19,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
@@ -79,6 +82,8 @@ import com.shibi.musicplayer.ui.background.LocalBackgroundChrome
 import com.shibi.musicplayer.ui.background.rememberSurfaceRoles
 import com.shibi.musicplayer.ui.background.toComposeColor
 import com.shibi.musicplayer.ui.theme.Spacing
+import com.shibi.musicplayer.video.VideoEngine
+import com.shibi.musicplayer.video.VideoUiState
 
 private val ThumbnailShape = RoundedCornerShape(12.dp)
 
@@ -92,6 +97,11 @@ fun VideosScreen(
     onVideoClick: (Video) -> Unit,
     contentBottomPadding: Dp,
     modifier: Modifier = Modifier,
+    video: VideoUiState = VideoUiState(),
+    videoEngine: VideoEngine? = null,
+    onTogglePlayPause: () -> Unit = {},
+    onSeek: (Long) -> Unit = {},
+    onCloseVideo: () -> Unit = {},
     viewModel: VideoLibraryViewModel = viewModel(),
 ) {
     val context = LocalContext.current
@@ -122,6 +132,21 @@ fun VideosScreen(
         onOpenSettings = { openAppSettings(context) },
         contentBottomPadding = contentBottomPadding,
         modifier = modifier,
+        playingVideoId = video.video?.id,
+        player = if (video.isActive) {
+            { maxHeight ->
+                InlineVideoPlayer(
+                    state = video,
+                    maxHeight = maxHeight,
+                    onTogglePlayPause = onTogglePlayPause,
+                    onSeek = onSeek,
+                    onClose = onCloseVideo,
+                    surface = { videoEngine?.let { engine -> VideoSurface(engine) } },
+                )
+            }
+        } else {
+            null
+        },
     )
 }
 
@@ -137,7 +162,25 @@ internal fun VideosContent(
     checked: Boolean = true,
     playingVideoId: Long? = null,
     listState: LazyListState = rememberLazyListState(),
+    player: (@Composable (maxHeight: Dp) -> Unit)? = null,
 ) {
+    if (player != null) {
+        PlayingFrame(
+            player = player,
+            modifier = modifier,
+        ) {
+            VideoList(
+                state = state,
+                onVideoClick = onVideoClick,
+                contentBottomPadding = contentBottomPadding,
+                playingVideoId = playingVideoId,
+                listState = listState,
+                topPadding = 8.dp,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+        return
+    }
     val denied = state.access == VideoAccess.Denied
     VideosFrame(
         subtitle = if (!checked || denied) {
@@ -196,6 +239,7 @@ private fun VideoList(
     playingVideoId: Long?,
     listState: LazyListState,
     modifier: Modifier = Modifier,
+    topPadding: Dp = 0.dp,
 ) {
     val videos = state.videos
     when {
@@ -215,7 +259,7 @@ private fun VideoList(
         else -> LazyColumn(
             modifier = modifier,
             state = listState,
-            contentPadding = PaddingValues(bottom = contentBottomPadding),
+            contentPadding = PaddingValues(top = topPadding, bottom = contentBottomPadding),
         ) {
             items(videos, key = { it.id }) { video ->
                 VideoRow(
@@ -409,6 +453,38 @@ private fun VideosFrame(
             )
         }
         content()
+    }
+}
+
+/**
+ * A video is open: the player box sits at the top as a column above the list (never over
+ * it), and the list scrolls in its own viewport below, fading into the chrome.
+ */
+@Composable
+private fun PlayingFrame(
+    player: @Composable (maxHeight: Dp) -> Unit,
+    modifier: Modifier = Modifier,
+    list: @Composable () -> Unit,
+) {
+    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+        val viewport = maxHeight
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .windowInsetsPadding(
+                    WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal),
+                ),
+        ) {
+            Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
+            player(viewport)
+            ListViewport(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+            ) {
+                list()
+            }
+        }
     }
 }
 

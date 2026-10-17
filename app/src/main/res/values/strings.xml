@@ -173,6 +173,11 @@
     <string name="more_actions">More</string>
     <string name="reorder">Reorder</string>
     <string name="unavailable_song">Unavailable</string>
+    <string name="video_close">Close video</string>
+    <string name="video_replay">Play again</string>
+    <string name="video_fullscreen_soon">Fullscreen (coming soon)</string>
+    <string name="video_error_open">Couldn\'t open this video. It may have been moved or deleted.</string>
+    <string name="video_error_playback">This video can\'t be played.</string>
     <plurals name="song_count">
         <item quantity="one">%d song</item>
         <item quantity="other">%d songs</item>

@@ -1,0 +1,105 @@
+package com.shibi.musicplayer.video
+
+import android.content.Context
+import android.view.View
+import kotlinx.coroutines.flow.StateFlow
+
+enum class VideoStatus { Idle, Buffering, Playing, Paused, Ended, Error }
+
+/** Why playback failed; the UI maps each to a readable string. */
+enum class VideoError {
+    /** The file could not be opened (moved, deleted, or access revoked). */
+    CannotOpen,
+
+    /** The engine opened the file but could not decode or play it. */
+    Playback,
+}
+
+data class VideoEngineState(
+    val status: VideoStatus = VideoStatus.Idle,
+    val positionMs: Long = 0L,
+    val durationMs: Long = 0L,
+    val videoWidth: Int = 0,
+    val videoHeight: Int = 0,
+    /** Display width / height, after the sample aspect ratio and rotation; null until known. */
+    val aspect: Float? = null,
+    val error: VideoError? = null,
+)
+
+/**
+ * The video player behind the UI. The app uses [VlcVideoEngine]; tests use a fake that draws
+ * a placeholder frame, so Robolectric never loads libVLC's native code. Nothing here names
+ * libVLC: composables only see this interface.
+ */
+interface VideoEngine {
+    val state: StateFlow<VideoEngineState>
+
+    /** Opens a `content://` (or file) URI and starts playing once a view is attached. */
+    fun load(uri: String)
+    fun play()
+    fun pause()
+    fun seekTo(positionMs: Long)
+
+    /** Frees the player and its native resources; the engine is unusable afterwards. */
+    fun release()
+
+    /** A fresh view for the picture. Each layout creates its own; [attach] binds it. */
+    fun createView(context: Context): View
+    fun attach(view: View)
+
+    /** Detaches [view] only if it is the attached one, so a newer layout keeps its picture. */
+    fun detach(view: View)
+}
+
+/** Engine events in our own terms, so the state mapping is pure and unit-tested. */
+sealed interface VideoEngineEvent {
+    data object Opening : VideoEngineEvent
+    data class Buffering(val percent: Float) : VideoEngineEvent
+    data object Playing : VideoEngineEvent
+    data object Paused : VideoEngineEvent
+    data object Stopped : VideoEngineEvent
+    data object Ended : VideoEngineEvent
+    data class Failed(val error: VideoError) : VideoEngineEvent
+    data class Time(val positionMs: Long) : VideoEngineEvent
+    data class Length(val durationMs: Long) : VideoEngineEvent
+    data class Size(val width: Int, val height: Int, val aspect: Float?) : VideoEngineEvent
+}
+
+object VideoStateReducer {
+
+    fun reduce(state: VideoEngineState, event: VideoEngineEvent): VideoEngineState = when (event) {
+        VideoEngineEvent.Opening -> VideoEngineState(status = VideoStatus.Buffering)
+        // libVLC keeps reporting buffering while it plays; only the start shows a spinner.
+        is VideoEngineEvent.Buffering ->
+            if (state.status == VideoStatus.Idle && event.percent < 100f) {
+                state.copy(status = VideoStatus.Buffering)
+            } else {
+                state
+            }
+        VideoEngineEvent.Playing -> state.copy(status = VideoStatus.Playing, error = null)
+        VideoEngineEvent.Paused ->
+            if (state.status == VideoStatus.Ended || state.status == VideoStatus.Error) state
+            else state.copy(status = VideoStatus.Paused)
+        // A stop from replacing the media or after the end must not hide Ended or Error.
+        VideoEngineEvent.Stopped ->
+            if (state.status == VideoStatus.Playing || state.status == VideoStatus.Paused) {
+                state.copy(status = VideoStatus.Idle)
+            } else {
+                state
+            }
+        VideoEngineEvent.Ended -> state.copy(
+            status = VideoStatus.Ended,
+            positionMs = if (state.durationMs > 0L) state.durationMs else state.positionMs,
+        )
+        is VideoEngineEvent.Failed -> state.copy(status = VideoStatus.Error, error = event.error)
+        is VideoEngineEvent.Time -> state.copy(
+            positionMs = event.positionMs.coerceIn(0L, state.durationMs.takeIf { it > 0L } ?: Long.MAX_VALUE),
+        )
+        is VideoEngineEvent.Length -> state.copy(durationMs = event.durationMs.coerceAtLeast(0L))
+        is VideoEngineEvent.Size -> state.copy(
+            videoWidth = event.width,
+            videoHeight = event.height,
+            aspect = event.aspect ?: state.aspect,
+        )
+    }
+}

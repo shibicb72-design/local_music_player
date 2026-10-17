@@ -208,7 +208,7 @@ class VideosScreenshotTest {
         )
     }
 
-    private companion object {
+    internal companion object {
         val videos = listOf(
             video(1L, "Beach day", 754_000L, 1_412_000_000L, 1920, 1080, "Camera"),
             video(2L, "Concert encore", 3_723_000L, 4_800_000_000L, 3840, 2160, "Movies"),
