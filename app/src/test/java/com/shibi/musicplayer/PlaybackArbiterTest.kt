@@ -54,6 +54,39 @@ class PlaybackArbiterTest {
     }
 
     @Test
+    fun endOfVideoInTwoPaneReturnsToNowPlayingWithoutMusic() {
+        val twoPane = PlaybackArbiter.onVideoEnded(musicPausedByVideo = true, twoPane = true)
+        assertTrue(twoPane.closeVideo)
+        assertFalse(twoPane.resumeMusic)
+        // Compact keeps the box with "Play again".
+        assertFalse(PlaybackArbiter.onVideoEnded(musicPausedByVideo = true, twoPane = false).closeVideo)
+    }
+
+    @Test
+    fun backClosesTheTwoPaneVideoFirst() {
+        assertTrue(PlaybackArbiter.onBack(videoActive = true, twoPane = true).closeVideo)
+        assertFalse(PlaybackArbiter.onBack(videoActive = false, twoPane = true).closeVideo)
+        // Compact Back stays navigation; leaving Videos pauses instead.
+        assertFalse(PlaybackArbiter.onBack(videoActive = true, twoPane = false).closeVideo)
+    }
+
+    @Test
+    fun leavingVideosPausesOnlyInCompact() {
+        assertTrue(PlaybackArbiter.onRouteChanged(fromVideos = true, toVideos = false, twoPane = false).pauseVideo)
+        // Two-pane: the right pane keeps playing while the left pane browses.
+        assertFalse(PlaybackArbiter.onRouteChanged(fromVideos = true, toVideos = false, twoPane = true).pauseVideo)
+        assertFalse(PlaybackArbiter.onRouteChanged(fromVideos = false, toVideos = true, twoPane = false).pauseVideo)
+        assertFalse(PlaybackArbiter.onRouteChanged(fromVideos = false, toVideos = false, twoPane = false).pauseVideo)
+        assertFalse(PlaybackArbiter.onRouteChanged(fromVideos = true, toVideos = true, twoPane = false).pauseVideo)
+    }
+
+    @Test
+    fun foldOrUnfoldMidVideoLandsOnVideos() {
+        assertTrue(PlaybackArbiter.showVideosAfterLayoutChange(videoActive = true))
+        assertFalse(PlaybackArbiter.showVideosAfterLayoutChange(videoActive = false))
+    }
+
+    @Test
     fun permanentLossAndNoisyPauseWithoutResuming() {
         for (event in listOf(VideoAudioEvent.Loss, VideoAudioEvent.BecomingNoisy)) {
             val playing = VideoFocusPolicy.decide(event, isPlaying = true, pausedForTransientLoss = false)

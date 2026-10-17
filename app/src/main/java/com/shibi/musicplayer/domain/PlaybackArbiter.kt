@@ -16,6 +16,7 @@ object PlaybackArbiter {
         val pauseMusic: Boolean = false,
         val closeVideo: Boolean = false,
         val resumeMusic: Boolean = false,
+        val pauseVideo: Boolean = false,
     )
 
     private val None = Decision()
@@ -33,9 +34,29 @@ object PlaybackArbiter {
     fun onMusicPlayingChanged(wasPlaying: Boolean, isPlaying: Boolean, videoActive: Boolean): Decision =
         if (!wasPlaying && isPlaying) onMusicStart(videoActive) else None
 
-    /** The video reached its end; there is no auto-next and, by default, no music. */
-    fun onVideoEnded(musicPausedByVideo: Boolean): Decision =
-        Decision(resumeMusic = ResumeMusicAfterVideo && musicPausedByVideo)
+    /**
+     * The video reached its end; there is no auto-next and, by default, no music. In two-pane
+     * the video pane closes so Now Playing returns; the compact box stays with "Play again".
+     */
+    fun onVideoEnded(musicPausedByVideo: Boolean, twoPane: Boolean = false): Decision =
+        Decision(resumeMusic = ResumeMusicAfterVideo && musicPausedByVideo, closeVideo = twoPane)
+
+    /** Back in two-pane closes the video pane before it navigates anywhere. */
+    fun onBack(videoActive: Boolean, twoPane: Boolean): Decision =
+        Decision(closeVideo = videoActive && twoPane)
+
+    /**
+     * The compact box lives on the Videos route, so leaving it pauses the video (there are no
+     * controls elsewhere). Two-pane keeps playing in the right pane while the left pane browses.
+     */
+    fun onRouteChanged(fromVideos: Boolean, toVideos: Boolean, twoPane: Boolean): Decision =
+        Decision(pauseVideo = fromVideos && !toVideos && !twoPane)
+
+    /**
+     * A fold or unfold with a video loaded lands on Videos: folded, that is where the box is;
+     * unfolded, the left pane shows the list next to the video pane.
+     */
+    fun showVideosAfterLayoutChange(videoActive: Boolean): Boolean = videoActive
 }
 
 /** Audio focus and route events for the video player, free of Android constants. */

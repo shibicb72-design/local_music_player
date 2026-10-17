@@ -1,6 +1,7 @@
 package com.shibi.musicplayer
 
 import com.shibi.musicplayer.domain.Video
+import com.shibi.musicplayer.ui.videoDetails
 import com.shibi.musicplayer.ui.videoSubtitle
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -32,5 +33,18 @@ class VideoSubtitleTest {
         assertEquals("1.4 GB · Camera", videoSubtitle(base.copy(width = null, height = 0)))
         assertEquals("1.4 GB · 1080p", videoSubtitle(base.copy(folder = null)))
         assertEquals("", videoSubtitle(base.copy(sizeBytes = 0L, width = null, folder = null)))
+    }
+
+    @Test
+    fun paneDetailsPutTheLengthFirst() {
+        assertEquals("12:34 · 1.4 GB · 1080p · Camera", videoDetails(754_000L, videoSubtitle(base)))
+        assertEquals("1:02:03 · Camera", videoDetails(3_723_000L, "Camera"))
+    }
+
+    @Test
+    fun paneDetailsDropAMissingLengthOrSubtitle() {
+        assertEquals("1.4 GB · 1080p · Camera", videoDetails(0L, videoSubtitle(base)))
+        assertEquals("12:34", videoDetails(754_000L, ""))
+        assertEquals("", videoDetails(0L, ""))
     }
 }

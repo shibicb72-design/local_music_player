@@ -45,6 +45,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -65,9 +66,12 @@ import kotlinx.coroutines.delay
 
 private const val ControlsAutoHideMs = 3_000L
 
+/** Test tag of the compact inline box. */
+internal const val InlineVideoTag = "inline_video"
+
 /** Fixed, never from the backdrop: the box is black in every theme and on every pastel. */
-private val OnVideo = Color.White
-private val OnVideoMuted = Color.White.copy(alpha = 0.72f)
+internal val OnVideo = Color.White
+internal val OnVideoMuted = Color.White.copy(alpha = 0.72f)
 private val VideoScrim = Color.Black.copy(alpha = 0.55f)
 
 /**
@@ -88,61 +92,87 @@ internal fun InlineVideoPlayer(
 ) {
     BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
         val boxHeight = InlineVideoBox.height(maxWidth.value, maxHeight.value, state.aspect).dp
-        ContrastSurface(
-            color = Color.Black,
+        VideoPlayerBox(
+            state = state,
+            onTogglePlayPause = onTogglePlayPause,
+            onSeek = onSeek,
+            onClose = onClose,
+            surface = surface,
+            initialControlsVisible = initialControlsVisible,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(boxHeight),
-        ) {
-            var controlsVisible by rememberSaveable { mutableStateOf(initialControlsVisible) }
-            var touches by remember { mutableIntStateOf(0) }
-            val playing = state.status == VideoStatus.Playing
-            LaunchedEffect(controlsVisible, playing, touches) {
-                if (controlsVisible && playing) {
-                    delay(ControlsAutoHideMs)
-                    controlsVisible = false
-                }
+                .height(boxHeight)
+                .testTag(InlineVideoTag),
+        )
+    }
+}
+
+/**
+ * The picture on black with tap-to-show controls, sized by the caller: the compact inline
+ * box and the two-pane video pane share it. The controls hide after 3 s while playing.
+ */
+@Composable
+internal fun VideoPlayerBox(
+    state: VideoUiState,
+    onTogglePlayPause: () -> Unit,
+    onSeek: (Long) -> Unit,
+    onClose: () -> Unit,
+    surface: @Composable () -> Unit,
+    modifier: Modifier = Modifier,
+    initialControlsVisible: Boolean = false,
+) {
+    ContrastSurface(
+        color = Color.Black,
+        modifier = modifier,
+    ) {
+        var controlsVisible by rememberSaveable { mutableStateOf(initialControlsVisible) }
+        var touches by remember { mutableIntStateOf(0) }
+        val playing = state.status == VideoStatus.Playing
+        LaunchedEffect(controlsVisible, playing, touches) {
+            if (controlsVisible && playing) {
+                delay(ControlsAutoHideMs)
+                controlsVisible = false
             }
-            Box(modifier = Modifier.fillMaxSize()) {
-                surface()
-                // Above the picture, so the video view never takes the tap.
-                Box(
+        }
+        Box(modifier = Modifier.fillMaxSize()) {
+            surface()
+            // Above the picture, so the video view never takes the tap.
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clickable(interactionSource = null, indication = null) {
+                        controlsVisible = !controlsVisible
+                        touches++
+                    },
+            )
+            if (state.status == VideoStatus.Buffering) {
+                CircularProgressIndicator(
+                    color = OnVideo,
                     modifier = Modifier
-                        .fillMaxSize()
-                        .clickable(interactionSource = null, indication = null) {
-                            controlsVisible = !controlsVisible
-                            touches++
-                        },
+                        .align(Alignment.Center)
+                        .size(40.dp),
                 )
-                if (state.status == VideoStatus.Buffering) {
-                    CircularProgressIndicator(
-                        color = OnVideo,
-                        modifier = Modifier
-                            .align(Alignment.Center)
-                            .size(40.dp),
-                    )
-                }
-                AnimatedVisibility(
-                    // Paused, ended or failed: the controls stay until something plays.
-                    visible = controlsVisible || !playing,
-                    enter = fadeIn(),
-                    exit = fadeOut(),
-                    modifier = Modifier.matchParentSize(),
-                ) {
-                    InlineControls(
-                        state = state,
-                        onTogglePlayPause = {
-                            touches++
-                            onTogglePlayPause()
-                        },
-                        onSeek = { position ->
-                            touches++
-                            onSeek(position)
-                        },
-                        onInteract = { touches++ },
-                        onClose = onClose,
-                    )
-                }
+            }
+            AnimatedVisibility(
+                // Paused, ended or failed: the controls stay until something plays.
+                visible = controlsVisible || !playing,
+                enter = fadeIn(),
+                exit = fadeOut(),
+                modifier = Modifier.matchParentSize(),
+            ) {
+                InlineControls(
+                    state = state,
+                    onTogglePlayPause = {
+                        touches++
+                        onTogglePlayPause()
+                    },
+                    onSeek = { position ->
+                        touches++
+                        onSeek(position)
+                    },
+                    onInteract = { touches++ },
+                    onClose = onClose,
+                )
             }
         }
     }

@@ -1,5 +1,6 @@
 package com.shibi.musicplayer.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -147,20 +148,8 @@ fun MusicApp(
             if (decision.closeVideo) closeVideo()
         }
     }
-    LaunchedEffect(videoState.status) {
-        if (videoState.status == VideoStatus.Ended) {
-            val decision = PlaybackArbiter.onVideoEnded(musicPausedByVideo)
-            if (decision.resumeMusic && !playerViewModel.uiState.value.isPlaying) {
-                playerViewModel.togglePlayPause()
-            }
-        }
-    }
-    // The inline box lives on the Videos route; leaving it pauses the video (V5 moves it).
-    LaunchedEffect(route) {
-        if (route != null && SectionRoutes.sectionFor(route) != NavSection.Videos) {
-            videoViewModel.pause()
-        }
-    }
+    // The last route seen, so a fold (a new composition) never counts as leaving Videos.
+    val previousRoute = remember { mutableStateOf<String?>(null) }
 
     // Dark theme paints the dark default over the chosen backdrop without rewriting it.
     AppBackgroundHost(
@@ -169,6 +158,31 @@ fun MusicApp(
     ) {
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val wide = maxWidth >= TwoPaneBreakpoint
+
+        LaunchedEffect(videoState.status, wide) {
+            if (videoState.status == VideoStatus.Ended) {
+                val decision = PlaybackArbiter.onVideoEnded(musicPausedByVideo, twoPane = wide)
+                if (decision.resumeMusic && !playerViewModel.uiState.value.isPlaying) {
+                    playerViewModel.togglePlayPause()
+                }
+                // Two-pane: no auto-next; Now Playing comes back in the right pane.
+                if (decision.closeVideo) closeVideo()
+            }
+        }
+        // Folded, the box lives on the Videos route, so leaving it pauses the video.
+        // Unfolded, the right pane keeps playing while the left pane browses.
+        LaunchedEffect(route) {
+            val from = previousRoute.value
+            if (route != null) previousRoute.value = route
+            if (from == null || route == null) return@LaunchedEffect
+            val decision = PlaybackArbiter.onRouteChanged(
+                fromVideos = SectionRoutes.sectionFor(from) == NavSection.Videos,
+                toVideos = SectionRoutes.sectionFor(route) == NavSection.Videos,
+                twoPane = wide,
+            )
+            if (decision.pauseVideo) videoViewModel.pause()
+        }
+
         val sections = SectionRoutes.sectionsFor(expanded = wide)
         // Pure, so the first expanded frame already shows the fallback: the ring never spins in.
         val carouselSection = SectionRoutes.selectionFor(wide, section, previousSection)
@@ -235,6 +249,13 @@ fun MusicApp(
             }
             // Unfolding on Now Playing: keep the fallback the ring already shows.
             if (carouselSection != section) onSection(carouselSection)
+            // Mid-video: folded, the box is on Videos; unfolded, the list sits by the pane.
+            if (PlaybackArbiter.showVideosAfterLayoutChange(videoViewModel.uiState.value.isActive)) {
+                select(NavSection.Videos)
+                if (navController.currentDestination?.route != VideosRoute) {
+                    navController.openSection(VideosRoute)
+                }
+            }
         }
 
         val miniBar: @Composable () -> Unit = {
@@ -269,24 +290,38 @@ fun MusicApp(
             )
         }
         val playerPane: @Composable (Dp) -> Unit = { extraBottom ->
-            PlayerScreen(
-                state = playerState,
-                onBack = {},
-                onTogglePlayPause = playerViewModel::togglePlayPause,
-                onNext = playerViewModel::skipNext,
-                onPrevious = playerViewModel::skipPrevious,
+            val paneModifier = Modifier
+                .fillMaxHeight()
+                .padding(start = 8.dp, top = 16.dp, end = 16.dp, bottom = extraBottom)
+                .clip(RoundedCornerShape(28.dp))
+            val engine = videoEngine
+            if (videoState.isActive) {
+                // Loaded, playing or paused: the video takes Now Playing's place until it closes.
+                VideoPane(
+                    state = videoState,
+                    onTogglePlayPause = videoViewModel::togglePlayPause,
+                    onSeek = videoViewModel::seekTo,
+                    onClose = ::closeVideo,
+                    surface = { engine?.let { VideoSurface(it) } },
+                    modifier = paneModifier,
+                )
+            } else {
+                PlayerScreen(
+                    state = playerState,
+                    onBack = {},
+                    onTogglePlayPause = playerViewModel::togglePlayPause,
+                    onNext = playerViewModel::skipNext,
+                    onPrevious = playerViewModel::skipPrevious,
                     onSeek = playerViewModel::seekTo,
                     selectedOutputId = activeOutputId,
                     onSelectOutput = playerViewModel::setOutputDevice,
                     onToggleShuffle = playerViewModel::toggleShuffle,
                     onCycleRepeat = playerViewModel::cycleRepeat,
                     showBack = false,
-                includeNavigationBars = false,
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .padding(start = 8.dp, top = 16.dp, end = 16.dp, bottom = extraBottom)
-                    .clip(RoundedCornerShape(28.dp)),
-            )
+                    includeNavigationBars = false,
+                    modifier = paneModifier,
+                )
+            }
         }
 
         if (!wide) {
@@ -334,121 +369,92 @@ fun MusicApp(
                     modifier = Modifier.fillMaxSize(),
                 )
             }
-        } else if (showMini) {
+        } else {
+            // One tree for both chrome layouts, so the NavHost (and the left pane's state)
+            // stays put when the mini player hides, as it does while a video is active.
             Column(modifier = Modifier.fillMaxSize()) {
                 Row(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxSize(),
                 ) {
-                    ListViewport(
+                    Column(
                         modifier = Modifier
                             .weight(0.42f)
                             .fillMaxHeight(),
                     ) {
-                    AppNavHost(
-                        navController = navController,
-                        libraryViewModel = libraryViewModel,
-                        playerViewModel = playerViewModel,
-                        playlistViewModel = playlistViewModel,
-                        playerState = playerState,
-                        favoriteIds = favoriteIds,
-                        libraryTracks = libraryState.tracks,
-                        tracksById = tracksById,
-                        recentTracks = recentTracks,
-                        recentSearches = recentSearches,
-                        darkTheme = darkTheme,
-                        appBackground = appBackground,
-                        backgroundColors = backgroundColors,
-                        onSelectBackground = backgroundViewModel::select,
-                        onBackgroundColors = backgroundViewModel::setColors,
-                        onResetBackgroundColors = backgroundViewModel::resetColors,
-                        wide = true,
-                        contentBottomPadding = SongListBottomPadding,
-                        activeOutputId = activeOutputId,
-                        outputs = outputs,
-                        onPlayQueue = { tracks, startId, context -> playQueue(tracks, startId, context) },
-                        onOpenPlayer = {},
-                        onAddToPlaylist = { pendingTrack = it },
-                        videoState = videoState,
-                        videoEngine = videoEngine,
-                        onPlayVideo = ::playVideo,
-                        videoViewModel = videoViewModel,
-                        onCloseVideo = ::closeVideo,
-                        modifier = Modifier.fillMaxHeight(),
-                    )
-                    }
-                    Box(modifier = Modifier.weight(0.58f).fillMaxHeight()) {
-                        playerPane(SongListBottomPadding)
-                    }
-                }
-                ChromeSlot {
-                    miniBar()
-                    carouselBar(Modifier)
-                }
-            }
-        } else {
-            Row(modifier = Modifier.fillMaxSize()) {
-                Column(
-                    modifier = Modifier
-                        .weight(0.42f)
-                        .fillMaxHeight(),
-                ) {
-                    ListViewport(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxSize(),
-                    ) {
-                    AppNavHost(
-                        navController = navController,
-                        libraryViewModel = libraryViewModel,
-                        playerViewModel = playerViewModel,
-                        playlistViewModel = playlistViewModel,
-                        playerState = playerState,
-                        favoriteIds = favoriteIds,
-                        libraryTracks = libraryState.tracks,
-                        tracksById = tracksById,
-                        recentTracks = recentTracks,
-                        recentSearches = recentSearches,
-                        darkTheme = darkTheme,
-                        appBackground = appBackground,
-                        backgroundColors = backgroundColors,
-                        onSelectBackground = backgroundViewModel::select,
-                        onBackgroundColors = backgroundViewModel::setColors,
-                        onResetBackgroundColors = backgroundViewModel::resetColors,
-                        wide = true,
-                        contentBottomPadding = SongListBottomPadding,
-                        activeOutputId = activeOutputId,
-                        outputs = outputs,
-                        onPlayQueue = { tracks, startId, context -> playQueue(tracks, startId, context) },
-                        onOpenPlayer = {},
-                        onAddToPlaylist = { pendingTrack = it },
-                        videoState = videoState,
-                        videoEngine = videoEngine,
-                        onPlayVideo = ::playVideo,
-                        videoViewModel = videoViewModel,
-                        onCloseVideo = ::closeVideo,
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                    }
-                    ChromeSlot {
-                        carouselBar(
-                            Modifier.padding(
-                                top = TwoPaneCarouselPadding,
-                                bottom = TwoPaneCarouselPadding,
-                            ),
+                        ListViewport(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxSize(),
+                        ) {
+                        AppNavHost(
+                            navController = navController,
+                            libraryViewModel = libraryViewModel,
+                            playerViewModel = playerViewModel,
+                            playlistViewModel = playlistViewModel,
+                            playerState = playerState,
+                            favoriteIds = favoriteIds,
+                            libraryTracks = libraryState.tracks,
+                            tracksById = tracksById,
+                            recentTracks = recentTracks,
+                            recentSearches = recentSearches,
+                            darkTheme = darkTheme,
+                            appBackground = appBackground,
+                            backgroundColors = backgroundColors,
+                            onSelectBackground = backgroundViewModel::select,
+                            onBackgroundColors = backgroundViewModel::setColors,
+                            onResetBackgroundColors = backgroundViewModel::resetColors,
+                            wide = true,
+                            contentBottomPadding = SongListBottomPadding,
+                            activeOutputId = activeOutputId,
+                            outputs = outputs,
+                            onPlayQueue = { tracks, startId, context -> playQueue(tracks, startId, context) },
+                            onOpenPlayer = {},
+                            onAddToPlaylist = { pendingTrack = it },
+                            videoState = videoState,
+                            videoEngine = videoEngine,
+                            onPlayVideo = ::playVideo,
+                            videoViewModel = videoViewModel,
+                            onCloseVideo = ::closeVideo,
+                            modifier = Modifier.fillMaxSize(),
                         )
+                        }
+                        // Without a mini player the carousel stays under the list column.
+                        if (!showMini) {
+                            ChromeSlot {
+                                carouselBar(
+                                    Modifier.padding(
+                                        top = TwoPaneCarouselPadding,
+                                        bottom = TwoPaneCarouselPadding,
+                                    ),
+                                )
+                            }
+                        }
+                    }
+                    Box(
+                        modifier = Modifier
+                            .weight(0.58f)
+                            .fillMaxHeight()
+                            .then(if (showMini) Modifier else Modifier.navigationBarsPadding()),
+                    ) {
+                        playerPane(if (showMini) SongListBottomPadding else TwoPanePlayerBottomPadding)
                     }
                 }
-                Box(
-                    modifier = Modifier
-                        .weight(0.58f)
-                        .fillMaxHeight()
-                        .navigationBarsPadding(),
-                ) {
-                    playerPane(TwoPanePlayerBottomPadding)
+                // With a loaded track the same chrome is window-wide under the split.
+                if (showMini) {
+                    ChromeSlot {
+                        miniBar()
+                        carouselBar(Modifier)
+                    }
                 }
             }
+        }
+
+        // Composed after the NavHost, so its callback is newer and wins: Back closes the
+        // two-pane video before it pops the left pane.
+        BackHandler(enabled = PlaybackArbiter.onBack(videoState.isActive, twoPane = wide).closeVideo) {
+            closeVideo()
         }
     }
 
@@ -660,7 +666,7 @@ private fun AppNavHost(
         }
         composable(VideosRoute) {
             // The video library (and its permission request) lives only in this destination.
-            // Folded and, until V5 moves it to the right pane, in the two-pane left pane too.
+            // Folded, the video plays in a box above the list; unfolded, in the right pane.
             VideosScreen(
                 onVideoClick = onPlayVideo,
                 contentBottomPadding = contentBottomPadding,
@@ -669,6 +675,7 @@ private fun AppNavHost(
                 onTogglePlayPause = videoViewModel::togglePlayPause,
                 onSeek = videoViewModel::seekTo,
                 onCloseVideo = onCloseVideo,
+                showInlinePlayer = !wide,
                 modifier = Modifier.fillMaxSize(),
             )
         }

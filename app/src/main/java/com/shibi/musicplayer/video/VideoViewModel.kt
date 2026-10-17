@@ -1,6 +1,7 @@
 package com.shibi.musicplayer.video
 
 import android.app.Application
+import androidx.annotation.VisibleForTesting
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.shibi.musicplayer.domain.InlineVideoBox
@@ -53,10 +54,20 @@ class VideoViewModel internal constructor(
 
     constructor(application: Application) : this(
         application = application,
-        engineFactory = { VlcVideoEngine(application) },
+        engineFactory = { testEngineFactory?.invoke() ?: VlcVideoEngine(application) },
         audioFocus = AndroidVideoAudioFocus(application),
         progress = VideoProgressHooks.None,
     )
+
+    internal companion object {
+        /**
+         * Robolectric tests of the real activity swap libVLC for a fake here, since the
+         * activity builds this view model with the default factory. The app never sets it.
+         */
+        @VisibleForTesting
+        @Volatile
+        var testEngineFactory: (() -> VideoEngine)? = null
+    }
 
     private val _engine = MutableStateFlow<VideoEngine?>(null)
 
