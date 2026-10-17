@@ -127,6 +127,11 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         startPlayback(player, tracks, trackId, context)
     }
 
+    /** The next [playTrack] starts with shuffle on, as a playlist's Shuffle button expects. */
+    fun shuffleNextQueue() {
+        shuffleEnabled = true
+    }
+
     fun toggleShuffle() {
         val player = controller ?: return
         shuffleEnabled = !shuffleEnabled

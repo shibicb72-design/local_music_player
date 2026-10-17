@@ -20,6 +20,13 @@ import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import com.shibi.musicplayer.MainActivity
 import com.shibi.musicplayer.R
+import com.shibi.musicplayer.playlist.PlaylistDatabase
+import com.shibi.musicplayer.playlist.PlaylistRepository
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 
 class PlaybackService : MediaSessionService() {
     private lateinit var player: ExoPlayer
@@ -27,6 +34,8 @@ class PlaybackService : MediaSessionService() {
     private var audioRecordingCallback: AudioManager.AudioRecordingCallback? = null
     private val micAutoPauseLogic = MicAutoPauseLogic()
     private var micAutoPauseGuard = false
+    private var likeShuffle: LikeShuffleDriver? = null
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     override fun onCreate() {
         super.onCreate()
@@ -53,6 +62,12 @@ class PlaybackService : MediaSessionService() {
             .apply {
                 repeatMode = Player.REPEAT_MODE_OFF
             }
+        likeShuffle = LikeShuffleDriver(player).also { it.attach() }
+        // Likes reach the shuffle live, so a heart tapped mid-session changes the next pick.
+        val favorites = PlaylistRepository(PlaylistDatabase.get(this).playlistDao()).favoriteIds
+        serviceScope.launch {
+            favorites.collect { ids -> likeShuffle?.setLiked(ids) }
+        }
 
         val sessionActivity = PendingIntent.getActivity(
             this,
@@ -141,6 +156,9 @@ class PlaybackService : MediaSessionService() {
             getSystemService(AudioManager::class.java).unregisterAudioRecordingCallback(callback)
         }
         audioRecordingCallback = null
+        serviceScope.cancel()
+        likeShuffle?.release()
+        likeShuffle = null
         mediaSession?.run {
             player.release()
             release()

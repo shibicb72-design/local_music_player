@@ -38,6 +38,7 @@ import com.shibi.musicplayer.R
 import com.shibi.musicplayer.background.BackgroundViewModel
 import com.shibi.musicplayer.domain.AppBackground
 import com.shibi.musicplayer.domain.AudioOutput
+import com.shibi.musicplayer.domain.LikeShufflePicker
 import com.shibi.musicplayer.domain.ShuffleContext
 import com.shibi.musicplayer.domain.Track
 import com.shibi.musicplayer.domain.shownWith
@@ -478,9 +479,10 @@ private fun AppNavHost(
                     onPlayQueue(tracks, startId, ShuffleContext.PLAYLIST)
                 },
                 onShuffle = { tracks ->
-                    val shuffled = tracks.shuffled()
-                    shuffled.firstOrNull()?.let {
-                        onPlayQueue(shuffled, it.id, ShuffleContext.PLAYLIST)
+                    // Shuffle mode on, so the like-weighted shuffle picks everything after the first song.
+                    LikeShufflePicker(tracks.map { it.id }, favoriteIds).draw()?.let { startId ->
+                        playerViewModel.shuffleNextQueue()
+                        onPlayQueue(tracks, startId, ShuffleContext.PLAYLIST)
                     }
                 },
                 contentBottomPadding = contentBottomPadding,
