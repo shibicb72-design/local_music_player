@@ -11,6 +11,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.res.stringResource
 import com.shibi.musicplayer.R
+import com.shibi.musicplayer.ui.background.LocalBackgroundChrome
+import com.shibi.musicplayer.ui.background.contentColorForContainer
 
 @Composable
 internal fun PlaylistNameDialog(
@@ -21,8 +23,13 @@ internal fun PlaylistNameDialog(
     onDismiss: () -> Unit,
 ) {
     var name by remember { mutableStateOf(initialName) }
+    val dialogColor = LocalBackgroundChrome.current.dialog
+    val onDialog = contentColorForContainer(dialogColor)
     AlertDialog(
         onDismissRequest = onDismiss,
+        containerColor = dialogColor,
+        titleContentColor = onDialog,
+        textContentColor = onDialog,
         title = { Text(title) },
         text = {
             OutlinedTextField(

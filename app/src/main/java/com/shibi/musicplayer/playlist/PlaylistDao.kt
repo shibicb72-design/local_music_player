@@ -76,6 +76,12 @@ interface PlaylistDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertFavorite(favorite: FavoriteEntity)
 
+    @Query("SELECT * FROM favorites WHERE trackId = :trackId LIMIT 1")
+    suspend fun findFavorite(trackId: Long): FavoriteEntity?
+
+    @Query("UPDATE favorites SET playCount = playCount + 1 WHERE trackId = :trackId")
+    suspend fun incrementPlayCount(trackId: Long): Int
+
     @Query("SELECT trackId FROM recent_plays ORDER BY playedAt DESC, id DESC")
     fun observeRecentIds(): Flow<List<Long>>
 

@@ -75,6 +75,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.shibi.musicplayer.R
 import com.shibi.musicplayer.domain.CarouselMath
+import com.shibi.musicplayer.ui.background.LocalBackgroundChrome
 import kotlin.math.abs
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -95,17 +96,17 @@ enum class NavSection(
     Settings(R.string.nav_settings, Icons.Rounded.Settings),
 }
 
-/** Tile ring only. The body grows with the tile; this is the phone-sized floor. */
-internal val NavCarouselBodyHeight = 156.dp
+/** Tile ring only. About half the old 156dp floor after the compact ring. */
+internal val NavCarouselBodyHeight = 80.dp
 
 /** Clearance between the front label and the navigation-bar inset. */
 internal val NavCarouselBottomPadding = 8.dp
 
-/** Space under a song list so the last row clears the carousel. */
-internal val SongListBottomPadding = 36.dp
+/** Space under a song list so the last row can rest in the edge fade. */
+internal val SongListBottomPadding = ListEdgeFade
 
-/** Space under playlist cards so the carousel does not cover the last square. */
-internal val PlaylistListBottomPadding = 36.dp
+/** Space under playlist cards so the last square can rest in the edge fade. */
+internal val PlaylistListBottomPadding = ListEdgeFade
 
 /** Gap between the two-pane player card and the screen edge, past the nav inset. */
 internal val TwoPanePlayerBottomPadding = 48.dp
@@ -113,12 +114,16 @@ internal val TwoPanePlayerBottomPadding = 48.dp
 /** Air around the carousel when it sits in the two-pane list column. */
 internal val TwoPaneCarouselPadding = 16.dp
 
-private val TileCorner = 18.dp
-private val LabelGap = 8.dp
-private val LabelHeight = 20.dp
-private val TopBreathing = 12.dp
-private val NeighborOverlap = 8.dp
-private val BackLift = 10.dp
+/** Space between the mini player and the top of the carousel. */
+internal val MiniPlayerCarouselGap = 8.dp
+
+private val TileCorner = 12.dp
+private val LabelGap = 6.dp
+private val LabelHeight = 18.dp
+private val TopBreathing = 4.dp
+private val BackLift = 6.dp
+private val MinTile = 44.dp
+private val MaxTile = 60.dp
 private val SelectedFill = Color(0xFF6E4EF0)
 private val TileShape = RoundedCornerShape(TileCorner)
 private val CarouselSpring = spring<Float>(
@@ -152,6 +157,7 @@ fun NavCarousel(
     val rotationValue = rotation.value
     val selectedIndex = math.selectedIndex(rotationValue)
     val label = stringResource(NavSection.entries[selectedIndex].labelRes)
+    val chrome = LocalBackgroundChrome.current
 
     LaunchedEffect(selected) {
         if (gestureActive) return@LaunchedEffect
@@ -164,6 +170,7 @@ fun NavCarousel(
     Column(
         modifier = modifier
             .fillMaxWidth()
+            .background(chrome.pageFill)
             .navigationBarsPadding(),
     ) {
         BoxWithConstraints(
@@ -177,13 +184,8 @@ fun NavCarousel(
             val density = LocalDensity.current
             val densityScale = density.density
             val tileSize = with(density) {
-                val widthPx = maxWidth.toPx()
-                val radius = widthPx * CarouselMath.RADIUS_FRACTION
-                val neighbor = radius * sin(math.stepRadians)
-                val scale45 = math.scale(math.stepRadians)
-                val overlap = NeighborOverlap.toPx()
-                ((2f * (neighbor + overlap)) / (1f + scale45))
-                    .coerceIn(72.dp.toPx(), 120.dp.toPx())
+                (maxWidth.toPx() * 0.145f)
+                    .coerceIn(MinTile.toPx(), MaxTile.toPx())
                     .toDp()
             }
             val layout = with(density) {
@@ -292,13 +294,13 @@ fun NavCarousel(
                                 },
                             )
                             .clip(TileShape)
-                            .background(if (centered) SelectedFill else Color.White.copy(alpha = 0.12f))
+                            .background(if (centered) SelectedFill else chrome.carouselTile)
                             .border(
                                 width = 1.dp,
                                 color = if (centered) {
                                     Color.White.copy(alpha = 0.55f)
                                 } else {
-                                    Color.White.copy(alpha = 0.22f)
+                                    chrome.carouselTileBorder
                                 },
                                 shape = TileShape,
                             ),
@@ -314,7 +316,7 @@ fun NavCarousel(
                     Icon(
                         imageVector = section.icon,
                         contentDescription = null,
-                        tint = if (centered) Color.White else Color.White.copy(alpha = 0.92f),
+                        tint = if (centered) Color.White else chrome.carouselIcon,
                         modifier = Modifier.size(tileSize * 0.38f),
                     )
                 }

@@ -75,14 +75,41 @@ class PlaylistRepository(
         dao.reorder(playlistId, trackIds)
     }
 
+    suspend fun stats(trackId: Long): SongStats {
+        val row = dao.findFavorite(trackId)
+        return SongStats(
+            favorite = row?.favorite == true,
+            likedAt = row?.likedAt,
+            playCount = row?.playCount ?: 0,
+        )
+    }
+
     suspend fun setFavorite(trackId: Long, favorite: Boolean) {
-        dao.upsertFavorite(FavoriteEntity(trackId = trackId, favorite = favorite))
+        val existing = dao.findFavorite(trackId)
+        dao.upsertFavorite(
+            FavoriteEntity(
+                trackId = trackId,
+                favorite = favorite,
+                likedAt = if (favorite) now() else null,
+                playCount = existing?.playCount ?: 0,
+            ),
+        )
     }
 
     suspend fun recordPlay(trackId: Long) {
         dao.deleteRecentForTrack(trackId)
         dao.insertRecent(RecentPlayEntity(trackId = trackId, playedAt = now()))
         dao.trimRecent(RECENT_LIMIT)
+        if (dao.incrementPlayCount(trackId) == 0) {
+            dao.upsertFavorite(
+                FavoriteEntity(
+                    trackId = trackId,
+                    favorite = false,
+                    likedAt = null,
+                    playCount = 1,
+                ),
+            )
+        }
     }
 
     suspend fun setDarkTheme(dark: Boolean) {

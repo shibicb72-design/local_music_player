@@ -5,6 +5,10 @@ import android.content.pm.PackageManager
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -30,14 +34,21 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Bluetooth
+import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Smartphone
+import androidx.compose.material.icons.filled.Speaker
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material3.Button
@@ -49,7 +60,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -61,6 +71,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -73,10 +85,15 @@ import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.shibi.musicplayer.R
 import com.shibi.musicplayer.domain.PlaybackTime
+import com.shibi.musicplayer.domain.RouteIcon
+import com.shibi.musicplayer.domain.RoutePresentation
 import com.shibi.musicplayer.domain.Track
 import com.shibi.musicplayer.domain.TrackDisplay
 import com.shibi.musicplayer.library.LibraryViewModel
 import com.shibi.musicplayer.playback.PlayerUiState
+import com.shibi.musicplayer.ui.background.ContrastSurface
+import com.shibi.musicplayer.ui.background.LocalBackgroundChrome
+import com.shibi.musicplayer.ui.theme.DeviceGreen
 import com.shibi.musicplayer.ui.theme.Secondary
 import com.shibi.musicplayer.ui.theme.Spacing
 
@@ -216,6 +233,7 @@ fun LibraryContent(
     favoriteIds: Set<Long> = emptySet(),
     onToggleFavorite: (Track) -> Unit = {},
     contentBottomPadding: Dp = 120.dp,
+    listState: LazyListState = rememberLazyListState(),
     modifier: Modifier = Modifier,
 ) {
     LibraryScaffold(
@@ -263,6 +281,7 @@ fun LibraryContent(
                 onAddToPlaylist = onAddToPlaylist,
                 contentBottomPadding = contentBottomPadding,
                 emptyMessage = stringResource(R.string.empty_library),
+                listState = listState,
                 modifier = Modifier.weight(1f),
             )
         }
@@ -280,6 +299,8 @@ private fun LibraryScaffold(
 ) {
     Scaffold(
         modifier = modifier,
+        containerColor = Color.Transparent,
+        contentColor = MaterialTheme.colorScheme.onBackground,
         contentWindowInsets = WindowInsets(0),
         bottomBar = {
             if (showMiniPlayer && nowPlaying.hasMedia) {
@@ -304,6 +325,7 @@ internal fun SongColumn(
     onAddToPlaylist: (Track) -> Unit,
     contentBottomPadding: Dp,
     emptyMessage: String,
+    listState: LazyListState = rememberLazyListState(),
     modifier: Modifier = Modifier,
 ) {
     if (tracks.isEmpty()) {
@@ -316,6 +338,7 @@ internal fun SongColumn(
     } else {
         LazyColumn(
             modifier = modifier,
+            state = listState,
             contentPadding = PaddingValues(bottom = contentBottomPadding),
         ) {
             items(tracks, key = { it.id }) { track ->
@@ -345,14 +368,13 @@ internal fun TrackRow(
 ) {
     val title = TrackDisplay.title(track.title)
     var menuOpen by remember { mutableStateOf(false) }
+    val chrome = LocalBackgroundChrome.current
     Row(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 8.dp)
             .clip(RoundedCornerShape(16.dp))
-            .background(
-                if (isPlaying) Color(0xFF7C5CFF).copy(alpha = 0.12f) else Color.Transparent,
-            )
+            .background(if (isPlaying) chrome.playingRowFill else chrome.rowFill)
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onAddToPlaylist,
@@ -410,7 +432,7 @@ internal fun TrackRow(
                 contentDescription = stringResource(
                     if (isFavorite) R.string.unfavorite else R.string.favorite,
                 ),
-                tint = if (isFavorite) Secondary else Color.White.copy(alpha = 0.92f),
+                tint = if (isFavorite) Secondary else chrome.iconMuted,
             )
         }
         Box {
@@ -489,6 +511,10 @@ internal fun NowPlayingBar(
     state: PlayerUiState,
     onOpen: () -> Unit,
     onTogglePlayPause: () -> Unit,
+    route: RoutePresentation = RoutePresentation.phone(),
+    isFavorite: Boolean = false,
+    onToggleFavorite: () -> Unit = {},
+    onOpenDevices: () -> Unit = {},
     padForNavigationBars: Boolean = true,
     bottomPadding: Dp = Spacing.sm,
 ) {
@@ -497,6 +523,20 @@ internal fun NowPlayingBar(
     } else {
         0f
     }
+    val phoneLabel = stringResource(R.string.output_this_phone)
+    val connectName = route.deviceName.ifBlank { phoneLabel }
+    val connectMuted = route.icon == RouteIcon.PHONE
+    val connectColor = if (connectMuted) {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    } else {
+        DeviceGreen.copy(alpha = 0.7f)
+    }
+    val deviceTint = if (connectMuted) {
+        MaterialTheme.colorScheme.onSurface
+    } else {
+        DeviceGreen.copy(alpha = 0.82f)
+    }
+    val chrome = LocalBackgroundChrome.current
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -506,35 +546,23 @@ internal fun NowPlayingBar(
             .then(if (padForNavigationBars) Modifier.navigationBarsPadding() else Modifier)
             .padding(start = Spacing.sm, end = Spacing.sm, bottom = bottomPadding),
     ) {
-        Surface(
+        ContrastSurface(
             onClick = onOpen,
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(22.dp),
-            color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.88f),
-            contentColor = MaterialTheme.colorScheme.onSurface,
-            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
-            shadowElevation = 12.dp,
+            color = if (chrome.isLight) {
+                chrome.frost
+            } else {
+                MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.92f)
+            },
+            border = BorderStroke(1.dp, chrome.frostBorder),
+            shadowElevation = 8.dp,
         ) {
             Column(modifier = Modifier.fillMaxWidth()) {
-                Box(
-                    modifier = Modifier
-                        .padding(horizontal = 16.dp)
-                        .fillMaxWidth()
-                        .height(2.dp)
-                        .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.12f)),
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(progress)
-                            .height(2.dp)
-                            .background(Color.White),
-                    )
-                }
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = Spacing.sm, vertical = Spacing.sm),
+                        .padding(start = Spacing.sm, end = Spacing.xs, top = Spacing.sm, bottom = Spacing.sm),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     AlbumArtwork(
@@ -546,7 +574,8 @@ internal fun NowPlayingBar(
                     Column(
                         modifier = Modifier
                             .weight(1f)
-                            .padding(horizontal = Spacing.sm),
+                            .padding(horizontal = Spacing.sm)
+                            .clipToBounds(),
                     ) {
                         val title = TrackDisplay.title(state.title)
                             .ifBlank { stringResource(R.string.nothing_playing) }
@@ -557,17 +586,56 @@ internal fun NowPlayingBar(
                             color = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.fillMaxWidth(),
                         )
-                        TrackDisplay.subtitle(state.artist, state.album)?.let { subtitle ->
+                        Text(
+                            text = TrackDisplay.subtitle(state.artist, state.album) ?: "\u00A0",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            if (route.showBluetoothGlyph) {
+                                Icon(
+                                    imageVector = Icons.Filled.Bluetooth,
+                                    contentDescription = null,
+                                    tint = connectColor,
+                                    modifier = Modifier.size(12.dp),
+                                )
+                                Spacer(Modifier.width(4.dp))
+                            }
                             Text(
-                                text = subtitle,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                text = connectName,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = connectColor,
                                 maxLines = 1,
+                                softWrap = false,
                                 overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier.weight(1f),
                             )
                         }
                     }
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clickable(onClick = onOpenDevices),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = iconForRoute(route.icon),
+                            contentDescription = stringResource(R.string.choose_output),
+                            tint = deviceTint,
+                            modifier = Modifier.size(24.dp),
+                        )
+                    }
+                    FavoriteHeart(
+                        isFavorite = isFavorite,
+                        onToggle = onToggleFavorite,
+                    )
                     Box(
                         modifier = Modifier
                             .size(40.dp)
@@ -577,13 +645,83 @@ internal fun NowPlayingBar(
                     ) {
                         Icon(
                             imageVector = if (state.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                            contentDescription = stringResource(if (state.isPlaying) R.string.pause else R.string.play),
+                            contentDescription = stringResource(
+                                if (state.isPlaying) R.string.pause else R.string.play,
+                            ),
                             tint = Color(0xFF0E0E12),
                             modifier = Modifier.size(24.dp),
                         )
                     }
                 }
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(2.dp)
+                        .background(chrome.progressTrack),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(progress)
+                            .height(2.dp)
+                            .background(chrome.progress),
+                    )
+                }
             }
         }
     }
+}
+
+@Composable
+private fun FavoriteHeart(
+    isFavorite: Boolean,
+    onToggle: () -> Unit,
+) {
+    val scale = remember { Animatable(1f) }
+    var seen by remember { mutableStateOf(false) }
+    LaunchedEffect(isFavorite) {
+        if (!seen) {
+            seen = true
+            return@LaunchedEffect
+        }
+        scale.snapTo(0.72f)
+        scale.animateTo(
+            1.18f,
+            spring(
+                dampingRatio = Spring.DampingRatioMediumBouncy,
+                stiffness = Spring.StiffnessMedium,
+            ),
+        )
+        scale.animateTo(1f, spring(stiffness = Spring.StiffnessMedium))
+    }
+    val chrome = LocalBackgroundChrome.current
+    val tint by animateColorAsState(
+        targetValue = if (isFavorite) Secondary else chrome.iconMuted,
+        label = "favoriteTint",
+    )
+    Box(
+        modifier = Modifier
+            .size(40.dp)
+            .clickable(onClick = onToggle),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = if (isFavorite) Icons.Rounded.Favorite else Icons.Outlined.FavoriteBorder,
+            contentDescription = stringResource(if (isFavorite) R.string.unfavorite else R.string.favorite),
+            tint = tint,
+            modifier = Modifier
+                .size(24.dp)
+                .graphicsLayer {
+                    scaleX = scale.value
+                    scaleY = scale.value
+                },
+        )
+    }
+}
+
+private fun iconForRoute(icon: RouteIcon): ImageVector = when (icon) {
+    RouteIcon.PHONE -> Icons.Filled.Smartphone
+    RouteIcon.HEADPHONES -> Icons.Filled.Headphones
+    RouteIcon.SPEAKER -> Icons.Filled.Speaker
+    RouteIcon.CAR -> Icons.Filled.DirectionsCar
+    RouteIcon.UNKNOWN -> Icons.Filled.Bluetooth
 }

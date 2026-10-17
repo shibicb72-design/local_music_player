@@ -13,6 +13,12 @@ data class PlaylistDetail(
     val trackIds: List<Long>,
 )
 
+data class SongStats(
+    val favorite: Boolean,
+    val likedAt: Long?,
+    val playCount: Int,
+)
+
 data class PlaylistsUiState(
     val playlists: List<PlaylistSummary> = emptyList(),
     val loaded: Boolean = false,

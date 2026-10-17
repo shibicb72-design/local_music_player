@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -38,6 +39,8 @@ import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Repeat
+import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material.icons.rounded.Smartphone
@@ -47,12 +50,12 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ScaffoldDefaults
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -74,18 +77,25 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.shibi.musicplayer.R
 import com.shibi.musicplayer.domain.ArtTile
 import com.shibi.musicplayer.domain.OutputKind
 import com.shibi.musicplayer.domain.PlaybackTime
+import com.shibi.musicplayer.domain.RepeatMode
+import com.shibi.musicplayer.domain.ShuffleBadge
+import com.shibi.musicplayer.domain.ShuffleContext
 import com.shibi.musicplayer.domain.TrackDisplay
 import com.shibi.musicplayer.domain.containsTamil
 import com.shibi.musicplayer.playback.PlayerUiState
-import com.shibi.musicplayer.ui.theme.TextHigh
+import com.shibi.musicplayer.ui.background.ContrastSurface
+import com.shibi.musicplayer.ui.background.LocalBackgroundChrome
+import com.shibi.musicplayer.ui.theme.Base0
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -98,6 +108,8 @@ fun PlayerScreen(
     onSeek: (Long) -> Unit,
     selectedOutputId: Int?,
     onSelectOutput: (Int?) -> Unit,
+    onToggleShuffle: () -> Unit = {},
+    onCycleRepeat: () -> Unit = {},
     showBack: Boolean = true,
     includeNavigationBars: Boolean = true,
     modifier: Modifier = Modifier,
@@ -105,14 +117,21 @@ fun PlayerScreen(
     val backDescription = stringResource(R.string.back)
     val outputs by rememberAudioOutputs()
     var showSheet by remember { mutableStateOf(false) }
-    val colorScheme = MaterialTheme.colorScheme
+    val chrome = LocalBackgroundChrome.current
+    val paneColor = if (chrome.isLight) chrome.frost else Base0
     val glow = (
         rememberArtworkColor(state.albumArtUri)
             ?: Color(ArtTile.specFor(state.title).startArgb)
         ).copy(alpha = 0.9f)
     val effective = effectiveOutput(outputs, selectedOutputId)
 
-    Box(modifier = modifier.fillMaxSize()) {
+    ContrastSurface(
+        color = paneColor,
+        modifier = modifier.fillMaxSize(),
+    ) {
+        val onPane = LocalContentColor.current
+        val onPaneVariant = MaterialTheme.colorScheme.onSurfaceVariant
+        Box(modifier = Modifier.fillMaxSize()) {
         AlbumArtwork(
             albumArtUri = state.albumArtUri,
             title = state.title,
@@ -137,15 +156,15 @@ fun PlayerScreen(
                 .fillMaxSize()
                 .background(
                     Brush.verticalGradient(
-                        0f to colorScheme.background.copy(alpha = 0.72f),
-                        0.45f to colorScheme.background.copy(alpha = 0.78f),
-                        1f to colorScheme.background,
+                        0f to paneColor.copy(alpha = if (chrome.isLight) 0.38f else 0.72f),
+                        0.45f to paneColor.copy(alpha = if (chrome.isLight) 0.58f else 0.78f),
+                        1f to paneColor.copy(alpha = if (chrome.isLight) 0.82f else 1f),
                     ),
                 ),
         )
         Scaffold(
             containerColor = Color.Transparent,
-            contentColor = colorScheme.onBackground,
+            contentColor = onPane,
             contentWindowInsets = if (includeNavigationBars) {
                 ScaffoldDefaults.contentWindowInsets
             } else {
@@ -160,13 +179,14 @@ fun PlayerScreen(
                             text = stringResource(R.string.player_title).uppercase(),
                             style = MaterialTheme.typography.labelMedium,
                             letterSpacing = 2.sp,
-                            color = TextHigh,
+                            color = onPane,
                         )
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = Color.Transparent,
                         scrolledContainerColor = Color.Transparent,
-                        navigationIconContentColor = colorScheme.onBackground,
+                        navigationIconContentColor = onPane,
+                        titleContentColor = onPane,
                     ),
                     navigationIcon = {
                         if (showBack) {
@@ -224,7 +244,7 @@ fun PlayerScreen(
                         TrackTitle(
                             text = titleText,
                             style = MaterialTheme.typography.headlineSmall,
-                            color = colorScheme.onBackground,
+                            color = onPane,
                             textAlign = TextAlign.Start,
                             modifier = Modifier.fillMaxWidth(),
                         )
@@ -232,7 +252,7 @@ fun PlayerScreen(
                         Text(
                             text = titleText,
                             style = MaterialTheme.typography.headlineSmall,
-                            color = colorScheme.onBackground,
+                            color = onPane,
                             maxLines = 1,
                             softWrap = false,
                             overflow = TextOverflow.Ellipsis,
@@ -250,7 +270,7 @@ fun PlayerScreen(
                         color = if (subtitle == null) {
                             Color.Transparent
                         } else {
-                            colorScheme.onSurfaceVariant
+                            onPaneVariant
                         },
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -270,18 +290,29 @@ fun PlayerScreen(
                         hasMedia = state.hasMedia,
                         hasNext = state.hasNext,
                         hasPrevious = state.hasPrevious,
+                        shuffleEnabled = state.shuffleEnabled,
+                        shuffleContext = state.shuffleContext,
+                        repeatMode = state.repeatMode,
                         compact = compact,
                         onTogglePlayPause = onTogglePlayPause,
                         onNext = onNext,
                         onPrevious = onPrevious,
+                        onToggleShuffle = onToggleShuffle,
+                        onCycleRepeat = onCycleRepeat,
                     )
                     Spacer(Modifier.height(if (compact) 12.dp else 24.dp))
-                    Surface(
+                    ContrastSurface(
                         onClick = { showSheet = true },
                         shape = CircleShape,
-                        color = Color.White.copy(alpha = 0.10f),
-                        contentColor = colorScheme.onBackground,
-                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f)),
+                        color = if (chrome.isLight) {
+                            Color.White.copy(alpha = 0.62f)
+                        } else {
+                            Color.White.copy(alpha = 0.10f)
+                        },
+                        border = BorderStroke(
+                            1.dp,
+                            if (chrome.isLight) chrome.frostBorder else Color.White.copy(alpha = 0.12f),
+                        ),
                     ) {
                         Row(
                             modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
@@ -304,6 +335,7 @@ fun PlayerScreen(
                     Spacer(Modifier.height(if (compact) 12.dp else 24.dp))
                 }
             }
+        }
         }
     }
     if (showSheet) {
@@ -338,6 +370,7 @@ private fun SeekControl(
     val sliderValue = displayed.coerceIn(0f, if (durationMs > 0L) durationMs.toFloat() else 1f)
     val seekDescription = stringResource(R.string.seek)
     val shownPosition = if (dragging) dragPosition.toLong() else positionMs
+    val onPane = LocalContentColor.current
 
     Column(modifier = Modifier.fillMaxWidth()) {
         Slider(
@@ -357,7 +390,7 @@ private fun SeekControl(
                     modifier = Modifier
                         .size(14.dp)
                         .shadow(4.dp, CircleShape)
-                        .background(Color.White, CircleShape),
+                        .background(onPane, CircleShape),
                 )
             },
             track = { sliderState ->
@@ -365,8 +398,8 @@ private fun SeekControl(
                     sliderState = sliderState,
                     modifier = Modifier.height(4.dp),
                     colors = SliderDefaults.colors(
-                        activeTrackColor = Color.White,
-                        inactiveTrackColor = Color.White.copy(alpha = 0.18f),
+                        activeTrackColor = onPane,
+                        inactiveTrackColor = onPane.copy(alpha = 0.18f),
                     ),
                     thumbTrackGapSize = 0.dp,
                     drawStopIndicator = null,
@@ -383,12 +416,12 @@ private fun SeekControl(
             Text(
                 text = PlaybackTime.format(shownPosition),
                 style = MaterialTheme.typography.labelSmall,
-                color = TextHigh,
+                color = onPane,
             )
             Text(
                 text = PlaybackTime.format(durationMs),
                 style = MaterialTheme.typography.labelSmall,
-                color = TextHigh,
+                color = onPane.copy(alpha = 0.72f),
             )
         }
     }
@@ -400,27 +433,63 @@ private fun TransportControls(
     hasMedia: Boolean,
     hasNext: Boolean,
     hasPrevious: Boolean,
+    shuffleEnabled: Boolean,
+    shuffleContext: ShuffleContext,
+    repeatMode: RepeatMode,
     compact: Boolean,
     onTogglePlayPause: () -> Unit,
     onNext: () -> Unit,
     onPrevious: () -> Unit,
+    onToggleShuffle: () -> Unit,
+    onCycleRepeat: () -> Unit,
 ) {
     val colorScheme = MaterialTheme.colorScheme
+    val chrome = LocalBackgroundChrome.current
     val playButtonSize = if (compact) 64.dp else 80.dp
     val playIconSize = if (compact) 34.dp else 42.dp
     val skipButtonSize = if (compact) 36.dp else 44.dp
+    val modeButtonSize = if (compact) 26.dp else 30.dp
+    val onPane = LocalContentColor.current
+    val accent = if (chrome.isLight) chrome.progress else colorScheme.secondary
+    val dimmed = onPane.copy(alpha = 0.40f)
+    val shuffleBadge = ShuffleBadge.label(shuffleEnabled, shuffleContext)?.toString()
+    val repeatBadge = when (repeatMode) {
+        RepeatMode.OFF -> null
+        RepeatMode.ONCE -> stringResource(R.string.repeat_badge_once)
+        RepeatMode.THRICE -> stringResource(R.string.repeat_badge_thrice)
+        RepeatMode.INFINITE -> stringResource(R.string.repeat_badge_infinite)
+    }
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(28.dp, Alignment.CenterHorizontally),
+        horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        ModeButton(
+            onClick = onToggleShuffle,
+            enabled = hasMedia,
+            tint = if (shuffleEnabled) accent else dimmed,
+            badge = shuffleBadge,
+            description = stringResource(
+                if (shuffleEnabled) {
+                    if (shuffleContext == ShuffleContext.PLAYLIST) {
+                        R.string.shuffle_on_playlist
+                    } else {
+                        R.string.shuffle_on_all
+                    }
+                } else {
+                    R.string.shuffle_off
+                },
+            ),
+            icon = Icons.Rounded.Shuffle,
+            iconSize = modeButtonSize,
+        )
         IconButton(
             onClick = onPrevious,
             enabled = hasPrevious,
             modifier = Modifier.size(56.dp),
             colors = IconButtonDefaults.iconButtonColors(
-                contentColor = colorScheme.onBackground,
-                disabledContentColor = colorScheme.onBackground.copy(alpha = 0.38f),
+                contentColor = onPane,
+                disabledContentColor = onPane.copy(alpha = 0.38f),
             ),
         ) {
             Icon(
@@ -460,8 +529,8 @@ private fun TransportControls(
             enabled = hasNext,
             modifier = Modifier.size(56.dp),
             colors = IconButtonDefaults.iconButtonColors(
-                contentColor = colorScheme.onBackground,
-                disabledContentColor = colorScheme.onBackground.copy(alpha = 0.38f),
+                contentColor = onPane,
+                disabledContentColor = onPane.copy(alpha = 0.38f),
             ),
         ) {
             Icon(
@@ -469,6 +538,64 @@ private fun TransportControls(
                 contentDescription = stringResource(R.string.next),
                 modifier = Modifier.size(skipButtonSize),
             )
+        }
+        ModeButton(
+            onClick = onCycleRepeat,
+            enabled = hasMedia,
+            tint = if (repeatMode == RepeatMode.OFF) dimmed else accent,
+            badge = repeatBadge,
+            description = stringResource(
+                when (repeatMode) {
+                    RepeatMode.OFF -> R.string.repeat_off
+                    RepeatMode.ONCE -> R.string.repeat_once
+                    RepeatMode.THRICE -> R.string.repeat_thrice
+                    RepeatMode.INFINITE -> R.string.repeat_infinite
+                },
+            ),
+            icon = Icons.Rounded.Repeat,
+            iconSize = modeButtonSize,
+        )
+    }
+}
+
+@Composable
+private fun ModeButton(
+    onClick: () -> Unit,
+    enabled: Boolean,
+    tint: Color,
+    badge: String?,
+    description: String,
+    icon: ImageVector,
+    iconSize: Dp,
+) {
+    IconButton(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = Modifier.size(56.dp),
+        colors = IconButtonDefaults.iconButtonColors(
+            contentColor = tint,
+            disabledContentColor = tint.copy(alpha = 0.38f),
+        ),
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                imageVector = icon,
+                contentDescription = description,
+                tint = tint,
+                modifier = Modifier.size(iconSize),
+            )
+            if (badge != null) {
+                Text(
+                    text = badge,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = tint,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .offset(x = 8.dp, y = (-6).dp),
+                )
+            }
         }
     }
 }
