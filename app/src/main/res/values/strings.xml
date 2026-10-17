@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Music Player</string>
+    <string name="app_name">Spectacula</string>
     <string name="library_title">Your music</string>
     <string name="player_title">Now playing</string>
     <string name="play">Play</string>
@@ -25,7 +25,7 @@
     <string name="missing_artist">—</string>
     <string name="unknown_album">Unknown album</string>
     <string name="permission_title">Music access needed</string>
-    <string name="permission_body">Allow access to audio files so this player can list the music stored on this device.</string>
+    <string name="permission_body">Allow access to audio files so Spectacula can list the music stored on this device.</string>
     <string name="grant_access">Grant access</string>
     <string name="open_settings">Open settings</string>
     <string name="empty_library">No music found on this device.</string>
@@ -67,7 +67,7 @@
     <string name="settings_backgrounds_body">The color behind your music</string>
     <string name="settings_backgrounds_dark_on">Dark theme is on. Turn it off to see your pick.</string>
     <string name="settings_about">About</string>
-    <string name="settings_about_body">A local player for the music on this device.</string>
+    <string name="settings_about_body">A local player for the music and videos on this device.</string>
     <string name="bg_tab_solid">Solid</string>
     <string name="bg_tab_multicolor">Multicolor</string>
     <string name="bg_tab_animated">Animated</string>
