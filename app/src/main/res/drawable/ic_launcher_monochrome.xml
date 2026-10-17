@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Themed-icon layer (Android 13+): the Theatrum foreground as one path; the system tints it. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M82.75,45A28.75,28.75 0,0 1,25.25 45A2.25,2.25 0,0 1,29.75 45A24.25,24.25 0,0 0,78.25 45A2.25,2.25 0,0 1,82.75 45Z M75.75,45A21.75,21.75 0,0 1,32.25 45A2.25,2.25 0,0 1,36.75 45A17.25,17.25 0,0 0,71.25 45A2.25,2.25 0,0 1,75.75 45Z M68.75,45A14.75,14.75 0,0 1,39.25 45A2.25,2.25 0,0 1,43.75 45A10.25,10.25 0,0 0,64.25 45A2.25,2.25 0,0 1,68.75 45Z M49,39.1L49,49.9Q49,52.5 51.26,51.21L60.74,45.79Q63,44.5 60.74,43.21L51.26,37.79Q49,36.5 49,39.1Z" />
+</vector>
