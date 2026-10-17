@@ -25,6 +25,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Search
@@ -395,6 +396,7 @@ fun SettingsScreen(
     onDarkThemeChange: (Boolean) -> Unit,
     backgroundName: String,
     onOpenBackgrounds: () -> Unit,
+    onOpenLicenses: () -> Unit = {},
     contentBottomPadding: Dp = 0.dp,
     modifier: Modifier = Modifier,
 ) {
@@ -403,6 +405,7 @@ fun SettingsScreen(
         onDarkThemeChange = onDarkThemeChange,
         backgroundName = backgroundName,
         onOpenBackgrounds = onOpenBackgrounds,
+        onOpenLicenses = onOpenLicenses,
         contentBottomPadding = contentBottomPadding,
         modifier = modifier,
     )
@@ -414,6 +417,7 @@ internal fun SettingsContent(
     onDarkThemeChange: (Boolean) -> Unit,
     backgroundName: String = "",
     onOpenBackgrounds: () -> Unit = {},
+    onOpenLicenses: () -> Unit = {},
     contentBottomPadding: Dp = 0.dp,
     modifier: Modifier = Modifier,
 ) {
@@ -484,18 +488,39 @@ internal fun SettingsContent(
             shape = MaterialTheme.shapes.large,
             color = MaterialTheme.colorScheme.surfaceContainer,
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    text = stringResource(R.string.app_name),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = stringResource(R.string.settings_about_body),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+            Column {
+                Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp)) {
+                    Text(
+                        text = stringResource(R.string.app_name),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = stringResource(R.string.settings_about_body),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(onClick = onOpenLicenses)
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = stringResource(R.string.settings_licenses),
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         }
     }

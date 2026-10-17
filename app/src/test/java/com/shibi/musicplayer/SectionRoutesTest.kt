@@ -38,6 +38,7 @@ class SectionRoutesTest {
     fun childRoutesKeepTheirParentSection() {
         assertEquals(NavSection.Playlists, SectionRoutes.sectionFor(SectionRoutes.PlaylistDetail))
         assertEquals(NavSection.Settings, SectionRoutes.sectionFor(SectionRoutes.Backgrounds))
+        assertEquals(NavSection.Settings, SectionRoutes.sectionFor(SectionRoutes.Licenses))
         assertNull(SectionRoutes.sectionFor(null))
         assertNull(SectionRoutes.sectionFor("unknown"))
     }

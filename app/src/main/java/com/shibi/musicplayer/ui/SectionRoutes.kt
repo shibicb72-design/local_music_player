@@ -16,6 +16,7 @@ internal object SectionRoutes {
     const val Search = "search"
     const val Settings = "settings"
     const val Backgrounds = "settings/backgrounds"
+    const val Licenses = "settings/licenses"
 
     fun routeFor(section: NavSection): String = when (section) {
         NavSection.Songs -> Songs
@@ -60,7 +61,7 @@ internal object SectionRoutes {
         Favorites -> NavSection.Favorites
         Recent -> NavSection.Recent
         Search -> NavSection.Search
-        Settings, Backgrounds -> NavSection.Settings
+        Settings, Backgrounds, Licenses -> NavSection.Settings
         else -> null
     }
 }
