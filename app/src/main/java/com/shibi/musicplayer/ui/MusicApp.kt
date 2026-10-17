@@ -57,6 +57,7 @@ import com.shibi.musicplayer.ui.background.AppBackgroundHost
 import com.shibi.musicplayer.ui.background.BackgroundPickerScreen
 import com.shibi.musicplayer.ui.background.backgroundTitleRes
 import com.shibi.musicplayer.ui.background.titleId
+import com.shibi.musicplayer.video.PlayerSurface
 import com.shibi.musicplayer.video.VideoEngine
 import com.shibi.musicplayer.video.VideoStatus
 import com.shibi.musicplayer.video.VideoUiState
@@ -73,6 +74,7 @@ private const val SearchRoute = SectionRoutes.Search
 private const val SettingsRoute = SectionRoutes.Settings
 private const val BackgroundsRoute = SectionRoutes.Backgrounds
 private const val LicensesRoute = SectionRoutes.Licenses
+private const val ErrorLogRoute = SectionRoutes.ErrorLog
 private const val VideosRoute = SectionRoutes.Videos
 private const val VideoFullscreenRoute = SectionRoutes.VideoFullscreen
 private const val PlaylistIdArg = "playlistId"
@@ -91,6 +93,10 @@ fun MusicApp(
     val videoState by videoViewModel.uiState.collectAsStateWithLifecycle()
     val videoEngine by videoViewModel.engine.collectAsStateWithLifecycle()
     val brightnessSwipe by videoViewModel.brightnessSwipe.collectAsStateWithLifecycle()
+    val trackSheet by videoViewModel.trackSheet.collectAsStateWithLifecycle()
+    // The tracks sheet, over the box, the pane or fullscreen; closing the video closes it.
+    var showTracks by rememberSaveable { mutableStateOf(false) }
+    val tracksOpen = showTracks && videoState.isActive
     var musicPausedByVideo by rememberSaveable { mutableStateOf(false) }
     val selectedOutputId by playerViewModel.preferredOutputId.collectAsStateWithLifecycle()
     val playlistState by playlistViewModel.state.collectAsStateWithLifecycle()
@@ -176,6 +182,17 @@ fun MusicApp(
     ) {
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val wide = maxWidth >= TwoPaneBreakpoint
+        // Named in the error log, so a report says where the picture was.
+        LaunchedEffect(fullscreen, wide) {
+            videoViewModel.setPlayerSurface(
+                when {
+                    fullscreen -> PlayerSurface.Fullscreen
+                    wide -> PlayerSurface.VideoPane
+                    else -> PlayerSurface.InlineBox
+                },
+            )
+        }
+        val openTracks = { showTracks = true }
 
         LaunchedEffect(videoState.status, wide) {
             if (videoState.status == VideoStatus.Ended) {
@@ -358,6 +375,8 @@ fun MusicApp(
                     // Fullscreen owns the picture while it is open; one view is attached at a time.
                     surface = { if (!fullscreen) engine?.let { VideoSurface(it) } },
                     onFullscreen = ::openFullscreen,
+                    onOpenTracks = openTracks,
+                    holdControls = tracksOpen,
                     modifier = paneModifier,
                 )
             } else {
@@ -428,6 +447,8 @@ fun MusicApp(
                     videoViewModel = videoViewModel,
                     onCloseVideo = ::closeVideo,
                     onFullscreen = ::openFullscreen,
+                    onOpenTracks = openTracks,
+                    holdControls = tracksOpen,
                     brightnessSwipe = brightnessSwipe,
                     modifier = Modifier.fillMaxSize(),
                 )
@@ -481,6 +502,8 @@ fun MusicApp(
                             videoViewModel = videoViewModel,
                             onCloseVideo = ::closeVideo,
                             onFullscreen = ::openFullscreen,
+                            onOpenTracks = openTracks,
+                            holdControls = tracksOpen,
                             brightnessSwipe = brightnessSwipe,
                             modifier = Modifier.fillMaxSize(),
                         )
@@ -536,8 +559,33 @@ fun MusicApp(
                 onCycleAspect = videoViewModel::cycleAspectMode,
                 onExit = ::exitFullscreen,
                 surface = { engine?.let { VideoSurface(it) } },
+                onOpenTracks = openTracks,
+                holdControls = tracksOpen,
             )
         }
+    }
+
+    if (tracksOpen) {
+        TrackSheet(
+            state = trackSheet,
+            actions = TrackSheetActions(
+                onSelectAudio = videoViewModel::selectAudioTrack,
+                onSelectSubtitle = videoViewModel::selectSubtitleTrack,
+                onStepAudioDelay = videoViewModel::stepAudioDelay,
+                onStepSubtitleDelay = videoViewModel::stepSubtitleDelay,
+                onTextSize = videoViewModel::setSubtitleTextSize,
+                onHardwareDecoding = videoViewModel::setHardwareDecoding,
+                onLoadFile = videoViewModel::loadExternalTrack,
+            ),
+            onDismiss = {
+                showTracks = false
+                videoViewModel.dismissTrackMessage()
+            },
+        )
+    }
+    // A closed video takes the sheet with it, so the next one does not open with it up.
+    LaunchedEffect(videoState.isActive) {
+        if (!videoState.isActive) showTracks = false
     }
 
     if (showDevices) {
@@ -600,6 +648,8 @@ private fun AppNavHost(
     videoViewModel: VideoViewModel,
     onCloseVideo: () -> Unit,
     onFullscreen: () -> Unit,
+    onOpenTracks: () -> Unit,
+    holdControls: Boolean,
     brightnessSwipe: Boolean,
     modifier: Modifier = Modifier,
 ) {
@@ -726,6 +776,16 @@ private fun AppNavHost(
                 },
                 brightnessSwipe = brightnessSwipe,
                 onBrightnessSwipeChange = videoViewModel::setBrightnessSwipe,
+                onOpenErrorLog = {
+                    navController.navigate(ErrorLogRoute) { launchSingleTop = true }
+                },
+                contentBottomPadding = contentBottomPadding,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+        composable(ErrorLogRoute) {
+            ErrorLogScreen(
+                onBack = { navController.popBackStack() },
                 contentBottomPadding = contentBottomPadding,
                 modifier = Modifier.fillMaxSize(),
             )
@@ -762,6 +822,8 @@ private fun AppNavHost(
                 onSeek = videoViewModel::seekTo,
                 onCloseVideo = onCloseVideo,
                 onFullscreen = onFullscreen,
+                onOpenTracks = onOpenTracks,
+                holdControls = holdControls,
                 showInlinePlayer = !wide,
                 modifier = Modifier.fillMaxSize(),
             )

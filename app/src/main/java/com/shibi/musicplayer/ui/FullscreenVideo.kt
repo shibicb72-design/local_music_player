@@ -131,6 +131,8 @@ internal fun FullscreenVideo(
     onExit: () -> Unit,
     surface: @Composable () -> Unit,
     modifier: Modifier = Modifier,
+    onOpenTracks: (() -> Unit)? = null,
+    holdControls: Boolean = false,
 ) {
     val activity = LocalActivity.current
     val context = LocalContext.current
@@ -154,6 +156,8 @@ internal fun FullscreenVideo(
         volume = volume,
         brightness = brightness,
         modifier = modifier,
+        onOpenTracks = onOpenTracks,
+        holdControls = holdControls,
     )
 }
 
@@ -213,6 +217,10 @@ internal fun FullscreenVideoContent(
     modifier: Modifier = Modifier,
     initialControlsVisible: Boolean = false,
     initialChip: FullscreenChip? = null,
+    /** Null hides the tracks button. */
+    onOpenTracks: (() -> Unit)? = null,
+    /** The tracks sheet is open: the controls stay up behind it. */
+    holdControls: Boolean = false,
 ) {
     ContrastSurface(
         color = Color.Black,
@@ -234,8 +242,8 @@ internal fun FullscreenVideoContent(
             chipSerial++
         }
 
-        LaunchedEffect(controlsVisible, playing, touches) {
-            if (controlsVisible && playing) {
+        LaunchedEffect(controlsVisible, playing, touches, holdControls) {
+            if (controlsVisible && playing && !holdControls) {
                 delay(ControlsAutoHideMs)
                 controlsVisible = false
             }
@@ -370,8 +378,13 @@ internal fun FullscreenVideoContent(
                         showChip(FullscreenChip.Aspect(onCycleAspect()))
                     },
                     onExit = onExit,
-                    // V7 passes the tracks and subtitles sheet here; until then the button is hidden.
-                    onOpenTracks = null,
+                    onOpenTracks = onOpenTracks?.let { open ->
+                        {
+                            controlsVisible = true
+                            touches++
+                            open()
+                        }
+                    },
                 )
             }
             ChipSlot(
@@ -471,7 +484,7 @@ private fun FullscreenControls(
                     .weight(1f)
                     .padding(horizontal = 8.dp),
             )
-            if (onOpenTracks != null) {
+            if (onOpenTracks != null && state.status != VideoStatus.Error) {
                 IconButton(onClick = onOpenTracks) {
                     Icon(
                         imageVector = Icons.Rounded.Subtitles,

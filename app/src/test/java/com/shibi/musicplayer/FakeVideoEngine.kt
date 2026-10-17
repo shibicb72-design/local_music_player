@@ -7,7 +7,12 @@ import android.graphics.Paint
 import android.graphics.Shader
 import android.view.View
 import com.shibi.musicplayer.domain.AspectMode
+import com.shibi.musicplayer.video.EngineOptions
+import com.shibi.musicplayer.video.ExternalTrackKind
+import com.shibi.musicplayer.video.RawTrackDescription
+import com.shibi.musicplayer.video.TrackSnapshot
 import com.shibi.musicplayer.video.VideoEngine
+import java.io.Closeable
 import com.shibi.musicplayer.video.VideoEngineEvent
 import com.shibi.musicplayer.video.VideoEngineState
 import com.shibi.musicplayer.video.VideoStateReducer
@@ -21,12 +26,27 @@ import kotlinx.coroutines.flow.StateFlow
 class FakeVideoEngine(
     initial: VideoEngineState = VideoEngineState(),
     private val frameAspect: Float = 16f / 9f,
+    initialTracks: TrackSnapshot = TrackSnapshot(),
 ) : VideoEngine {
 
     private val _state = MutableStateFlow(initial)
     override val state: StateFlow<VideoEngineState> = _state
 
+    /** Tests set the tracks the "file" has; the track calls below update them like libVLC. */
+    val trackState = MutableStateFlow(initialTracks)
+    override val tracks: StateFlow<TrackSnapshot> = trackState
+
     val calls = mutableListOf<String>()
+
+    /** Kept apart from [calls], so the play/pause/seek sequences stay exact. */
+    val configured = mutableListOf<EngineOptions>()
+
+    /** False makes [addExternalTrack] refuse, like libVLC's `addSlave` returning false. */
+    var acceptExternal = true
+
+    /** False adds the file without a new track appearing (libVLC could not read it). */
+    var externalAddsTrack = true
+    private var nextExternalId = 100
     var released = false
         private set
     var attachedView: View? = null
@@ -56,6 +76,49 @@ class FakeVideoEngine(
 
     override fun setAspectMode(mode: AspectMode) {
         calls += "aspect:${mode.name}"
+    }
+
+    override fun configure(options: EngineOptions) {
+        configured += options
+    }
+
+    override fun selectAudioTrack(id: Int) {
+        calls += "audio:$id"
+        trackState.value = trackState.value.copy(selectedAudioId = id)
+    }
+
+    override fun selectSubtitleTrack(id: Int) {
+        calls += "subtitle:$id"
+        trackState.value = trackState.value.copy(selectedSubtitleId = id)
+    }
+
+    override fun setAudioDelay(delayMs: Long) {
+        calls += "audioDelay:$delayMs"
+        trackState.value = trackState.value.copy(audioDelayMs = delayMs)
+    }
+
+    override fun setSubtitleDelay(delayMs: Long) {
+        calls += "subtitleDelay:$delayMs"
+        trackState.value = trackState.value.copy(subtitleDelayMs = delayMs)
+    }
+
+    override fun addExternalTrack(
+        kind: ExternalTrackKind,
+        location: String,
+        name: String,
+        resource: Closeable?,
+    ): Boolean {
+        calls += "external:${kind.name}:$location"
+        if (!acceptExternal) return false
+        if (!externalAddsTrack) return true
+        val id = nextExternalId++
+        val added = RawTrackDescription(id, "Track $id")
+        val current = trackState.value
+        trackState.value = when (kind) {
+            ExternalTrackKind.Audio -> current.copy(audio = current.audio + added, selectedAudioId = id)
+            ExternalTrackKind.Subtitle -> current.copy(subtitles = current.subtitles + added, selectedSubtitleId = id)
+        }.copy(externalNames = current.externalNames + (id to name))
+        return true
     }
 
     override fun release() {

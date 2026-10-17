@@ -18,6 +18,7 @@ import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.TouchInjectionScope
@@ -30,7 +31,10 @@ import com.shibi.musicplayer.playback.PlaybackService
 import com.shibi.musicplayer.ui.FullscreenVideoTag
 import com.shibi.musicplayer.ui.GestureChipTag
 import com.shibi.musicplayer.ui.InlineVideoTag
+import com.shibi.musicplayer.ui.TrackSheetTag
 import com.shibi.musicplayer.ui.VideoPaneTag
+import com.shibi.musicplayer.video.RawTrackDescription
+import com.shibi.musicplayer.video.TrackSnapshot
 import com.shibi.musicplayer.video.VideoEngineEvent
 import com.shibi.musicplayer.video.VideoStatus
 import com.shibi.musicplayer.video.VideoViewModel
@@ -214,6 +218,41 @@ class FullscreenNavigationTest {
         fullscreen().performTouchInput { doubleClick(center) }
         settle(500)
         assertEquals("the middle third does not seek", seeks, engine.calls.count { it.startsWith("seek:") })
+    }
+
+    /** V7: the placeholder V6 hid is now the tracks button; the sheet opens over fullscreen. */
+    @Test
+    fun theTracksButtonOpensTheSheetOverFullscreen() {
+        start()
+        playVideo("Beach day")
+        val engine = engines.single()
+        engine.trackState.value = TrackSnapshot(
+            subtitles = listOf(RawTrackDescription(-1, "Disable"), RawTrackDescription(3, "Track 1 - [English]")),
+        )
+        tapFullscreen()
+        assertTagShown(FullscreenVideoTag)
+        tapDescription("Audio and subtitles")
+        assertTagShown(TrackSheetTag)
+        assertTextShown("Load subtitle file…")
+
+        compose.onNodeWithText("Track 1 - [English]").performSemanticsAction(SemanticsActions.OnClick)
+        settle()
+        assertEquals("subtitle:3", engine.calls.last())
+        // The sheet sits over fullscreen; fullscreen is still there under it.
+        assertTagShown(FullscreenVideoTag)
+    }
+
+    @Test
+    fun theFoldedBoxOpensTheSheetToo() {
+        start()
+        playVideo("Beach day")
+        assertTagShown(InlineVideoTag)
+        tapDescription("Audio and subtitles")
+        assertTagShown(TrackSheetTag)
+        // Closing the video takes the sheet with it.
+        videoViewModel().close()
+        settle()
+        assertTagGone(TrackSheetTag)
     }
 
     private fun openPlayingFullscreen() {

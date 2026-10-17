@@ -17,6 +17,7 @@ internal object SectionRoutes {
     const val Settings = "settings"
     const val Backgrounds = "settings/backgrounds"
     const val Licenses = "settings/licenses"
+    const val ErrorLog = "settings/error-log"
     const val Videos = "videos"
 
     /** Reserved for the fullscreen player (V6); it stays under the Videos section. */
@@ -66,7 +67,7 @@ internal object SectionRoutes {
         Favorites -> NavSection.Favorites
         Recent -> NavSection.Recent
         Search -> NavSection.Search
-        Settings, Backgrounds, Licenses -> NavSection.Settings
+        Settings, Backgrounds, Licenses, ErrorLog -> NavSection.Settings
         Videos, VideoFullscreen -> NavSection.Videos
         else -> null
     }

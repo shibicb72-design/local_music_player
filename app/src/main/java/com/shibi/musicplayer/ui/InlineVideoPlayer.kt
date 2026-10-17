@@ -23,6 +23,7 @@ import androidx.compose.material.icons.rounded.Fullscreen
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Replay
+import androidx.compose.material.icons.rounded.Subtitles
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -89,6 +90,8 @@ internal fun InlineVideoPlayer(
     surface: @Composable () -> Unit,
     modifier: Modifier = Modifier,
     onFullscreen: () -> Unit = {},
+    onOpenTracks: (() -> Unit)? = null,
+    holdControls: Boolean = false,
     initialControlsVisible: Boolean = false,
 ) {
     BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
@@ -100,6 +103,8 @@ internal fun InlineVideoPlayer(
             onClose = onClose,
             surface = surface,
             onFullscreen = onFullscreen,
+            onOpenTracks = onOpenTracks,
+            holdControls = holdControls,
             initialControlsVisible = initialControlsVisible,
             modifier = Modifier
                 .fillMaxWidth()
@@ -122,6 +127,10 @@ internal fun VideoPlayerBox(
     surface: @Composable () -> Unit,
     modifier: Modifier = Modifier,
     onFullscreen: () -> Unit = {},
+    /** Null hides the tracks button. */
+    onOpenTracks: (() -> Unit)? = null,
+    /** The tracks sheet is open: the controls stay up behind it. */
+    holdControls: Boolean = false,
     initialControlsVisible: Boolean = false,
 ) {
     ContrastSurface(
@@ -131,8 +140,8 @@ internal fun VideoPlayerBox(
         var controlsVisible by rememberSaveable { mutableStateOf(initialControlsVisible) }
         var touches by remember { mutableIntStateOf(0) }
         val playing = state.status == VideoStatus.Playing
-        LaunchedEffect(controlsVisible, playing, touches) {
-            if (controlsVisible && playing) {
+        LaunchedEffect(controlsVisible, playing, touches, holdControls) {
+            if (controlsVisible && playing && !holdControls) {
                 delay(ControlsAutoHideMs)
                 controlsVisible = false
             }
@@ -176,6 +185,13 @@ internal fun VideoPlayerBox(
                     onInteract = { touches++ },
                     onClose = onClose,
                     onFullscreen = onFullscreen,
+                    onOpenTracks = onOpenTracks?.let { open ->
+                        {
+                            controlsVisible = true
+                            touches++
+                            open()
+                        }
+                    },
                 )
             }
         }
@@ -213,6 +229,7 @@ private fun InlineControls(
     onInteract: () -> Unit,
     onClose: () -> Unit,
     onFullscreen: () -> Unit,
+    onOpenTracks: (() -> Unit)?,
 ) {
     Box(
         modifier = Modifier
@@ -233,6 +250,15 @@ private fun InlineControls(
                 color = OnVideo,
                 modifier = Modifier.weight(1f),
             )
+            if (onOpenTracks != null && state.status != VideoStatus.Error) {
+                IconButton(onClick = onOpenTracks) {
+                    Icon(
+                        imageVector = Icons.Rounded.Subtitles,
+                        contentDescription = stringResource(R.string.video_tracks),
+                        tint = OnVideo,
+                    )
+                }
+            }
             IconButton(onClick = onClose) {
                 Icon(
                     imageVector = Icons.Rounded.Close,

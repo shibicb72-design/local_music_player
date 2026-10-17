@@ -12,15 +12,26 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
 
-/** Fullscreen video preferences: the last aspect mode and the brightness swipe toggle. */
+/**
+ * Video preferences: the last fullscreen aspect mode, the brightness swipe toggle, and the
+ * tracks sheet's subtitle text size and hardware decoding.
+ */
 interface VideoPrefs {
     val aspectMode: Flow<AspectMode>
 
     /** Left-half brightness swipe in fullscreen; on unless the user turns it off. */
     val brightnessSwipe: Flow<Boolean>
 
+    /** SRT and VTT text size; ASS keeps its own styling. */
+    val subtitleTextSize: Flow<SubtitleTextSize>
+
+    /** Auto (hardware first) unless the user turns it off. */
+    val hardwareDecoding: Flow<Boolean>
+
     suspend fun setAspectMode(mode: AspectMode)
     suspend fun setBrightnessSwipe(enabled: Boolean)
+    suspend fun setSubtitleTextSize(size: SubtitleTextSize)
+    suspend fun setHardwareDecoding(enabled: Boolean)
 }
 
 private val Context.videoDataStore: DataStore<Preferences> by preferencesDataStore(name = "video")
@@ -35,6 +46,12 @@ internal class DataStoreVideoPrefs(private val dataStore: DataStore<Preferences>
     override val brightnessSwipe: Flow<Boolean> =
         dataStore.data.map { prefs -> prefs[BrightnessSwipeKey] ?: true }
 
+    override val subtitleTextSize: Flow<SubtitleTextSize> =
+        dataStore.data.map { prefs -> SubtitleTextSize.decode(prefs[SubtitleTextSizeKey]) }
+
+    override val hardwareDecoding: Flow<Boolean> =
+        dataStore.data.map { prefs -> prefs[HardwareDecodingKey] ?: true }
+
     override suspend fun setAspectMode(mode: AspectMode) {
         dataStore.edit { prefs -> prefs[AspectModeKey] = mode.encode() }
     }
@@ -43,9 +60,19 @@ internal class DataStoreVideoPrefs(private val dataStore: DataStore<Preferences>
         dataStore.edit { prefs -> prefs[BrightnessSwipeKey] = enabled }
     }
 
+    override suspend fun setSubtitleTextSize(size: SubtitleTextSize) {
+        dataStore.edit { prefs -> prefs[SubtitleTextSizeKey] = size.encode() }
+    }
+
+    override suspend fun setHardwareDecoding(enabled: Boolean) {
+        dataStore.edit { prefs -> prefs[HardwareDecodingKey] = enabled }
+    }
+
     private companion object {
         val AspectModeKey = stringPreferencesKey("aspect_mode")
         val BrightnessSwipeKey = booleanPreferencesKey("brightness_swipe")
+        val SubtitleTextSizeKey = stringPreferencesKey("subtitle_text_size")
+        val HardwareDecodingKey = booleanPreferencesKey("hardware_decoding")
     }
 }
 
@@ -53,9 +80,13 @@ internal class DataStoreVideoPrefs(private val dataStore: DataStore<Preferences>
 internal class InMemoryVideoPrefs(
     aspect: AspectMode = AspectMode.Default,
     brightness: Boolean = true,
+    textSize: SubtitleTextSize = SubtitleTextSize.Default,
+    hardware: Boolean = true,
 ) : VideoPrefs {
     override val aspectMode = MutableStateFlow(aspect)
     override val brightnessSwipe = MutableStateFlow(brightness)
+    override val subtitleTextSize = MutableStateFlow(textSize)
+    override val hardwareDecoding = MutableStateFlow(hardware)
 
     override suspend fun setAspectMode(mode: AspectMode) {
         aspectMode.value = mode
@@ -63,5 +94,13 @@ internal class InMemoryVideoPrefs(
 
     override suspend fun setBrightnessSwipe(enabled: Boolean) {
         brightnessSwipe.value = enabled
+    }
+
+    override suspend fun setSubtitleTextSize(size: SubtitleTextSize) {
+        subtitleTextSize.value = size
+    }
+
+    override suspend fun setHardwareDecoding(enabled: Boolean) {
+        hardwareDecoding.value = enabled
     }
 }

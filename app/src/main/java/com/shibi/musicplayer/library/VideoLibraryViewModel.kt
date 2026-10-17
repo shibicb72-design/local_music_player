@@ -6,6 +6,9 @@ import android.os.Build
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.shibi.musicplayer.R
+import com.shibi.musicplayer.diagnostics.ErrorLog
+import com.shibi.musicplayer.diagnostics.ErrorLogger
 import com.shibi.musicplayer.domain.Video
 import com.shibi.musicplayer.domain.VideoAccess
 import kotlinx.coroutines.CoroutineDispatcher
@@ -38,11 +41,20 @@ class VideoLibraryViewModel internal constructor(
     application: Application,
     private val repository: VideoRepository,
     private val ioDispatcher: CoroutineDispatcher,
+    private val errorLogger: ErrorLogger = ErrorLogger.None,
 ) : AndroidViewModel(application) {
-    constructor(application: Application) : this(application, VideoRepository(application), Dispatchers.IO)
+    constructor(application: Application) : this(
+        application,
+        VideoRepository(application),
+        Dispatchers.IO,
+        ErrorLog.get(application),
+    )
 
     private val _uiState = MutableStateFlow(VideoLibraryUiState())
     val uiState: StateFlow<VideoLibraryUiState> = _uiState.asStateFlow()
+
+    /** The last scan failure logged; cleared by a scan that works. */
+    private var lastFailure: String? = null
 
     init {
         viewModelScope.launch {
@@ -64,6 +76,20 @@ class VideoLibraryViewModel internal constructor(
             _uiState.update { it.copy(access = access, isLoading = true, hasError = false) }
             val result = withContext(ioDispatcher) {
                 runCatching { repository.loadVideos() }
+            }
+            val failure = result.exceptionOrNull()
+            // The same failure on every MediaStore burst would push useful entries out of the log.
+            val signature = failure?.let { "${it.javaClass.name}: ${it.message}" }
+            val repeated = signature != null && signature == lastFailure
+            lastFailure = signature
+            failure?.takeUnless { repeated }?.let { error ->
+                // The list shows a short message; the cause goes to Settings > Error log.
+                errorLogger.log(
+                    step = "Scan videos (MediaStore query, access $access)",
+                    error = error,
+                    shown = getApplication<Application>().getString(R.string.video_library_error),
+                    media = null,
+                )
             }
             _uiState.update { current ->
                 result.fold(

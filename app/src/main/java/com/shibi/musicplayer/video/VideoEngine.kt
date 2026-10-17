@@ -3,6 +3,7 @@ package com.shibi.musicplayer.video
 import android.content.Context
 import android.view.View
 import com.shibi.musicplayer.domain.AspectMode
+import java.io.Closeable
 import kotlinx.coroutines.flow.StateFlow
 
 enum class VideoStatus { Idle, Buffering, Playing, Paused, Ended, Error }
@@ -25,6 +26,17 @@ data class VideoEngineState(
     /** Display width / height, after the sample aspect ratio and rotation; null until known. */
     val aspect: Float? = null,
     val error: VideoError? = null,
+    /** The exception behind [error], for the error log; never shown on screen. */
+    val failureCause: Throwable? = null,
+)
+
+/** libVLC reports a playback failure as an event with no exception; the log gets this one. */
+class VideoPlaybackException(message: String) : Exception(message)
+
+/** Saved engine settings from the tracks sheet, for every video; a change reopens the open one in place. */
+data class EngineOptions(
+    val hardwareDecoding: Boolean = true,
+    val subtitleTextSize: SubtitleTextSize = SubtitleTextSize.Default,
 )
 
 /**
@@ -35,6 +47,9 @@ data class VideoEngineState(
 interface VideoEngine {
     val state: StateFlow<VideoEngineState>
 
+    /** Audio and subtitle tracks, the selection and the delays; empty until the video starts. */
+    val tracks: StateFlow<TrackSnapshot>
+
     /** Opens a `content://` (or file) URI and starts playing once a view is attached. */
     fun load(uri: String)
     fun play()
@@ -43,6 +58,28 @@ interface VideoEngine {
 
     /** How the picture fills its view; kept across views, so a re-attach keeps it. */
     fun setAspectMode(mode: AspectMode)
+
+    /**
+     * Hardware decoding and subtitle text size. Kept for the next [load]; when a video is
+     * already open and they change, it is reopened at the same position and tracks.
+     */
+    fun configure(options: EngineOptions)
+
+    fun selectAudioTrack(id: Int)
+
+    /** [TrackMapping.DisabledId] turns subtitles off. */
+    fun selectSubtitleTrack(id: Int)
+
+    /** Positive delays play the track later. */
+    fun setAudioDelay(delayMs: Long)
+    fun setSubtitleDelay(delayMs: Long)
+
+    /**
+     * Adds a file to the open video and selects it. [location] is a URI libVLC opens itself
+     * (`file://` or `fd://`); [resource] (the descriptor behind an `fd://`) stays open until
+     * the next [load] or [release]. False if libVLC refused it.
+     */
+    fun addExternalTrack(kind: ExternalTrackKind, location: String, name: String, resource: Closeable?): Boolean
 
     /** Frees the player and its native resources; the engine is unusable afterwards. */
     fun release()
@@ -63,7 +100,7 @@ sealed interface VideoEngineEvent {
     data object Paused : VideoEngineEvent
     data object Stopped : VideoEngineEvent
     data object Ended : VideoEngineEvent
-    data class Failed(val error: VideoError) : VideoEngineEvent
+    data class Failed(val error: VideoError, val cause: Throwable? = null) : VideoEngineEvent
     data class Time(val positionMs: Long) : VideoEngineEvent
     data class Length(val durationMs: Long) : VideoEngineEvent
     data class Size(val width: Int, val height: Int, val aspect: Float?) : VideoEngineEvent
@@ -80,7 +117,7 @@ object VideoStateReducer {
             } else {
                 state
             }
-        VideoEngineEvent.Playing -> state.copy(status = VideoStatus.Playing, error = null)
+        VideoEngineEvent.Playing -> state.copy(status = VideoStatus.Playing, error = null, failureCause = null)
         VideoEngineEvent.Paused ->
             if (state.status == VideoStatus.Ended || state.status == VideoStatus.Error) state
             else state.copy(status = VideoStatus.Paused)
@@ -95,7 +132,11 @@ object VideoStateReducer {
             status = VideoStatus.Ended,
             positionMs = if (state.durationMs > 0L) state.durationMs else state.positionMs,
         )
-        is VideoEngineEvent.Failed -> state.copy(status = VideoStatus.Error, error = event.error)
+        is VideoEngineEvent.Failed -> state.copy(
+            status = VideoStatus.Error,
+            error = event.error,
+            failureCause = event.cause,
+        )
         is VideoEngineEvent.Time -> state.copy(
             positionMs = event.positionMs.coerceIn(0L, state.durationMs.takeIf { it > 0L } ?: Long.MAX_VALUE),
         )
