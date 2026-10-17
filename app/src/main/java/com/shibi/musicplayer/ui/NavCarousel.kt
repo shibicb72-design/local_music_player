@@ -1,25 +1,25 @@
 package com.shibi.musicplayer.ui
 
+import android.provider.Settings
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.exponentialDecay
 import androidx.compose.animation.core.spring
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
@@ -35,6 +35,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -42,25 +43,33 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlurEffect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
@@ -69,17 +78,18 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.shibi.musicplayer.R
 import com.shibi.musicplayer.domain.CarouselMath
+import com.shibi.musicplayer.ui.background.BackgroundChrome
 import com.shibi.musicplayer.ui.background.LocalBackgroundChrome
 import kotlin.math.abs
-import kotlin.math.min
 import kotlin.math.roundToInt
-import kotlin.math.sin
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 
 enum class NavSection(
@@ -117,22 +127,31 @@ internal val TwoPaneCarouselPadding = 16.dp
 /** Space between the mini player and the top of the carousel. */
 internal val MiniPlayerCarouselGap = 8.dp
 
-private val TileCorner = 12.dp
 private val LabelGap = 6.dp
 private val LabelHeight = 18.dp
 private val TopBreathing = 4.dp
 private val BackLift = 6.dp
 private val MinTile = 44.dp
 private val MaxTile = 60.dp
-private val SelectedFill = Color(0xFF6E4EF0)
-private val TileShape = RoundedCornerShape(TileCorner)
-private val CarouselSpring = spring<Float>(
-    dampingRatio = Spring.DampingRatioLowBouncy,
-    stiffness = Spring.StiffnessMedium,
-)
-private val FlingDecay = exponentialDecay<Float>(frictionMultiplier = 1.6f)
+private val MaxBackBlur = 4.dp
+private val LabelParallax = 20.dp
+private val GlowParallax = 6.dp
+private val PillShape = RoundedCornerShape(percent = 50)
 
-private data class CarouselLayout(
+/** Lilac glow under the lens on dark chrome; deep violet comes from `accentText` on light. */
+private val DarkGlow = Color(0xFF8E7BFF)
+
+// Material 3 Expressive motion scheme (androidx ExpressiveMotionTokens).
+/** Default spatial, 0.8 / 380: the ring travels with a small, physical overshoot. */
+private val SpatialSpring = spring<Float>(dampingRatio = 0.8f, stiffness = 380f)
+
+/** Fast spatial, 0.6 / 800: the lens springs back to full size when the ring settles. */
+private val LensSettleSpring = spring<Float>(dampingRatio = 0.6f, stiffness = 800f)
+
+/** Fast effects, 1.0 / 3800: the lens tucks in as soon as a finger lands. */
+private val LensPressSpring = spring<Float>(dampingRatio = 1f, stiffness = 3800f)
+
+internal data class CarouselLayout(
     val centerX: Float,
     val centerY: Float,
     val radius: Float,
@@ -149,23 +168,163 @@ fun NavCarousel(
 ) {
     val math = remember { CarouselMath(NavSection.entries.size) }
     val rotation = remember { Animatable(selected.ordinal.toFloat()) }
+    val energy = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
     val haptics = LocalHapticFeedback.current
     val onSelectState = rememberUpdatedState(onSelect)
+    val reduceMotion = rememberReduceMotion()
     var gestureActive by remember { mutableStateOf(false) }
     var settleGeneration by remember { mutableIntStateOf(0) }
-    val rotationValue = rotation.value
-    val selectedIndex = math.selectedIndex(rotationValue)
-    val label = stringResource(NavSection.entries[selectedIndex].labelRes)
-    val chrome = LocalBackgroundChrome.current
+    // Recomposes on detent changes only, never per frame.
+    val selectedIndex by remember { derivedStateOf { math.selectedIndex(rotation.value) } }
 
     LaunchedEffect(selected) {
         if (gestureActive) return@LaunchedEffect
         val target = math.rotationForIndex(rotation.value, selected.ordinal)
         if (abs(rotation.value - target) > 0.01f) {
-            rotation.animateTo(target, CarouselSpring)
+            if (reduceMotion) rotation.snapTo(target) else rotation.animateTo(target, SpatialSpring)
         }
     }
+
+    // A light tick for every detent the ring passes while the user drives it.
+    LaunchedEffect(math) {
+        snapshotFlow { math.selectedIndex(rotation.value) }
+            .drop(1)
+            .collect {
+                if (gestureActive) haptics.performHapticFeedback(HapticFeedbackType.SegmentFrequentTick)
+            }
+    }
+
+    fun lift() {
+        scope.launch {
+            if (reduceMotion) energy.snapTo(1f) else energy.animateTo(1f, LensPressSpring)
+        }
+    }
+
+    fun settle(target: Float, velocity: Float, generation: Int) {
+        scope.launch {
+            if (reduceMotion) {
+                rotation.snapTo(target)
+            } else {
+                rotation.animateTo(target, SpatialSpring, initialVelocity = velocity)
+            }
+            if (settleGeneration != generation) return@launch
+            haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+            gestureActive = false
+            onSelectState.value(NavSection.entries[math.selectedIndex(target)])
+            if (reduceMotion) energy.snapTo(0f) else energy.animateTo(0f, LensSettleSpring)
+        }
+    }
+
+    fun selectIndex(index: Int) {
+        val generation = ++settleGeneration
+        gestureActive = true
+        lift()
+        scope.launch { rotation.stop() }
+        settle(math.rotationForIndex(rotation.value, index), 0f, generation)
+    }
+
+    NavCarouselContent(
+        rotation = { rotation.value },
+        energy = { energy.value },
+        selectedIndex = selectedIndex,
+        blurBack = !reduceMotion,
+        onSelectIndex = ::selectIndex,
+        modifier = modifier,
+    ) { layoutState ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .zIndex(8f)
+                .pointerInput(math) {
+                    val slop = viewConfiguration.touchSlop
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        val generation = ++settleGeneration
+                        scope.launch { rotation.stop() }
+                        gestureActive = true
+                        var spun = rotation.value
+                        val tracker = VelocityTracker()
+                        tracker.addPosition(down.uptimeMillis, down.position)
+                        var totalX = 0f
+                        var totalY = 0f
+                        var dragging = false
+                        val pointerId = down.id
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            val change = event.changes.firstOrNull { it.id == pointerId } ?: break
+                            if (!change.pressed) {
+                                change.consume()
+                                val currentLayout = layoutState()
+                                if (!dragging) {
+                                    val hit = hitTest(
+                                        x = down.position.x,
+                                        y = down.position.y,
+                                        layout = currentLayout,
+                                        rotation = rotation.value,
+                                        math = math,
+                                    )
+                                    if (hit != null) {
+                                        lift()
+                                        settle(math.rotationForIndex(rotation.value, hit), 0f, generation)
+                                    } else if (settleGeneration == generation) {
+                                        gestureActive = false
+                                    }
+                                } else {
+                                    val velocity = tracker.calculateVelocity().x
+                                    val itemsPerSecond = math.dragItems(velocity, currentLayout.radius)
+                                    val target = math.flingTarget(
+                                        rotation = rotation.value,
+                                        velocity = itemsPerSecond,
+                                        momentum = !reduceMotion,
+                                    )
+                                    settle(target, itemsPerSecond, generation)
+                                }
+                                break
+                            }
+                            val delta = change.positionChange()
+                            totalX += delta.x
+                            totalY += delta.y
+                            tracker.addPosition(change.uptimeMillis, change.position)
+                            if (!dragging && (abs(totalX) > slop || abs(totalY) > slop)) {
+                                dragging = abs(totalX) >= abs(totalY)
+                                if (!dragging) {
+                                    if (settleGeneration == generation) gestureActive = false
+                                    break
+                                }
+                                lift()
+                            }
+                            if (dragging) {
+                                change.consume()
+                                spun += math.dragItems(delta.x, layoutState().radius)
+                                val target = spun
+                                scope.launch { rotation.snapTo(target) }
+                            }
+                        }
+                    }
+                },
+        )
+    }
+}
+
+/**
+ * The ring itself, stateless. Every per-frame value ([rotation], [energy]) is
+ * read in a layout, layer or draw lambda, so spinning never recomposes.
+ * Screenshot tests pose it directly to record a mid-spin filmstrip.
+ */
+@Composable
+internal fun NavCarouselContent(
+    rotation: () -> Float,
+    energy: () -> Float,
+    selectedIndex: Int,
+    blurBack: Boolean,
+    modifier: Modifier = Modifier,
+    onSelectIndex: (Int) -> Unit = {},
+    overlay: @Composable BoxScope.(layout: () -> CarouselLayout) -> Unit = {},
+) {
+    val math = remember { CarouselMath(NavSection.entries.size) }
+    val chrome = LocalBackgroundChrome.current
+    val lens = remember(chrome) { lensColors(chrome) }
 
     Column(
         modifier = modifier
@@ -176,10 +335,7 @@ fun NavCarousel(
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxWidth()
-                .semantics {
-                    role = Role.Tab
-                    contentDescription = label
-                },
+                .selectableGroup(),
         ) {
             val density = LocalDensity.current
             val densityScale = density.density
@@ -188,142 +344,262 @@ fun NavCarousel(
                     .coerceIn(MinTile.toPx(), MaxTile.toPx())
                     .toDp()
             }
+            val bodyHeight = tileSize + TopBreathing + LabelGap + LabelHeight
             val layout = with(density) {
                 val tileRadius = tileSize.toPx() / 2f
                 val labelExtent = (LabelGap + LabelHeight).toPx()
-                val liftPx = BackLift.toPx()
                 val widthPx = constraints.maxWidth.toFloat()
-                val heightPx = (tileSize + TopBreathing + LabelGap + LabelHeight).toPx()
                 CarouselLayout(
                     centerX = widthPx / 2f,
-                    centerY = heightPx - labelExtent - tileRadius,
+                    centerY = bodyHeight.toPx() - labelExtent - tileRadius,
                     radius = widthPx * CarouselMath.RADIUS_FRACTION,
-                    liftPx = liftPx,
+                    liftPx = BackLift.toPx(),
                     tileRadius = tileRadius,
                     labelExtent = labelExtent,
                 )
             }
             val layoutState = rememberUpdatedState(layout)
+            val pillWidth = tileSize * 1.42f
+            val pillHeight = tileSize * 0.86f
+
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(tileSize + TopBreathing + LabelGap + LabelHeight),
+                    .height(bodyHeight),
             ) {
-            Canvas(modifier = Modifier.fillMaxSize().zIndex(0.4f)) {
-                // Floor sits on the front tile, above the label.
-                val floorY = layout.centerY + layout.tileRadius * 0.72f
-                val rx = min(layout.radius * sin(math.stepRadians) * 0.55f, size.width * 0.28f)
-                val ry = 12.dp.toPx()
-                drawOval(
-                    brush = Brush.radialGradient(
-                        0f to Color.White.copy(alpha = 0.28f),
-                        0.42f to SelectedFill.copy(alpha = 0.24f),
-                        1f to Color.Transparent,
-                        center = Offset(layout.centerX, floorY),
-                        radius = rx,
-                    ),
-                    topLeft = Offset(layout.centerX - rx, floorY - ry),
-                    size = Size(rx * 2f, ry * 2f),
+                // Soft light pooled under the lens; drifts against the spin for parallax.
+                Spacer(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .drawBehind {
+                            val turn = rotation()
+                            val drift = (turn - turn.roundToInt()) * -GlowParallax.toPx()
+                            val glowY = layout.centerY + pillHeight.toPx() * 0.42f
+                            val rx = pillWidth.toPx() * 1.15f
+                            val ry = 14.dp.toPx()
+                            val strength = 1f - 0.45f * energy()
+                            val center = Offset(layout.centerX + drift, glowY)
+                            drawOval(
+                                brush = Brush.radialGradient(
+                                    0f to lens.glow.copy(alpha = lens.glow.alpha * strength),
+                                    1f to Color.Transparent,
+                                    center = center,
+                                    radius = rx,
+                                ),
+                                topLeft = Offset(center.x - rx, center.y - ry),
+                                size = Size(rx * 2f, ry * 2f),
+                            )
+                        },
                 )
-            }
 
-            NavSection.entries.forEachIndexed { index, section ->
-                val offset = math.offsetRadians(index, rotationValue)
-                val scale = math.scale(offset)
-                val itemAlpha = math.alpha(offset)
-                if (itemAlpha <= 0.01f) return@forEachIndexed
-                val depth = math.zIndex(offset)
-                val shade = math.shade(offset)
-                val centered = index == selectedIndex
-                val itemLabel = stringResource(section.labelRes)
-                val shiftX = math.translationX(offset, layout.radius)
-                val shiftY = math.translationY(offset, layout.liftPx)
+                // The lens: fixed at the front; icons pass through it and morph.
                 Box(
                     modifier = Modifier
-                        .zIndex(depth + 1f)
                         .offset {
                             IntOffset(
-                                (layout.centerX - layout.tileRadius).roundToInt(),
-                                (layout.centerY - layout.tileRadius).roundToInt(),
+                                (layout.centerX - pillWidth.toPx() / 2f).roundToInt(),
+                                (layout.centerY - pillHeight.toPx() / 2f).roundToInt(),
                             )
                         }
-                        .size(tileSize)
+                        .size(width = pillWidth, height = pillHeight)
                         .graphicsLayer {
-                            translationX = shiftX
-                            translationY = shiftY
-                            scaleX = scale
-                            scaleY = scale
-                            alpha = itemAlpha
-                            rotationY = math.rotationYDegrees(offset)
-                            cameraDistance = 12f * densityScale
-                            transformOrigin = TransformOrigin.Center
+                            val e = energy()
+                            scaleX = 1f - 0.08f * e
+                            scaleY = 1f - 0.06f * e
+                            shadowElevation = (10f - 5f * e) * densityScale
+                            shape = PillShape
+                            clip = true
+                            ambientShadowColor = lens.ambient
+                            spotShadowColor = lens.spot
                         }
-                        .semantics {
-                            role = Role.Tab
-                            this.selected = centered
-                            contentDescription = itemLabel
-                            onClick {
-                                val generation = ++settleGeneration
-                                scope.launch {
-                                    gestureActive = true
-                                    rotation.stop()
-                                    val target = math.rotationForIndex(rotation.value, index)
-                                    rotation.animateTo(target, CarouselSpring)
-                                    if (settleGeneration == generation) {
-                                        haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
-                                        gestureActive = false
-                                        onSelectState.value(section)
-                                    }
-                                }
-                                true
-                            }
-                        },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .shadow(
-                                elevation = if (centered) 16.dp else 6.dp,
-                                shape = TileShape,
-                                ambientColor = Color.Black.copy(alpha = 0.55f),
-                                spotColor = if (centered) {
-                                    SelectedFill.copy(alpha = 0.45f)
-                                } else {
-                                    Color.Black.copy(alpha = 0.40f)
-                                },
-                            )
-                            .clip(TileShape)
-                            .background(if (centered) SelectedFill else chrome.carouselTile)
-                            .border(
-                                width = 1.dp,
-                                color = if (centered) {
-                                    Color.White.copy(alpha = 0.55f)
-                                } else {
-                                    chrome.carouselTileBorder
-                                },
-                                shape = TileShape,
-                            ),
-                    ) {
-                        if (!centered && shade > 0.02f) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(Color.Black.copy(alpha = shade)),
-                            )
-                        }
+                        .background(lens.fill)
+                        .border(width = 1.dp, brush = lens.rim, shape = PillShape),
+                )
+
+                CarouselRing(
+                    math = math,
+                    rotation = rotation,
+                    layout = layout,
+                    tileSize = tileSize,
+                    selectedIndex = selectedIndex,
+                    blurBack = blurBack,
+                    chrome = chrome,
+                    lensIcon = lens.icon,
+                    cameraDistancePx = 12f * densityScale,
+                    onSelectIndex = onSelectIndex,
+                )
+
+                CarouselLabels(
+                    math = math,
+                    rotation = rotation,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .zIndex(7f),
+                )
+
+                overlay { layoutState.value }
+            }
+        }
+        Box(modifier = Modifier.height(NavCarouselBottomPadding))
+    }
+}
+
+/**
+ * Eight icons on the ring. Placement, depth order, scale, tilt, dim and blur
+ * all come from [rotation] inside the placement block, so a spin only re-places
+ * and redraws layers.
+ */
+@Composable
+private fun CarouselRing(
+    math: CarouselMath,
+    rotation: () -> Float,
+    layout: CarouselLayout,
+    tileSize: Dp,
+    selectedIndex: Int,
+    blurBack: Boolean,
+    chrome: BackgroundChrome,
+    lensIcon: Color,
+    cameraDistancePx: Float,
+    onSelectIndex: (Int) -> Unit,
+) {
+    val density = LocalDensity.current
+    val maxBlurPx = with(density) { MaxBackBlur.toPx() }
+    Layout(
+        modifier = Modifier.fillMaxSize().zIndex(2f),
+        content = {
+            NavSection.entries.forEachIndexed { index, section ->
+                RingItem(
+                    section = section,
+                    frontness = { math.frontness(math.offsetRadians(index, rotation())) },
+                    selected = index == selectedIndex,
+                    tileSize = tileSize,
+                    chrome = chrome,
+                    lensIcon = lensIcon,
+                    onClick = { onSelectIndex(index) },
+                )
+            }
+        },
+    ) { measurables, constraints ->
+        val placeables = measurables.map { it.measure(constraints.copy(minWidth = 0, minHeight = 0)) }
+        layout(constraints.maxWidth, constraints.maxHeight) {
+            val turn = rotation()
+            placeables.forEachIndexed { index, placeable ->
+                val offset = math.offsetRadians(index, turn)
+                val x = (layout.centerX - placeable.width / 2f).roundToInt()
+                val y = (layout.centerY - placeable.height / 2f).roundToInt()
+                placeable.placeWithLayer(x, y, zIndex = math.zIndex(offset) + 1f) {
+                    val itemAlpha = math.alpha(offset)
+                    val scale = math.scale(offset)
+                    translationX = math.translationX(offset, layout.radius)
+                    translationY = math.translationY(offset, layout.liftPx)
+                    scaleX = scale
+                    scaleY = scale
+                    alpha = itemAlpha
+                    rotationY = math.rotationYDegrees(offset)
+                    cameraDistance = cameraDistancePx
+                    transformOrigin = TransformOrigin.Center
+                    val blur = if (blurBack) math.blurFraction(offset) * maxBlurPx else 0f
+                    renderEffect = if (blur > 0.25f && itemAlpha > 0f) {
+                        BlurEffect(blur, blur, TileMode.Decal)
+                    } else {
+                        null
                     }
-                    Icon(
-                        imageVector = section.icon,
-                        contentDescription = null,
-                        tint = if (centered) Color.White else chrome.carouselIcon,
-                        modifier = Modifier.size(tileSize * 0.38f),
-                    )
                 }
             }
+        }
+    }
+}
 
+@Composable
+private fun RingItem(
+    section: NavSection,
+    frontness: () -> Float,
+    selected: Boolean,
+    tileSize: Dp,
+    chrome: BackgroundChrome,
+    lensIcon: Color,
+    onClick: () -> Unit,
+) {
+    val label = stringResource(section.labelRes)
+    val iconSize = tileSize * 0.40f
+    Box(
+        modifier = Modifier
+            .size(tileSize)
+            .semantics {
+                role = Role.Tab
+                this.selected = selected
+                contentDescription = label
+                onClick {
+                    onClick()
+                    true
+                }
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        // A quiet glass bead that dissolves into the lens as it reaches the front.
+        Spacer(
+            modifier = Modifier
+                .size(tileSize * 0.80f)
+                .drawBehind {
+                    val away = 1f - frontness()
+                    if (away <= 0.01f) return@drawBehind
+                    drawCircle(chrome.carouselTile.copy(alpha = chrome.carouselTile.alpha * away))
+                    drawCircle(
+                        color = chrome.carouselTileBorder.copy(
+                            alpha = chrome.carouselTileBorder.alpha * away,
+                        ),
+                        radius = size.minDimension / 2f - 0.5.dp.toPx(),
+                        style = Stroke(width = 1.dp.toPx()),
+                    )
+                },
+        )
+        // Icon morph: the resting tint crossfades into the lens tint and grows a touch.
+        Icon(
+            imageVector = section.icon,
+            contentDescription = null,
+            tint = chrome.carouselIcon,
+            modifier = Modifier
+                .size(iconSize)
+                .graphicsLayer {
+                    val f = frontness()
+                    alpha = 1f - f
+                    scaleX = 1f + 0.14f * f
+                    scaleY = 1f + 0.14f * f
+                },
+        )
+        Icon(
+            imageVector = section.icon,
+            contentDescription = null,
+            tint = lensIcon,
+            modifier = Modifier
+                .size(iconSize)
+                .graphicsLayer {
+                    val f = frontness()
+                    alpha = f
+                    scaleX = 1f + 0.14f * f
+                    scaleY = 1f + 0.14f * f
+                },
+        )
+    }
+}
+
+/** All eight labels stacked; each fades and slides with its own item. */
+@Composable
+private fun CarouselLabels(
+    math: CarouselMath,
+    rotation: () -> Float,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .width(160.dp)
+            .height(LabelHeight)
+            .clearAndSetSemantics {},
+        contentAlignment = Alignment.Center,
+    ) {
+        NavSection.entries.forEachIndexed { index, section ->
             Text(
-                text = label,
+                text = stringResource(section.labelRes),
                 fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onBackground,
@@ -332,101 +608,74 @@ fun NavCarousel(
                 overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center,
                 modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .zIndex(7f)
-                    .width(160.dp)
-                    .height(LabelHeight),
-            )
-
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .zIndex(8f)
-                    .pointerInput(math) {
-                        val slop = viewConfiguration.touchSlop
-                        awaitEachGesture {
-                            val down = awaitFirstDown(requireUnconsumed = false)
-                            val generation = ++settleGeneration
-                            scope.launch { rotation.stop() }
-                            gestureActive = true
-                            var spun = rotation.value
-                            val tracker = VelocityTracker()
-                            tracker.addPosition(down.uptimeMillis, down.position)
-                            var totalX = 0f
-                            var totalY = 0f
-                            var dragging = false
-                            val pointerId = down.id
-                            while (true) {
-                                val event = awaitPointerEvent()
-                                val change = event.changes.firstOrNull { it.id == pointerId } ?: break
-                                if (!change.pressed) {
-                                    change.consume()
-                                    val currentLayout = layoutState.value
-                                    if (!dragging) {
-                                        val hit = hitTest(
-                                            x = down.position.x,
-                                            y = down.position.y,
-                                            layout = currentLayout,
-                                            rotation = rotation.value,
-                                            math = math,
-                                        )
-                                        if (hit != null) {
-                                            scope.launch {
-                                                val target = math.rotationForIndex(rotation.value, hit)
-                                                rotation.animateTo(target, CarouselSpring)
-                                                if (settleGeneration == generation) {
-                                                    haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
-                                                    gestureActive = false
-                                                    onSelectState.value(NavSection.entries[hit])
-                                                }
-                                            }
-                                        } else if (settleGeneration == generation) {
-                                            gestureActive = false
-                                        }
-                                    } else {
-                                        val velocity = tracker.calculateVelocity().x
-                                        val itemsPerSecond = math.dragItems(velocity, currentLayout.radius)
-                                        scope.launch {
-                                            rotation.animateDecay(itemsPerSecond, FlingDecay)
-                                            val target = math.snapTarget(rotation.value)
-                                            if (abs(rotation.value - target) > 0.001f) {
-                                                rotation.animateTo(target, CarouselSpring)
-                                            }
-                                            if (settleGeneration == generation) {
-                                                haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
-                                                gestureActive = false
-                                                onSelectState.value(
-                                                    NavSection.entries[math.selectedIndex(rotation.value)],
-                                                )
-                                            }
-                                        }
-                                    }
-                                    break
-                                }
-                                val delta = change.positionChange()
-                                totalX += delta.x
-                                totalY += delta.y
-                                tracker.addPosition(change.uptimeMillis, change.position)
-                                if (!dragging && (abs(totalX) > slop || abs(totalY) > slop)) {
-                                    dragging = abs(totalX) >= abs(totalY)
-                                    if (!dragging) {
-                                        if (settleGeneration == generation) gestureActive = false
-                                        break
-                                    }
-                                }
-                                if (dragging) {
-                                    change.consume()
-                                    spun += math.dragItems(delta.x, layoutState.value.radius)
-                                    val target = spun
-                                    scope.launch { rotation.snapTo(target) }
-                                }
-                            }
-                        }
+                    .fillMaxWidth()
+                    .graphicsLayer {
+                        val offset = math.offsetRadians(index, rotation())
+                        alpha = math.labelAlpha(offset)
+                        translationX = offset / math.stepRadians * LabelParallax.toPx()
                     },
             )
-            }
         }
-        Box(modifier = Modifier.height(NavCarouselBottomPadding))
+    }
+}
+
+private class LensColors(
+    val fill: Brush,
+    val rim: Brush,
+    val icon: Color,
+    val glow: Color,
+    val spot: Color,
+    val ambient: Color,
+)
+
+private fun lensColors(chrome: BackgroundChrome): LensColors {
+    // Opaque glass: tints are composited over the page so the soft elevation
+    // shadow never shows through the lens as a dark slab.
+    val page = chrome.pageFill.copy(alpha = 1f)
+    return if (chrome.isLight) {
+        LensColors(
+            fill = Brush.verticalGradient(
+                0f to Color.White,
+                1f to Color.White.copy(alpha = 0.84f).compositeOver(page),
+            ),
+            rim = Brush.verticalGradient(
+                0f to Color.White,
+                1f to chrome.accentText.copy(alpha = 0.16f),
+            ),
+            icon = chrome.accentText,
+            glow = chrome.accentText.copy(alpha = 0.22f),
+            spot = chrome.accentText.copy(alpha = 0.38f),
+            ambient = Color.Black.copy(alpha = 0.18f),
+        )
+    } else {
+        LensColors(
+            fill = Brush.verticalGradient(
+                0f to Color.White.copy(alpha = 0.20f).compositeOver(page),
+                1f to Color.White.copy(alpha = 0.08f).compositeOver(page),
+            ),
+            rim = Brush.verticalGradient(
+                0f to Color.White.copy(alpha = 0.50f),
+                1f to Color.White.copy(alpha = 0.06f),
+            ),
+            icon = Color.White,
+            glow = DarkGlow.copy(alpha = 0.36f),
+            spot = DarkGlow.copy(alpha = 0.60f),
+            ambient = Color.Black.copy(alpha = 0.50f),
+        )
+    }
+}
+
+/** True when the system "Remove animations" setting (animator scale 0) is on. */
+@Composable
+private fun rememberReduceMotion(): Boolean {
+    if (LocalInspectionMode.current) return false
+    val context = LocalContext.current
+    return remember(context) {
+        Settings.Global.getFloat(
+            context.contentResolver,
+            Settings.Global.ANIMATOR_DURATION_SCALE,
+            1f,
+        ) == 0f
     }
 }
 

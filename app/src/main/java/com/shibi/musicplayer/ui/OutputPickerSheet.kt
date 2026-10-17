@@ -114,21 +114,24 @@ internal fun OutputPickerContent(
     selectedId: Int?,
     onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier,
+    inSheet: Boolean = true,
 ) {
     val effective = effectiveOutput(outputs, selectedId)
     val scheme = MaterialTheme.colorScheme
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .navigationBarsPadding()
-            .padding(horizontal = 16.dp)
-            .padding(top = 8.dp, bottom = 24.dp),
+            .then(if (inSheet) Modifier.navigationBarsPadding() else Modifier)
+            .padding(horizontal = if (inSheet) 16.dp else 8.dp)
+            .padding(top = 8.dp, bottom = if (inSheet) 24.dp else 8.dp),
     ) {
-        Text(
-            text = stringResource(R.string.play_on),
-            style = MaterialTheme.typography.titleLarge,
-            modifier = Modifier.padding(start = 8.dp, bottom = 12.dp),
-        )
+        if (inSheet) {
+            Text(
+                text = stringResource(R.string.play_on),
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.padding(start = 8.dp, bottom = 12.dp),
+            )
+        }
         outputs.forEachIndexed { index, output ->
             val selected = output.id == effective?.id
             Row(
@@ -179,7 +182,7 @@ internal fun OutputPickerContent(
                     Icon(
                         imageVector = Icons.Rounded.CheckCircle,
                         contentDescription = null,
-                        tint = OutputAccent,
+                        tint = LocalBackgroundChrome.current.accentText,
                     )
                 }
             }
@@ -187,7 +190,50 @@ internal fun OutputPickerContent(
                 Spacer(Modifier.height(8.dp))
             }
         }
+        if (AudioOutputs.onlyThisPhone(outputs)) {
+            OnlyThisPhoneHint(modifier = Modifier.padding(top = if (outputs.isEmpty()) 0.dp else 12.dp))
+        }
         Spacer(Modifier.height(8.dp))
+    }
+}
+
+/** Friendly empty state when the phone is the only place music can play. */
+@Composable
+private fun OnlyThisPhoneHint(modifier: Modifier = Modifier) {
+    val scheme = MaterialTheme.colorScheme
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .background(scheme.onSurface.copy(alpha = 0.08f), CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Bluetooth,
+                contentDescription = null,
+                tint = scheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp),
+            )
+        }
+        Spacer(Modifier.width(14.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = stringResource(R.string.devices_only_phone),
+                style = MaterialTheme.typography.titleSmall,
+                color = scheme.onSurface,
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = stringResource(R.string.devices_only_phone_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = scheme.onSurfaceVariant,
+            )
+        }
     }
 }
 

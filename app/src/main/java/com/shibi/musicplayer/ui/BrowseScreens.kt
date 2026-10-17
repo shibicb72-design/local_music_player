@@ -1,6 +1,8 @@
 package com.shibi.musicplayer.ui
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -49,6 +51,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.shibi.musicplayer.R
+import com.shibi.musicplayer.domain.AudioOutput
 import com.shibi.musicplayer.domain.LibrarySearch
 import com.shibi.musicplayer.domain.Track
 import com.shibi.musicplayer.playback.PlayerUiState
@@ -113,6 +116,45 @@ internal fun FavoritesContent(
                 emptyMessage = stringResource(R.string.favorites_empty),
                 modifier = Modifier.weight(1f),
             )
+        }
+    }
+}
+
+/** Devices as a real destination, so the carousel can rest on it. */
+@Composable
+internal fun DevicesScreen(
+    outputs: List<AudioOutput>,
+    selectedId: Int?,
+    onSelect: (Int) -> Unit,
+    contentBottomPadding: Dp,
+    modifier: Modifier = Modifier,
+) {
+    SectionFrame(
+        title = stringResource(R.string.devices_title),
+        subtitle = stringResource(R.string.devices_subtitle),
+        modifier = modifier,
+    ) {
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(bottom = contentBottomPadding),
+        ) {
+            ContrastSurface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp),
+                shape = MaterialTheme.shapes.large,
+                color = MaterialTheme.colorScheme.surfaceContainer,
+            ) {
+                OutputPickerContent(
+                    outputs = outputs,
+                    selectedId = selectedId,
+                    onSelect = onSelect,
+                    inSheet = false,
+                )
+            }
         }
     }
 }

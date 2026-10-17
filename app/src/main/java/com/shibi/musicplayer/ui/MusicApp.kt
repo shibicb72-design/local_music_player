@@ -37,6 +37,7 @@ import androidx.navigation.navArgument
 import com.shibi.musicplayer.R
 import com.shibi.musicplayer.background.BackgroundViewModel
 import com.shibi.musicplayer.domain.AppBackground
+import com.shibi.musicplayer.domain.AudioOutput
 import com.shibi.musicplayer.domain.ShuffleContext
 import com.shibi.musicplayer.domain.Track
 import com.shibi.musicplayer.library.LibraryViewModel
@@ -48,15 +49,16 @@ import com.shibi.musicplayer.ui.background.BackgroundPickerScreen
 import com.shibi.musicplayer.ui.background.backgroundTitleRes
 import com.shibi.musicplayer.ui.background.titleId
 
-private const val SongsRoute = "songs"
-private const val PlaylistsRoute = "playlists"
-private const val PlayerRoute = "player"
-private const val PlaylistDetailRoute = "playlist/{playlistId}"
-private const val FavoritesRoute = "favorites"
-private const val RecentRoute = "recent"
-private const val SearchRoute = "search"
-private const val SettingsRoute = "settings"
-private const val BackgroundsRoute = "settings/backgrounds"
+private const val SongsRoute = SectionRoutes.Songs
+private const val PlaylistsRoute = SectionRoutes.Playlists
+private const val PlayerRoute = SectionRoutes.Player
+private const val PlaylistDetailRoute = SectionRoutes.PlaylistDetail
+private const val DevicesRoute = SectionRoutes.Devices
+private const val FavoritesRoute = SectionRoutes.Favorites
+private const val RecentRoute = SectionRoutes.Recent
+private const val SearchRoute = SectionRoutes.Search
+private const val SettingsRoute = SectionRoutes.Settings
+private const val BackgroundsRoute = SectionRoutes.Backgrounds
 private const val PlaylistIdArg = "playlistId"
 private val TwoPaneBreakpoint = 600.dp
 
@@ -95,8 +97,7 @@ fun MusicApp(
     val outputs by rememberAudioOutputs()
 
     LaunchedEffect(route) {
-        if (showDevices) return@LaunchedEffect
-        val mapped = sectionForRoute(route) ?: return@LaunchedEffect
+        val mapped = SectionRoutes.sectionFor(route) ?: return@LaunchedEffect
         if (mapped != section) section = mapped
     }
 
@@ -142,7 +143,9 @@ fun MusicApp(
                 NavSection.NowPlaying -> {
                     if (!wide && route != PlayerRoute) navController.openPlayer()
                 }
-                NavSection.Devices -> showDevices = true
+                NavSection.Devices -> {
+                    if (route != DevicesRoute) navController.openSection(DevicesRoute)
+                }
                 NavSection.Favorites -> {
                     if (route != FavoritesRoute) navController.openSection(FavoritesRoute)
                 }
@@ -235,6 +238,7 @@ fun MusicApp(
                     wide = false,
                     contentBottomPadding = bottomPadding,
                     activeOutputId = activeOutputId,
+                    outputs = outputs,
                     onPlayQueue = { tracks, startId, context -> playQueue(tracks, startId, context) },
                     onOpenPlayer = {
                         section = NavSection.NowPlaying
@@ -276,6 +280,7 @@ fun MusicApp(
                         wide = true,
                         contentBottomPadding = SongListBottomPadding,
                         activeOutputId = activeOutputId,
+                        outputs = outputs,
                         onPlayQueue = { tracks, startId, context -> playQueue(tracks, startId, context) },
                         onOpenPlayer = {},
                         onAddToPlaylist = { pendingTrack = it },
@@ -323,6 +328,7 @@ fun MusicApp(
                         wide = true,
                         contentBottomPadding = SongListBottomPadding,
                         activeOutputId = activeOutputId,
+                        outputs = outputs,
                         onPlayQueue = { tracks, startId, context -> playQueue(tracks, startId, context) },
                         onOpenPlayer = {},
                         onAddToPlaylist = { pendingTrack = it },
@@ -355,11 +361,8 @@ fun MusicApp(
             outputs = outputs,
             selectedId = playbackRoute.activeDeviceId,
             onSelect = { deviceId -> playerViewModel.setOutputDevice(deviceId) },
-            onDismiss = {
-                showDevices = false
-                section = sectionForRoute(navController.currentDestination?.route)
-                    ?: NavSection.Songs
-            },
+            // The sheet is only the mini player's shortcut; it never owns the selection.
+            onDismiss = { showDevices = false },
         )
     }
     pendingTrack?.let { track ->
@@ -403,6 +406,7 @@ private fun AppNavHost(
     wide: Boolean,
     contentBottomPadding: Dp,
     activeOutputId: Int?,
+    outputs: List<AudioOutput>,
     onPlayQueue: (List<Track>, Long, ShuffleContext) -> Unit,
     onOpenPlayer: () -> Unit,
     onAddToPlaylist: (Track) -> Unit,
@@ -460,6 +464,15 @@ private fun AppNavHost(
                         onPlayQueue(shuffled, it.id, ShuffleContext.PLAYLIST)
                     }
                 },
+                contentBottomPadding = contentBottomPadding,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+        composable(DevicesRoute) {
+            DevicesScreen(
+                outputs = outputs,
+                selectedId = activeOutputId,
+                onSelect = playerViewModel::setOutputDevice,
                 contentBottomPadding = contentBottomPadding,
                 modifier = Modifier.fillMaxSize(),
             )
@@ -549,19 +562,6 @@ private fun AppNavHost(
             }
         }
     }
-}
-
-private fun sectionForRoute(route: String?): NavSection? = when (route) {
-    SongsRoute -> NavSection.Songs
-    PlaylistsRoute -> NavSection.Playlists
-    PlayerRoute -> NavSection.NowPlaying
-    PlaylistDetailRoute -> NavSection.Playlists
-    FavoritesRoute -> NavSection.Favorites
-    RecentRoute -> NavSection.Recent
-    SearchRoute -> NavSection.Search
-    SettingsRoute -> NavSection.Settings
-    BackgroundsRoute -> NavSection.Settings
-    else -> null
 }
 
 private fun NavHostController.openSection(route: String) {

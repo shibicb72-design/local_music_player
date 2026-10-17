@@ -20,6 +20,10 @@ data class AudioOutput(
 )
 
 object AudioOutputs {
+    /** True when there is nothing to choose: no outputs, or only the phone itself. */
+    fun onlyThisPhone(outputs: List<AudioOutput>): Boolean =
+        outputs.none { it.kind != OutputKind.PHONE_SPEAKER }
+
     const val TYPE_BUILTIN_EARPIECE = 1
     const val TYPE_BUILTIN_SPEAKER = 2
     const val TYPE_WIRED_HEADSET = 3
