@@ -168,6 +168,11 @@ class VideoViewModel internal constructor(
     private val _uiState = MutableStateFlow(VideoUiState())
     val uiState: StateFlow<VideoUiState> = _uiState.asStateFlow()
 
+    private val _inPip = MutableStateFlow(false)
+
+    /** The activity is in picture-in-picture: the UI shows only the video. */
+    val inPip: StateFlow<Boolean> = _inPip.asStateFlow()
+
     private var stateJob: Job? = null
     private var pausedForTransientLoss = false
 
@@ -281,6 +286,9 @@ class VideoViewModel internal constructor(
         val playing = status == VideoStatus.Playing || status == VideoStatus.Buffering
         when (BackgroundPolicy.decide(event, playing)) {
             BackgroundAction.Pause -> pause()
+            // onStop only arrives here with a playing video when picture-in-picture did not
+            // happen (not supported, or refused), so fall back to pausing.
+            BackgroundAction.EnterPip -> pause()
             // Locked, or picking a file: still a save point, in case the process goes.
             BackgroundAction.KeepAudio, BackgroundAction.None -> checkpoint()
         }
@@ -380,8 +388,29 @@ class VideoViewModel internal constructor(
         if (status == VideoStatus.Playing || status == VideoStatus.Buffering) pause() else play()
     }
 
+    /** The activity entered or left picture-in-picture; the UI shows only the video while in it. */
+    fun setInPip(on: Boolean) {
+        _inPip.value = on
+    }
+
     fun seekTo(positionMs: Long) {
         _engine.value?.seekTo(positionMs)
+    }
+
+    /**
+     * One picture-in-picture control tap: [deltaMs] later (positive) or earlier (negative),
+     * kept inside the video. Does nothing when no video is open.
+     */
+    fun seekBy(deltaMs: Long) {
+        val state = _uiState.value
+        if (state.video == null) return
+        val target = state.positionMs + deltaMs
+        val clamped = if (state.durationMs > 0L) {
+            target.coerceIn(0L, state.durationMs)
+        } else {
+            target.coerceAtLeast(0L)
+        }
+        seekTo(clamped)
     }
 
     /** The chip's Start over: back to 0, and the saved place is cleared. */
@@ -593,6 +622,7 @@ class VideoViewModel internal constructor(
         val where = when (background) {
             BackgroundEvent.ScreenOff -> "${surface.label}, screen locked"
             BackgroundEvent.LeftApp -> "${surface.label}, app in background"
+            BackgroundEvent.PipDismissed -> "${surface.label}, picture-in-picture closed"
             BackgroundEvent.PickingFile -> "${surface.label}, file picker open"
             null -> surface.label
         }

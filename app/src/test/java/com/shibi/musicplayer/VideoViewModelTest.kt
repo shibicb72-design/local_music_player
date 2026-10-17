@@ -297,6 +297,27 @@ class VideoViewModelTest {
     }
 
     @Test
+    fun seekByMovesThePositionAndStaysInsideTheVideo() {
+        viewModel.open(beach)
+        val engine = engines.single()
+        engine.emit(VideoEngineEvent.Playing)
+        engine.emit(VideoEngineEvent.Time(60_000L))
+        idle()
+
+        // Backwards past the start clamps to 0.
+        viewModel.seekBy(-70_000L)
+        idle()
+        assertEquals("seek:0", engine.calls.last())
+        assertEquals(0L, viewModel.uiState.value.positionMs)
+
+        // Forwards past the end clamps to the duration.
+        viewModel.seekBy(800_000L)
+        idle()
+        assertEquals("seek:754000", engine.calls.last())
+        assertEquals(754_000L, viewModel.uiState.value.positionMs)
+    }
+
+    @Test
     fun theSameVideoAgainResumesInsteadOfReloading() {
         viewModel.open(beach)
         engines.single().emit(VideoEngineEvent.Paused)
