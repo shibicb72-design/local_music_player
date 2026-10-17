@@ -4,14 +4,17 @@ import android.app.Application
 import androidx.annotation.VisibleForTesting
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.shibi.musicplayer.domain.AspectMode
 import com.shibi.musicplayer.domain.InlineVideoBox
 import com.shibi.musicplayer.domain.Video
 import com.shibi.musicplayer.domain.VideoAudioEvent
 import com.shibi.musicplayer.domain.VideoFocusPolicy
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -50,6 +53,7 @@ class VideoViewModel internal constructor(
     private val engineFactory: () -> VideoEngine,
     private val audioFocus: VideoAudioFocus,
     private val progress: VideoProgressHooks,
+    private val prefs: VideoPrefs = InMemoryVideoPrefs(),
 ) : AndroidViewModel(application) {
 
     constructor(application: Application) : this(
@@ -57,6 +61,7 @@ class VideoViewModel internal constructor(
         engineFactory = { testEngineFactory?.invoke() ?: VlcVideoEngine(application) },
         audioFocus = AndroidVideoAudioFocus(application),
         progress = VideoProgressHooks.None,
+        prefs = DataStoreVideoPrefs(application),
     )
 
     internal companion object {
@@ -80,6 +85,23 @@ class VideoViewModel internal constructor(
     private var stateJob: Job? = null
     private var pausedForTransientLoss = false
 
+    /** The last aspect mode picked in fullscreen (saved); the box and the pane always fit. */
+    val aspectMode: StateFlow<AspectMode> =
+        prefs.aspectMode.stateIn(viewModelScope, SharingStarted.Eagerly, AspectMode.Default)
+
+    /** Settings: the left-half brightness swipe in fullscreen, on by default. */
+    val brightnessSwipe: StateFlow<Boolean> =
+        prefs.brightnessSwipe.stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
+    private var fullscreen = false
+
+    init {
+        // The saved mode can arrive after fullscreen opened; apply it once it does.
+        viewModelScope.launch {
+            aspectMode.collect { if (fullscreen) applyAspect() }
+        }
+    }
+
     /** Plays [video] at once; the same video again just resumes it. */
     fun open(video: Video) {
         val current = _uiState.value
@@ -89,7 +111,11 @@ class VideoViewModel internal constructor(
         }
         checkpoint()
         stateJob?.cancel()
-        val engine = _engine.value ?: engineFactory().also { _engine.value = it }
+        val engine = _engine.value ?: engineFactory().also { created ->
+            _engine.value = created
+            // A new engine starts at fit, which is what the box and the pane want.
+            if (fullscreen) applyAspect()
+        }
         _uiState.value = VideoUiState(
             video = video,
             status = VideoStatus.Buffering,
@@ -125,6 +151,25 @@ class VideoViewModel internal constructor(
 
     fun seekTo(positionMs: Long) {
         _engine.value?.seekTo(positionMs)
+    }
+
+    /** Fullscreen uses the saved aspect mode; leaving it goes back to fit for the box and pane. */
+    fun setFullscreen(on: Boolean) {
+        if (fullscreen == on) return
+        fullscreen = on
+        applyAspect()
+    }
+
+    /** The fullscreen aspect button: the next mode, saved for next time. Returns it for the label. */
+    fun cycleAspectMode(): AspectMode {
+        val next = aspectMode.value.next()
+        viewModelScope.launch { prefs.setAspectMode(next) }
+        _engine.value?.takeIf { fullscreen }?.setAspectMode(next)
+        return next
+    }
+
+    fun setBrightnessSwipe(enabled: Boolean) {
+        viewModelScope.launch { prefs.setBrightnessSwipe(enabled) }
     }
 
     /** ✕, a song tap, or music started elsewhere: save, release the engine, drop focus. */
@@ -178,6 +223,10 @@ class VideoViewModel internal constructor(
         pausedForTransientLoss = result.pausedForTransientLoss
         // Another player took focus for good; ask again only when the user presses play.
         if (event == VideoAudioEvent.Loss) audioFocus.release()
+    }
+
+    private fun applyAspect() {
+        _engine.value?.setAspectMode(if (fullscreen) aspectMode.value else AspectMode.Fit)
     }
 
     private fun checkpoint() {

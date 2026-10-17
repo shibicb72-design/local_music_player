@@ -1,5 +1,6 @@
 package com.shibi.musicplayer.ui
 
+import android.content.res.Configuration
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -25,6 +26,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -71,6 +74,7 @@ private const val SettingsRoute = SectionRoutes.Settings
 private const val BackgroundsRoute = SectionRoutes.Backgrounds
 private const val LicensesRoute = SectionRoutes.Licenses
 private const val VideosRoute = SectionRoutes.Videos
+private const val VideoFullscreenRoute = SectionRoutes.VideoFullscreen
 private const val PlaylistIdArg = "playlistId"
 private val TwoPaneBreakpoint = 600.dp
 
@@ -86,6 +90,7 @@ fun MusicApp(
     val playerState by playerViewModel.uiState.collectAsStateWithLifecycle()
     val videoState by videoViewModel.uiState.collectAsStateWithLifecycle()
     val videoEngine by videoViewModel.engine.collectAsStateWithLifecycle()
+    val brightnessSwipe by videoViewModel.brightnessSwipe.collectAsStateWithLifecycle()
     var musicPausedByVideo by rememberSaveable { mutableStateOf(false) }
     val selectedOutputId by playerViewModel.preferredOutputId.collectAsStateWithLifecycle()
     val playlistState by playlistViewModel.state.collectAsStateWithLifecycle()
@@ -150,6 +155,19 @@ fun MusicApp(
     }
     // The last route seen, so a fold (a new composition) never counts as leaving Videos.
     val previousRoute = remember { mutableStateOf<String?>(null) }
+    // Fullscreen covers the whole window, over either layout; the carousel and chrome hide.
+    val fullscreen = route == VideoFullscreenRoute && videoState.isActive
+    LaunchedEffect(fullscreen) { videoViewModel.setFullscreen(fullscreen) }
+    // The video closed under fullscreen (music started, or a cold start restored the route).
+    LaunchedEffect(route, videoState.isActive) {
+        if (route == VideoFullscreenRoute && !videoState.isActive) navController.popBackStack()
+    }
+    val configuration = LocalConfiguration.current
+    val landscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+    // A phone or the folded cover screen; the unfolded inner screen is at least 600dp both ways.
+    val compactDevice = configuration.smallestScreenWidthDp < TwoPaneBreakpoint.value
+    // Null on a new composition, so only a rotation seen by this composition counts.
+    val previousLandscape = remember { mutableStateOf<Boolean?>(null) }
 
     // Dark theme paints the dark default over the chosen backdrop without rewriting it.
     AppBackgroundHost(
@@ -189,6 +207,23 @@ fun MusicApp(
         // A second play button would fight the video; the bar returns when it closes.
         val showMini = playerState.hasMedia && route != PlayerRoute && !videoState.isActive
         val activeOutputId = playbackRoute.activeDeviceId
+
+        fun openFullscreen() {
+            if (navController.currentDestination?.route != VideoFullscreenRoute) {
+                navController.navigate(VideoFullscreenRoute) { launchSingleTop = true }
+            }
+        }
+
+        fun exitFullscreen() {
+            if (navController.currentDestination?.route == VideoFullscreenRoute) navController.popBackStack()
+            // Opened from the unfolded pane over another section, then folded: the box is on Videos.
+            if (!wide && videoViewModel.uiState.value.isActive &&
+                navController.currentDestination?.route != VideosRoute
+            ) {
+                select(NavSection.Videos)
+                navController.openSection(VideosRoute)
+            }
+        }
 
         fun playQueue(
             tracks: List<Track>,
@@ -250,12 +285,30 @@ fun MusicApp(
             // Unfolding on Now Playing: keep the fallback the ring already shows.
             if (carouselSection != section) onSection(carouselSection)
             // Mid-video: folded, the box is on Videos; unfolded, the list sits by the pane.
-            if (PlaybackArbiter.showVideosAfterLayoutChange(videoViewModel.uiState.value.isActive)) {
+            // Fullscreen stays fullscreen: turning sideways changes the width too.
+            if (navController.currentDestination?.route != VideoFullscreenRoute &&
+                PlaybackArbiter.showVideosAfterLayoutChange(videoViewModel.uiState.value.isActive)
+            ) {
                 select(NavSection.Videos)
                 if (navController.currentDestination?.route != VideosRoute) {
                     navController.openSection(VideosRoute)
                 }
             }
+        }
+
+        // Turning the phone sideways while the compact box plays goes fullscreen, like YouTube.
+        // After the width effect above, so its "land on Videos" never undoes this.
+        LaunchedEffect(landscape) {
+            val was = previousLandscape.value
+            previousLandscape.value = landscape
+            val enter = PlaybackArbiter.enterFullscreenOnRotate(
+                wasLandscape = was,
+                isLandscape = landscape,
+                compactDevice = compactDevice,
+                videoActive = videoViewModel.uiState.value.isActive,
+                onVideos = navController.currentDestination?.route == VideosRoute,
+            )
+            if (enter) openFullscreen()
         }
 
         val miniBar: @Composable () -> Unit = {
@@ -302,7 +355,9 @@ fun MusicApp(
                     onTogglePlayPause = videoViewModel::togglePlayPause,
                     onSeek = videoViewModel::seekTo,
                     onClose = ::closeVideo,
-                    surface = { engine?.let { VideoSurface(it) } },
+                    // Fullscreen owns the picture while it is open; one view is attached at a time.
+                    surface = { if (!fullscreen) engine?.let { VideoSurface(it) } },
+                    onFullscreen = ::openFullscreen,
                     modifier = paneModifier,
                 )
             } else {
@@ -324,6 +379,12 @@ fun MusicApp(
             }
         }
 
+        // Under fullscreen the layout stays composed (the NavHost keeps its state) but silent.
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .then(if (fullscreen) Modifier.clearAndSetSemantics {} else Modifier),
+        ) {
         if (!wide) {
             SectionScaffold(
                 modifier = Modifier.fillMaxSize(),
@@ -366,6 +427,8 @@ fun MusicApp(
                     onPlayVideo = ::playVideo,
                     videoViewModel = videoViewModel,
                     onCloseVideo = ::closeVideo,
+                    onFullscreen = ::openFullscreen,
+                    brightnessSwipe = brightnessSwipe,
                     modifier = Modifier.fillMaxSize(),
                 )
             }
@@ -417,6 +480,8 @@ fun MusicApp(
                             onPlayVideo = ::playVideo,
                             videoViewModel = videoViewModel,
                             onCloseVideo = ::closeVideo,
+                            onFullscreen = ::openFullscreen,
+                            brightnessSwipe = brightnessSwipe,
                             modifier = Modifier.fillMaxSize(),
                         )
                         }
@@ -451,10 +516,27 @@ fun MusicApp(
             }
         }
 
+        }
+
         // Composed after the NavHost, so its callback is newer and wins: Back closes the
-        // two-pane video before it pops the left pane.
-        BackHandler(enabled = PlaybackArbiter.onBack(videoState.isActive, twoPane = wide).closeVideo) {
+        // two-pane video before it pops the left pane. Fullscreen's own handler comes later.
+        BackHandler(
+            enabled = !fullscreen && PlaybackArbiter.onBack(videoState.isActive, twoPane = wide).closeVideo,
+        ) {
             closeVideo()
+        }
+
+        if (fullscreen) {
+            val engine = videoEngine
+            FullscreenVideo(
+                state = videoState,
+                brightnessSwipe = brightnessSwipe,
+                onTogglePlayPause = videoViewModel::togglePlayPause,
+                onSeek = videoViewModel::seekTo,
+                onCycleAspect = videoViewModel::cycleAspectMode,
+                onExit = ::exitFullscreen,
+                surface = { engine?.let { VideoSurface(it) } },
+            )
         }
     }
 
@@ -517,6 +599,8 @@ private fun AppNavHost(
     onPlayVideo: (Video) -> Unit,
     videoViewModel: VideoViewModel,
     onCloseVideo: () -> Unit,
+    onFullscreen: () -> Unit,
+    brightnessSwipe: Boolean,
     modifier: Modifier = Modifier,
 ) {
     NavHost(
@@ -640,6 +724,8 @@ private fun AppNavHost(
                 onOpenLicenses = {
                     navController.navigate(LicensesRoute) { launchSingleTop = true }
                 },
+                brightnessSwipe = brightnessSwipe,
+                onBrightnessSwipeChange = videoViewModel::setBrightnessSwipe,
                 contentBottomPadding = contentBottomPadding,
                 modifier = Modifier.fillMaxSize(),
             )
@@ -675,9 +761,15 @@ private fun AppNavHost(
                 onTogglePlayPause = videoViewModel::togglePlayPause,
                 onSeek = videoViewModel::seekTo,
                 onCloseVideo = onCloseVideo,
+                onFullscreen = onFullscreen,
                 showInlinePlayer = !wide,
                 modifier = Modifier.fillMaxSize(),
             )
+        }
+        composable(VideoFullscreenRoute) {
+            // MusicApp draws fullscreen over the whole window; this entry only holds the route,
+            // so Back pops to wherever it was opened from.
+            Box(modifier = Modifier.fillMaxSize())
         }
         composable(PlayerRoute) {
             if (!wide) {

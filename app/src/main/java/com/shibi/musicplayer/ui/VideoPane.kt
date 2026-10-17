@@ -38,6 +38,7 @@ internal fun VideoPane(
     onClose: () -> Unit,
     surface: @Composable () -> Unit,
     modifier: Modifier = Modifier,
+    onFullscreen: () -> Unit = {},
     initialControlsVisible: Boolean = false,
 ) {
     ContrastSurface(
@@ -58,6 +59,7 @@ internal fun VideoPane(
                     onSeek = onSeek,
                     onClose = onClose,
                     surface = surface,
+                    onFullscreen = onFullscreen,
                     initialControlsVisible = initialControlsVisible,
                     modifier = Modifier
                         .fillMaxWidth()

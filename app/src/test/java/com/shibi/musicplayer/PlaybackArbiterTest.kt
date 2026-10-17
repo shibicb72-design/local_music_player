@@ -1,5 +1,6 @@
 package com.shibi.musicplayer
 
+import com.shibi.musicplayer.domain.FullscreenOrientation
 import com.shibi.musicplayer.domain.InlineVideoBox
 import com.shibi.musicplayer.domain.PlaybackArbiter
 import com.shibi.musicplayer.domain.VideoAudioEvent
@@ -158,4 +159,42 @@ class PlaybackArbiterTest {
         assertNull(InlineVideoBox.displayAspect(0, 1080))
         assertNull(InlineVideoBox.displayAspect(1920, -1))
     }
+
+    @Test
+    fun rotatingTheFoldedPhoneToLandscapeGoesFullscreen() {
+        assertTrue(rotate(wasLandscape = false))
+    }
+
+    @Test
+    fun onlyThePortraitToLandscapeEdgeOnAPhoneWithTheBoxShowingGoesFullscreen() {
+        // A new composition (fold, cold start) or a phone already sideways never jumps.
+        assertFalse(rotate(wasLandscape = null))
+        assertFalse(rotate(wasLandscape = true))
+        // Back to portrait does not either.
+        assertFalse(rotate(wasLandscape = true, isLandscape = false))
+        // The unfolded inner screen keeps its two-pane layout.
+        assertFalse(rotate(wasLandscape = false, compactDevice = false))
+        assertFalse(rotate(wasLandscape = false, videoActive = false))
+        assertFalse(rotate(wasLandscape = false, onVideos = false))
+    }
+
+    @Test
+    fun wideVideosTurnSidewaysAndPortraitClipsKeepTheOrientation() {
+        assertEquals(FullscreenOrientation.Landscape, PlaybackArbiter.fullscreenOrientation(16f / 9f))
+        assertEquals(FullscreenOrientation.Landscape, PlaybackArbiter.fullscreenOrientation(4f / 3f))
+        assertEquals(FullscreenOrientation.Keep, PlaybackArbiter.fullscreenOrientation(9f / 16f))
+        // A square clip has no better side.
+        assertEquals(FullscreenOrientation.Keep, PlaybackArbiter.fullscreenOrientation(1f))
+        // Not known yet: 16:9, like the box.
+        assertEquals(FullscreenOrientation.Landscape, PlaybackArbiter.fullscreenOrientation(null))
+        assertEquals(FullscreenOrientation.Landscape, PlaybackArbiter.fullscreenOrientation(Float.NaN))
+    }
+
+    private fun rotate(
+        wasLandscape: Boolean?,
+        isLandscape: Boolean = true,
+        compactDevice: Boolean = true,
+        videoActive: Boolean = true,
+        onVideos: Boolean = true,
+    ) = PlaybackArbiter.enterFullscreenOnRotate(wasLandscape, isLandscape, compactDevice, videoActive, onVideos)
 }
