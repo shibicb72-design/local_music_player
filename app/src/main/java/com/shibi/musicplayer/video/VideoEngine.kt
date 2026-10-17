@@ -2,6 +2,7 @@ package com.shibi.musicplayer.video
 
 import android.content.Context
 import android.view.View
+import com.shibi.musicplayer.domain.AspectMode
 import kotlinx.coroutines.flow.StateFlow
 
 enum class VideoStatus { Idle, Buffering, Playing, Paused, Ended, Error }
@@ -39,6 +40,9 @@ interface VideoEngine {
     fun play()
     fun pause()
     fun seekTo(positionMs: Long)
+
+    /** How the picture fills its view; kept across views, so a re-attach keeps it. */
+    fun setAspectMode(mode: AspectMode)
 
     /** Frees the player and its native resources; the engine is unusable afterwards. */
     fun release()

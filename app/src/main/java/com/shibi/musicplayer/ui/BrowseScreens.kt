@@ -397,6 +397,8 @@ fun SettingsScreen(
     backgroundName: String,
     onOpenBackgrounds: () -> Unit,
     onOpenLicenses: () -> Unit = {},
+    brightnessSwipe: Boolean = true,
+    onBrightnessSwipeChange: (Boolean) -> Unit = {},
     contentBottomPadding: Dp = 0.dp,
     modifier: Modifier = Modifier,
 ) {
@@ -406,6 +408,8 @@ fun SettingsScreen(
         backgroundName = backgroundName,
         onOpenBackgrounds = onOpenBackgrounds,
         onOpenLicenses = onOpenLicenses,
+        brightnessSwipe = brightnessSwipe,
+        onBrightnessSwipeChange = onBrightnessSwipeChange,
         contentBottomPadding = contentBottomPadding,
         modifier = modifier,
     )
@@ -418,6 +422,8 @@ internal fun SettingsContent(
     backgroundName: String = "",
     onOpenBackgrounds: () -> Unit = {},
     onOpenLicenses: () -> Unit = {},
+    brightnessSwipe: Boolean = true,
+    onBrightnessSwipeChange: (Boolean) -> Unit = {},
     contentBottomPadding: Dp = 0.dp,
     modifier: Modifier = Modifier,
 ) {
@@ -477,6 +483,39 @@ internal fun SettingsContent(
                     text = backgroundName.ifBlank { stringResource(R.string.bg_default) },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        Spacer(Modifier.height(16.dp))
+        // Fullscreen video: the left-half brightness swipe. Volume is always a swipe.
+        ContrastSurface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp),
+            shape = MaterialTheme.shapes.large,
+            color = MaterialTheme.colorScheme.surfaceContainer,
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(R.string.settings_video),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text = stringResource(R.string.settings_brightness_swipe),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(
+                    checked = brightnessSwipe,
+                    onCheckedChange = onBrightnessSwipeChange,
                 )
             }
         }

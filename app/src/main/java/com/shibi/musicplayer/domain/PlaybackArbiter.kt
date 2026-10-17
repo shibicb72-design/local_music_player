@@ -57,7 +57,30 @@ object PlaybackArbiter {
      * unfolded, the left pane shows the list next to the video pane.
      */
     fun showVideosAfterLayoutChange(videoActive: Boolean): Boolean = videoActive
+
+    /**
+     * Turning a phone (or the folded cover screen) from portrait to landscape while the
+     * compact box shows a video goes fullscreen, like YouTube. Only that edge counts: a new
+     * composition ([wasLandscape] null), the unfolded inner screen ([compactDevice] false)
+     * or a phone already in landscape never jumps.
+     */
+    fun enterFullscreenOnRotate(
+        wasLandscape: Boolean?,
+        isLandscape: Boolean,
+        compactDevice: Boolean,
+        videoActive: Boolean,
+        onVideos: Boolean,
+    ): Boolean = wasLandscape == false && isLandscape && compactDevice && videoActive && onVideos
+
+    /** Wide (and not-yet-known) videos turn sideways; portrait clips keep the phone as it is. */
+    fun fullscreenOrientation(aspect: Float?): FullscreenOrientation {
+        val ratio = aspect?.takeIf { it.isFinite() && it > 0f } ?: InlineVideoBox.DefaultAspect
+        return if (ratio > 1f) FullscreenOrientation.Landscape else FullscreenOrientation.Keep
+    }
 }
+
+/** What fullscreen asks of the activity: `SENSOR_LANDSCAPE`, or leave it to the user. */
+enum class FullscreenOrientation { Landscape, Keep }
 
 /** Audio focus and route events for the video player, free of Android constants. */
 enum class VideoAudioEvent { Gain, Loss, LossTransient, LossTransientCanDuck, BecomingNoisy }

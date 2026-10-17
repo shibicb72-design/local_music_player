@@ -5,6 +5,7 @@ import android.graphics.Color
 import android.net.Uri
 import android.os.ParcelFileDescriptor
 import android.view.View
+import com.shibi.musicplayer.domain.AspectMode
 import com.shibi.musicplayer.domain.InlineVideoBox
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -36,6 +37,7 @@ internal class VlcVideoEngine(context: Context) : VideoEngine {
     private var descriptor: ParcelFileDescriptor? = null
     private var attached: VLCVideoLayout? = null
     private var released = false
+    private var aspectMode = AspectMode.Default
 
     /** libVLC's Android vout needs a surface before the first frame; play waits for a view. */
     private var playWhenAttached = false
@@ -109,6 +111,11 @@ internal class VlcVideoEngine(context: Context) : VideoEngine {
         dispatch(VideoEngineEvent.Time(target))
     }
 
+    override fun setAspectMode(mode: AspectMode) {
+        aspectMode = mode
+        if (attached != null) player?.applyScale()
+    }
+
     override fun release() {
         if (released) return
         released = true
@@ -136,9 +143,12 @@ internal class VlcVideoEngine(context: Context) : VideoEngine {
         if (attached === layout) return
         val mediaPlayer = ensurePlayer()
         if (attached != null) mediaPlayer.detachViews()
-        // Texture view: the inline box clips and z-orders with Compose (a SurfaceView would not).
+        // Texture view in every layout (box, pane, fullscreen): it clips and z-orders with
+        // Compose (a SurfaceView would not), and a layout switch is one re-attach path.
         mediaPlayer.attachViews(layout, null, true, true)
         attached = layout
+        // The scale belongs to the attached layout's helper, so every new view gets it again.
+        mediaPlayer.applyScale()
         if (playWhenAttached) {
             playWhenAttached = false
             mediaPlayer.play()
@@ -158,6 +168,10 @@ internal class VlcVideoEngine(context: Context) : VideoEngine {
             created.setEventListener(listener)
             player = created
         }
+    }
+
+    private fun MediaPlayer.applyScale() {
+        setVideoScale(MediaPlayer.ScaleType.valueOf(aspectMode.vlcScale))
     }
 
     private fun startOrDefer(mediaPlayer: MediaPlayer) {

@@ -4,9 +4,11 @@ import android.app.Application
 import android.os.Looper
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.shibi.musicplayer.domain.AspectMode
 import com.shibi.musicplayer.domain.Video
 import com.shibi.musicplayer.domain.VideoAudioEvent
 import com.shibi.musicplayer.ui.messageRes
+import com.shibi.musicplayer.video.InMemoryVideoPrefs
 import com.shibi.musicplayer.video.VideoAudioFocus
 import com.shibi.musicplayer.video.VideoEngineEvent
 import com.shibi.musicplayer.video.VideoError
@@ -60,6 +62,57 @@ class VideoViewModelTest {
         assertNull(real.engine.value)
         assertFalse(real.uiState.value.isActive)
     }
+
+    @Test
+    fun fullscreenAppliesTheSavedAspectAndLeavingItFitsAgain() {
+        val prefs = InMemoryVideoPrefs(aspect = AspectMode.Fill)
+        val vm = withPrefs(prefs)
+        idle()
+        vm.open(beach)
+        val engine = engines.single()
+        assertFalse("the box keeps the engine's fit", engine.calls.any { it.startsWith("aspect:") })
+        vm.setFullscreen(true)
+        assertEquals("aspect:Fill", engine.calls.last())
+        vm.setFullscreen(false)
+        assertEquals("aspect:Fit", engine.calls.last())
+    }
+
+    @Test
+    fun theAspectButtonCyclesAndSavesTheMode() {
+        val prefs = InMemoryVideoPrefs(aspect = AspectMode.Original)
+        val vm = withPrefs(prefs)
+        idle()
+        vm.open(beach)
+        vm.setFullscreen(true)
+        assertEquals(AspectMode.Fit, vm.cycleAspectMode())
+        idle()
+        assertEquals(AspectMode.Fit, prefs.aspectMode.value)
+        assertEquals(AspectMode.Fill, vm.cycleAspectMode())
+        idle()
+        assertEquals(AspectMode.Fill, prefs.aspectMode.value)
+        assertEquals(AspectMode.Fill, vm.aspectMode.value)
+        assertEquals("aspect:Fill", engines.single().calls.last())
+    }
+
+    @Test
+    fun theBrightnessSwipeIsOnByDefaultAndSaved() {
+        val prefs = InMemoryVideoPrefs()
+        val vm = withPrefs(prefs)
+        idle()
+        assertTrue(vm.brightnessSwipe.value)
+        vm.setBrightnessSwipe(false)
+        idle()
+        assertFalse(prefs.brightnessSwipe.value)
+        assertFalse(vm.brightnessSwipe.value)
+    }
+
+    private fun withPrefs(prefs: InMemoryVideoPrefs) = VideoViewModel(
+        application = app,
+        engineFactory = { FakeVideoEngine().also { engines += it } },
+        audioFocus = focus,
+        progress = progress,
+        prefs = prefs,
+    )
 
     @Test
     fun openLoadsAndTracksTheEngineState() {

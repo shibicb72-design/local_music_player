@@ -6,6 +6,7 @@ import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Shader
 import android.view.View
+import com.shibi.musicplayer.domain.AspectMode
 import com.shibi.musicplayer.video.VideoEngine
 import com.shibi.musicplayer.video.VideoEngineEvent
 import com.shibi.musicplayer.video.VideoEngineState
@@ -51,6 +52,10 @@ class FakeVideoEngine(
     override fun seekTo(positionMs: Long) {
         calls += "seek:$positionMs"
         emit(VideoEngineEvent.Time(positionMs))
+    }
+
+    override fun setAspectMode(mode: AspectMode) {
+        calls += "aspect:${mode.name}"
     }
 
     override fun release() {

@@ -36,8 +36,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -88,6 +88,7 @@ internal fun InlineVideoPlayer(
     onClose: () -> Unit,
     surface: @Composable () -> Unit,
     modifier: Modifier = Modifier,
+    onFullscreen: () -> Unit = {},
     initialControlsVisible: Boolean = false,
 ) {
     BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
@@ -98,6 +99,7 @@ internal fun InlineVideoPlayer(
             onSeek = onSeek,
             onClose = onClose,
             surface = surface,
+            onFullscreen = onFullscreen,
             initialControlsVisible = initialControlsVisible,
             modifier = Modifier
                 .fillMaxWidth()
@@ -119,6 +121,7 @@ internal fun VideoPlayerBox(
     onClose: () -> Unit,
     surface: @Composable () -> Unit,
     modifier: Modifier = Modifier,
+    onFullscreen: () -> Unit = {},
     initialControlsVisible: Boolean = false,
 ) {
     ContrastSurface(
@@ -172,6 +175,7 @@ internal fun VideoPlayerBox(
                     },
                     onInteract = { touches++ },
                     onClose = onClose,
+                    onFullscreen = onFullscreen,
                 )
             }
         }
@@ -208,6 +212,7 @@ private fun InlineControls(
     onSeek: (Long) -> Unit,
     onInteract: () -> Unit,
     onClose: () -> Unit,
+    onFullscreen: () -> Unit,
 ) {
     Box(
         modifier = Modifier
@@ -260,6 +265,7 @@ private fun InlineControls(
                 durationMs = state.durationMs,
                 onSeek = onSeek,
                 onInteract = onInteract,
+                onFullscreen = onFullscreen,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth(),
@@ -269,7 +275,13 @@ private fun InlineControls(
 }
 
 @Composable
-private fun CenterButton(status: VideoStatus, onClick: () -> Unit, modifier: Modifier = Modifier) {
+internal fun CenterButton(
+    status: VideoStatus,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    buttonSize: Dp = 64.dp,
+    iconSize: Dp = 40.dp,
+) {
     val (icon, label) = when (status) {
         VideoStatus.Playing -> Icons.Rounded.Pause to R.string.pause
         VideoStatus.Ended -> Icons.Rounded.Replay to R.string.video_replay
@@ -277,7 +289,7 @@ private fun CenterButton(status: VideoStatus, onClick: () -> Unit, modifier: Mod
     }
     IconButton(
         onClick = onClick,
-        modifier = modifier.size(64.dp),
+        modifier = modifier.size(buttonSize),
         colors = IconButtonDefaults.iconButtonColors(
             containerColor = Color.Black.copy(alpha = 0.35f),
             contentColor = OnVideo,
@@ -287,66 +299,84 @@ private fun CenterButton(status: VideoStatus, onClick: () -> Unit, modifier: Mod
         Icon(
             imageVector = icon,
             contentDescription = stringResource(label),
-            modifier = Modifier.size(40.dp),
+            modifier = Modifier.size(iconSize),
         )
     }
 }
 
-/** A position bar with elapsed and total times; never a volume control. */
+/** The white position slider shared by the box, the pane and fullscreen. */
 @OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun PositionSlider(
+    shownMs: Long,
+    durationMs: Long,
+    onDrag: (Long) -> Unit,
+    onDragEnd: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val rangeEnd = durationMs.coerceAtLeast(1L).toFloat()
+    val seekDescription = stringResource(R.string.seek)
+    Slider(
+        value = shownMs.toFloat().coerceIn(0f, rangeEnd),
+        onValueChange = { value -> onDrag(value.toLong()) },
+        onValueChangeFinished = onDragEnd,
+        enabled = durationMs > 0L,
+        valueRange = 0f..rangeEnd,
+        thumb = {
+            Box(
+                modifier = Modifier
+                    .size(12.dp)
+                    .background(OnVideo, CircleShape),
+            )
+        },
+        track = { sliderState ->
+            SliderDefaults.Track(
+                sliderState = sliderState,
+                modifier = Modifier.height(3.dp),
+                colors = SliderDefaults.colors(
+                    activeTrackColor = OnVideo,
+                    inactiveTrackColor = OnVideo.copy(alpha = 0.3f),
+                    disabledActiveTrackColor = OnVideo.copy(alpha = 0.5f),
+                    disabledInactiveTrackColor = OnVideo.copy(alpha = 0.3f),
+                ),
+                thumbTrackGapSize = 0.dp,
+                drawStopIndicator = null,
+            )
+        },
+        modifier = modifier.semantics { contentDescription = seekDescription },
+    )
+}
+
+/** A position bar with elapsed and total times; never a volume control. */
 @Composable
 private fun InlineSeekBar(
     positionMs: Long,
     durationMs: Long,
     onSeek: (Long) -> Unit,
     onInteract: () -> Unit,
+    onFullscreen: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var dragging by remember { mutableStateOf(false) }
-    var dragPosition by remember { mutableFloatStateOf(0f) }
-    val rangeEnd = durationMs.coerceAtLeast(1L).toFloat()
-    val shown = if (dragging) dragPosition.toLong() else positionMs
-    val seekDescription = stringResource(R.string.seek)
+    var dragPosition by remember { mutableLongStateOf(0L) }
+    val shown = if (dragging) dragPosition else positionMs
     Column(modifier = modifier.padding(start = 16.dp, end = 4.dp)) {
-        Slider(
-            value = shown.toFloat().coerceIn(0f, rangeEnd),
-            onValueChange = { value ->
+        PositionSlider(
+            shownMs = shown,
+            durationMs = durationMs,
+            onDrag = { value ->
                 dragging = true
                 dragPosition = value
                 onInteract()
             },
-            onValueChangeFinished = {
-                onSeek(dragPosition.toLong())
+            onDragEnd = {
+                onSeek(dragPosition)
                 dragging = false
-            },
-            enabled = durationMs > 0L,
-            valueRange = 0f..rangeEnd,
-            thumb = {
-                Box(
-                    modifier = Modifier
-                        .size(12.dp)
-                        .background(OnVideo, CircleShape),
-                )
-            },
-            track = { sliderState ->
-                SliderDefaults.Track(
-                    sliderState = sliderState,
-                    modifier = Modifier.height(3.dp),
-                    colors = SliderDefaults.colors(
-                        activeTrackColor = OnVideo,
-                        inactiveTrackColor = OnVideo.copy(alpha = 0.3f),
-                        disabledActiveTrackColor = OnVideo.copy(alpha = 0.5f),
-                        disabledInactiveTrackColor = OnVideo.copy(alpha = 0.3f),
-                    ),
-                    thumbTrackGapSize = 0.dp,
-                    drawStopIndicator = null,
-                )
             },
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(end = 12.dp)
-                .height(24.dp)
-                .semantics { contentDescription = seekDescription },
+                .height(24.dp),
         )
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -358,18 +388,11 @@ private fun InlineSeekBar(
                 style = MaterialTheme.typography.labelMedium,
                 color = OnVideoMuted,
             )
-            // Fullscreen arrives in V6; shown so the layout is final, but it does nothing yet.
-            IconButton(
-                onClick = {},
-                enabled = false,
-                colors = IconButtonDefaults.iconButtonColors(
-                    contentColor = OnVideo,
-                    disabledContentColor = OnVideo.copy(alpha = 0.38f),
-                ),
-            ) {
+            IconButton(onClick = onFullscreen) {
                 Icon(
                     imageVector = Icons.Rounded.Fullscreen,
-                    contentDescription = stringResource(R.string.video_fullscreen_soon),
+                    contentDescription = stringResource(R.string.video_fullscreen),
+                    tint = OnVideo,
                 )
             }
         }
