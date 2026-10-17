@@ -50,6 +50,8 @@ import com.shibi.musicplayer.domain.AudioOutput
 import com.shibi.musicplayer.domain.AudioOutputs
 import com.shibi.musicplayer.domain.OutputKind
 import com.shibi.musicplayer.domain.RawOutput
+import com.shibi.musicplayer.ui.background.LocalBackgroundChrome
+import com.shibi.musicplayer.ui.background.contentColorForContainer
 
 @Composable
 fun rememberAudioOutputs(): State<List<AudioOutput>> {
@@ -86,11 +88,12 @@ fun OutputPickerSheet(
     onDismiss: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState()
+    val sheetColor = LocalBackgroundChrome.current.sheet
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-        contentColor = MaterialTheme.colorScheme.onSurface,
+        containerColor = sheetColor,
+        contentColor = contentColorForContainer(sheetColor),
         scrimColor = OutputScrim,
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
     ) {
@@ -113,6 +116,7 @@ internal fun OutputPickerContent(
     modifier: Modifier = Modifier,
 ) {
     val effective = effectiveOutput(outputs, selectedId)
+    val scheme = MaterialTheme.colorScheme
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -133,7 +137,7 @@ internal fun OutputPickerContent(
                     .clip(RoundedCornerShape(16.dp))
                     .background(
                         if (selected) {
-                            Color.White.copy(alpha = 0.08f)
+                            scheme.primary.copy(alpha = 0.16f)
                         } else {
                             Color.Transparent
                         },
@@ -154,7 +158,7 @@ internal fun OutputPickerContent(
                     Icon(
                         imageVector = iconFor(output.kind),
                         contentDescription = null,
-                        tint = if (selected) Color.White else MaterialTheme.colorScheme.onSurface,
+                        tint = if (selected) Color.White else scheme.onSurface,
                         modifier = Modifier.size(22.dp),
                     )
                 }
@@ -163,16 +167,12 @@ internal fun OutputPickerContent(
                     Text(
                         text = output.name,
                         style = MaterialTheme.typography.titleSmall,
-                        color = if (selected) Color.White else MaterialTheme.colorScheme.onSurface,
+                        color = scheme.onSurface,
                     )
                     Text(
                         text = stringResource(outputSubtitle(output.kind)),
                         style = MaterialTheme.typography.bodySmall,
-                        color = if (selected) {
-                            Color.White.copy(alpha = 0.82f)
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
+                        color = scheme.onSurfaceVariant,
                     )
                 }
                 if (selected) {

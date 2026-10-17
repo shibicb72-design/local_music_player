@@ -1,17 +1,27 @@
 package com.shibi.musicplayer.ui
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.layout.SubcomposeLayout
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import com.shibi.musicplayer.ui.background.LocalBackgroundChrome
+
+/** Fade at the bottom of the list viewport so rows dissolve before the chrome. */
+internal val ListEdgeFade = 32.dp
 
 /**
- * Hosts the floating mini player and the carousel once, over the section
- * content. Content bottom padding is the measured chrome height plus
- * [contentBottomPadding], so the last row can scroll clear of both.
+ * Hosts the mini player and the carousel in a non-overlapping slot under the
+ * section content. The list viewport ends above that slot; a short fade at its
+ * bottom edge dissolves rows into the page background.
  */
 @Composable
 internal fun SectionScaffold(
@@ -23,29 +33,51 @@ internal fun SectionScaffold(
     carousel: @Composable () -> Unit = {},
     content: @Composable (bottomPadding: Dp) -> Unit,
 ) {
-    SubcomposeLayout(modifier) { constraints ->
-        val chromePlaceable = if (showMiniPlayer || showCarousel) {
-            subcompose("chrome") {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    if (showMiniPlayer) miniPlayer()
-                    if (showCarousel) carousel()
-                }
-            }.first().measure(constraints.copy(minWidth = 0, minHeight = 0))
-        } else {
-            null
+    Column(modifier.fillMaxSize()) {
+        ListViewport(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            content(contentBottomPadding)
         }
-        val chromeHeight = chromePlaceable?.height ?: 0
-        val bottomPadding = contentBottomPadding + chromeHeight.toDp()
-        val contentPlaceable = subcompose("content") {
-            Column(modifier = Modifier.fillMaxSize()) {
-                content(bottomPadding)
+        if (showMiniPlayer || showCarousel) {
+            ChromeSlot {
+                if (showMiniPlayer) miniPlayer()
+                if (showCarousel) carousel()
             }
-        }.first().measure(constraints)
-        val width = constraints.maxWidth
-        val height = constraints.maxHeight
-        layout(width, height) {
-            contentPlaceable.place(0, 0)
-            chromePlaceable?.place(0, height - chromeHeight)
         }
     }
+}
+
+@Composable
+internal fun ListViewport(
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    val fill = LocalBackgroundChrome.current.pageFill
+    Box(modifier) {
+        content()
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .height(ListEdgeFade)
+                .background(
+                    Brush.verticalGradient(
+                        0f to fill.copy(alpha = 0f),
+                        1f to fill,
+                    ),
+                ),
+        )
+    }
+}
+
+@Composable
+internal fun ChromeSlot(
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(LocalBackgroundChrome.current.pageFill),
+        content = content,
+    )
 }

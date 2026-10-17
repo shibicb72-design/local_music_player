@@ -23,6 +23,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -33,11 +34,19 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.shibi.musicplayer.R
+import com.shibi.musicplayer.background.BackgroundViewModel
+import com.shibi.musicplayer.domain.AppBackground
+import com.shibi.musicplayer.domain.ShuffleContext
 import com.shibi.musicplayer.domain.Track
 import com.shibi.musicplayer.library.LibraryViewModel
 import com.shibi.musicplayer.playback.PlayerUiState
 import com.shibi.musicplayer.playback.PlayerViewModel
 import com.shibi.musicplayer.playlist.PlaylistViewModel
+import com.shibi.musicplayer.ui.background.AppBackgroundHost
+import com.shibi.musicplayer.ui.background.BackgroundPickerScreen
+import com.shibi.musicplayer.ui.background.backgroundTitleRes
+import com.shibi.musicplayer.ui.background.titleId
 
 private const val SongsRoute = "songs"
 private const val PlaylistsRoute = "playlists"
@@ -47,6 +56,7 @@ private const val FavoritesRoute = "favorites"
 private const val RecentRoute = "recent"
 private const val SearchRoute = "search"
 private const val SettingsRoute = "settings"
+private const val BackgroundsRoute = "settings/backgrounds"
 private const val PlaylistIdArg = "playlistId"
 private val TwoPaneBreakpoint = 600.dp
 
@@ -55,6 +65,7 @@ fun MusicApp(
     libraryViewModel: LibraryViewModel = viewModel(),
     playerViewModel: PlayerViewModel = viewModel(),
     playlistViewModel: PlaylistViewModel = viewModel(),
+    backgroundViewModel: BackgroundViewModel = viewModel(),
 ) {
     val playerState by playerViewModel.uiState.collectAsStateWithLifecycle()
     val selectedOutputId by playerViewModel.preferredOutputId.collectAsStateWithLifecycle()
@@ -66,6 +77,8 @@ fun MusicApp(
     val recentIds by playlistViewModel.recentTrackIds.collectAsStateWithLifecycle()
     val recentSearches by playlistViewModel.recentSearches.collectAsStateWithLifecycle()
     val darkTheme by playlistViewModel.darkTheme.collectAsStateWithLifecycle()
+    val appBackground by backgroundViewModel.selection.collectAsStateWithLifecycle()
+    val backgroundColors by backgroundViewModel.customColors.collectAsStateWithLifecycle()
     val libraryState by libraryViewModel.uiState.collectAsStateWithLifecycle()
     val tracksById = remember(libraryState.tracks) {
         libraryState.tracks.associateBy { it.id }
@@ -87,6 +100,10 @@ fun MusicApp(
         if (mapped != section) section = mapped
     }
 
+    AppBackgroundHost(
+        background = appBackground,
+        customColors = backgroundColors,
+    ) {
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val wide = maxWidth >= TwoPaneBreakpoint
         LaunchedEffect(wide) {
@@ -98,9 +115,13 @@ fun MusicApp(
         val showCarousel = wide || route != PlayerRoute
         val activeOutputId = playbackRoute.activeDeviceId
 
-        fun playQueue(tracks: List<Track>, startId: Long) {
+        fun playQueue(
+            tracks: List<Track>,
+            startId: Long,
+            context: ShuffleContext = ShuffleContext.ALL_SONGS,
+        ) {
             if (tracks.isEmpty()) return
-            playerViewModel.playTrack(tracks, startId)
+            playerViewModel.playTrack(tracks, startId, context)
             playlistViewModel.recordPlay(startId)
             if (!wide) {
                 section = NavSection.NowPlaying
@@ -171,10 +192,12 @@ fun MusicApp(
                 onTogglePlayPause = playerViewModel::togglePlayPause,
                 onNext = playerViewModel::skipNext,
                 onPrevious = playerViewModel::skipPrevious,
-                onSeek = playerViewModel::seekTo,
-                selectedOutputId = activeOutputId,
-                onSelectOutput = playerViewModel::setOutputDevice,
-                showBack = false,
+                    onSeek = playerViewModel::seekTo,
+                    selectedOutputId = activeOutputId,
+                    onSelectOutput = playerViewModel::setOutputDevice,
+                    onToggleShuffle = playerViewModel::toggleShuffle,
+                    onCycleRepeat = playerViewModel::cycleRepeat,
+                    showBack = false,
                 includeNavigationBars = false,
                 modifier = Modifier
                     .fillMaxHeight()
@@ -204,10 +227,15 @@ fun MusicApp(
                     recentTracks = recentTracks,
                     recentSearches = recentSearches,
                     darkTheme = darkTheme,
+                    appBackground = appBackground,
+                    backgroundColors = backgroundColors,
+                    onSelectBackground = backgroundViewModel::select,
+                    onBackgroundColors = backgroundViewModel::setColors,
+                    onResetBackgroundColors = backgroundViewModel::resetColors,
                     wide = false,
                     contentBottomPadding = bottomPadding,
                     activeOutputId = activeOutputId,
-                    onPlayQueue = { tracks, startId -> playQueue(tracks, startId) },
+                    onPlayQueue = { tracks, startId, context -> playQueue(tracks, startId, context) },
                     onOpenPlayer = {
                         section = NavSection.NowPlaying
                         navController.openPlayer()
@@ -223,6 +251,11 @@ fun MusicApp(
                         .weight(1f)
                         .fillMaxSize(),
                 ) {
+                    ListViewport(
+                        modifier = Modifier
+                            .weight(0.42f)
+                            .fillMaxHeight(),
+                    ) {
                     AppNavHost(
                         navController = navController,
                         libraryViewModel = libraryViewModel,
@@ -235,22 +268,28 @@ fun MusicApp(
                         recentTracks = recentTracks,
                         recentSearches = recentSearches,
                         darkTheme = darkTheme,
+                        appBackground = appBackground,
+                        backgroundColors = backgroundColors,
+                        onSelectBackground = backgroundViewModel::select,
+                        onBackgroundColors = backgroundViewModel::setColors,
+                        onResetBackgroundColors = backgroundViewModel::resetColors,
                         wide = true,
                         contentBottomPadding = SongListBottomPadding,
                         activeOutputId = activeOutputId,
-                        onPlayQueue = { tracks, startId -> playQueue(tracks, startId) },
+                        onPlayQueue = { tracks, startId, context -> playQueue(tracks, startId, context) },
                         onOpenPlayer = {},
                         onAddToPlaylist = { pendingTrack = it },
-                        modifier = Modifier
-                            .weight(0.42f)
-                            .fillMaxHeight(),
+                        modifier = Modifier.fillMaxHeight(),
                     )
+                    }
                     Box(modifier = Modifier.weight(0.58f).fillMaxHeight()) {
                         playerPane(SongListBottomPadding)
                     }
                 }
-                miniBar()
-                if (showCarousel) carouselBar(Modifier)
+                ChromeSlot {
+                    miniBar()
+                    if (showCarousel) carouselBar(Modifier)
+                }
             }
         } else {
             Row(modifier = Modifier.fillMaxSize()) {
@@ -259,6 +298,11 @@ fun MusicApp(
                         .weight(0.42f)
                         .fillMaxHeight(),
                 ) {
+                    ListViewport(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxSize(),
+                    ) {
                     AppNavHost(
                         navController = navController,
                         libraryViewModel = libraryViewModel,
@@ -271,22 +315,28 @@ fun MusicApp(
                         recentTracks = recentTracks,
                         recentSearches = recentSearches,
                         darkTheme = darkTheme,
+                        appBackground = appBackground,
+                        backgroundColors = backgroundColors,
+                        onSelectBackground = backgroundViewModel::select,
+                        onBackgroundColors = backgroundViewModel::setColors,
+                        onResetBackgroundColors = backgroundViewModel::resetColors,
                         wide = true,
                         contentBottomPadding = SongListBottomPadding,
                         activeOutputId = activeOutputId,
-                        onPlayQueue = { tracks, startId -> playQueue(tracks, startId) },
+                        onPlayQueue = { tracks, startId, context -> playQueue(tracks, startId, context) },
                         onOpenPlayer = {},
                         onAddToPlaylist = { pendingTrack = it },
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxSize(),
+                        modifier = Modifier.fillMaxSize(),
                     )
-                    carouselBar(
-                        Modifier.padding(
-                            top = TwoPaneCarouselPadding,
-                            bottom = TwoPaneCarouselPadding,
-                        ),
-                    )
+                    }
+                    ChromeSlot {
+                        carouselBar(
+                            Modifier.padding(
+                                top = TwoPaneCarouselPadding,
+                                bottom = TwoPaneCarouselPadding,
+                            ),
+                        )
+                    }
                 }
                 Box(
                     modifier = Modifier
@@ -329,6 +379,7 @@ fun MusicApp(
             onDismiss = { pendingTrack = null },
         )
     }
+    }
 }
 
 @Composable
@@ -344,10 +395,15 @@ private fun AppNavHost(
     recentTracks: List<Track>,
     recentSearches: List<String>,
     darkTheme: Boolean,
+    appBackground: AppBackground,
+    backgroundColors: Map<String, List<Long>>,
+    onSelectBackground: (AppBackground) -> Unit,
+    onBackgroundColors: (String, List<Long>) -> Unit,
+    onResetBackgroundColors: (String) -> Unit,
     wide: Boolean,
     contentBottomPadding: Dp,
     activeOutputId: Int?,
-    onPlayQueue: (List<Track>, Long) -> Unit,
+    onPlayQueue: (List<Track>, Long, ShuffleContext) -> Unit,
     onOpenPlayer: () -> Unit,
     onAddToPlaylist: (Track) -> Unit,
     modifier: Modifier = Modifier,
@@ -361,7 +417,9 @@ private fun AppNavHost(
             LibraryScreen(
                 viewModel = libraryViewModel,
                 nowPlaying = playerState,
-                onTrackSelected = { tracks, trackId -> onPlayQueue(tracks, trackId) },
+                onTrackSelected = { tracks, trackId ->
+                    onPlayQueue(tracks, trackId, ShuffleContext.ALL_SONGS)
+                },
                 onOpenPlayer = onOpenPlayer,
                 onTogglePlayPause = playerViewModel::togglePlayPause,
                 onAddToPlaylist = onAddToPlaylist,
@@ -393,10 +451,14 @@ private fun AppNavHost(
                 viewModel = playlistViewModel,
                 tracksById = tracksById,
                 onBack = { navController.popBackStack() },
-                onPlay = onPlayQueue,
+                onPlay = { tracks, startId ->
+                    onPlayQueue(tracks, startId, ShuffleContext.PLAYLIST)
+                },
                 onShuffle = { tracks ->
                     val shuffled = tracks.shuffled()
-                    shuffled.firstOrNull()?.let { onPlayQueue(shuffled, it.id) }
+                    shuffled.firstOrNull()?.let {
+                        onPlayQueue(shuffled, it.id, ShuffleContext.PLAYLIST)
+                    }
                 },
                 contentBottomPadding = contentBottomPadding,
                 modifier = Modifier.fillMaxSize(),
@@ -407,7 +469,9 @@ private fun AppNavHost(
                 tracks = libraryTracks,
                 favoriteIds = favoriteIds,
                 nowPlaying = playerState,
-                onTrackSelected = onPlayQueue,
+                onTrackSelected = { tracks, startId ->
+                    onPlayQueue(tracks, startId, ShuffleContext.ALL_SONGS)
+                },
                 onToggleFavorite = { playlistViewModel.toggleFavorite(it.id) },
                 onAddToPlaylist = onAddToPlaylist,
                 contentBottomPadding = contentBottomPadding,
@@ -419,7 +483,9 @@ private fun AppNavHost(
                 tracks = recentTracks,
                 favoriteIds = favoriteIds,
                 nowPlaying = playerState,
-                onTrackSelected = onPlayQueue,
+                onTrackSelected = { tracks, startId ->
+                    onPlayQueue(tracks, startId, ShuffleContext.ALL_SONGS)
+                },
                 onToggleFavorite = { playlistViewModel.toggleFavorite(it.id) },
                 onAddToPlaylist = onAddToPlaylist,
                 contentBottomPadding = contentBottomPadding,
@@ -431,7 +497,9 @@ private fun AppNavHost(
                 tracks = libraryTracks,
                 favoriteIds = favoriteIds,
                 nowPlaying = playerState,
-                onTrackSelected = onPlayQueue,
+                onTrackSelected = { tracks, startId ->
+                    onPlayQueue(tracks, startId, ShuffleContext.ALL_SONGS)
+                },
                 onToggleFavorite = { playlistViewModel.toggleFavorite(it.id) },
                 onAddToPlaylist = onAddToPlaylist,
                 recentSearches = recentSearches,
@@ -444,6 +512,22 @@ private fun AppNavHost(
             SettingsScreen(
                 darkTheme = darkTheme,
                 onDarkThemeChange = playlistViewModel::setDarkTheme,
+                backgroundName = stringResource(backgroundTitleRes(appBackground.titleId())),
+                onOpenBackgrounds = {
+                    navController.navigate(BackgroundsRoute) { launchSingleTop = true }
+                },
+                contentBottomPadding = contentBottomPadding,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+        composable(BackgroundsRoute) {
+            BackgroundPickerScreen(
+                selected = appBackground,
+                customColors = backgroundColors,
+                onSelect = onSelectBackground,
+                onColorsChange = onBackgroundColors,
+                onResetColors = onResetBackgroundColors,
+                onBack = { navController.popBackStack() },
                 contentBottomPadding = contentBottomPadding,
                 modifier = Modifier.fillMaxSize(),
             )
@@ -459,6 +543,8 @@ private fun AppNavHost(
                     onSeek = playerViewModel::seekTo,
                     selectedOutputId = activeOutputId,
                     onSelectOutput = playerViewModel::setOutputDevice,
+                    onToggleShuffle = playerViewModel::toggleShuffle,
+                    onCycleRepeat = playerViewModel::cycleRepeat,
                 )
             }
         }
@@ -474,6 +560,7 @@ private fun sectionForRoute(route: String?): NavSection? = when (route) {
     RecentRoute -> NavSection.Recent
     SearchRoute -> NavSection.Search
     SettingsRoute -> NavSection.Settings
+    BackgroundsRoute -> NavSection.Settings
     else -> null
 }
 

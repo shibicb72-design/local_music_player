@@ -152,6 +152,11 @@ class CarouselMathTest {
     }
 
     @Test
+    fun ringRadiusIsWideRelativeToTheOldTightOrbit() {
+        assertTrue(CarouselMath.RADIUS_FRACTION >= 0.42f)
+    }
+
+    @Test
     fun dragIsOneToOneAlongTheRing() {
         val radius = 120f
         val arc = radius * math.stepRadians

@@ -43,14 +43,14 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.shibi.musicplayer.R
+import com.shibi.musicplayer.ui.background.LocalBackgroundChrome
+import com.shibi.musicplayer.ui.background.contentColorForContainer
 import com.shibi.musicplayer.ui.theme.Accent
 import com.shibi.musicplayer.ui.theme.AccentContainer
 import com.shibi.musicplayer.ui.theme.Base4
 import com.shibi.musicplayer.ui.theme.OnAccentContainer
 import com.shibi.musicplayer.ui.theme.Outline
 import com.shibi.musicplayer.ui.theme.Secondary
-import com.shibi.musicplayer.ui.theme.TextHigh
-import com.shibi.musicplayer.ui.theme.TextMed
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -64,11 +64,12 @@ fun AddToPlaylistSheet(
     var creating by remember { mutableStateOf(false) }
     var draft by remember { mutableStateOf("") }
     val sheetState = rememberModalBottomSheetState()
+    val sheetColor = LocalBackgroundChrome.current.sheet
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-        contentColor = TextHigh,
+        containerColor = sheetColor,
+        contentColor = contentColorForContainer(sheetColor),
         scrimColor = Color.Black.copy(alpha = 0.72f),
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
     ) {
@@ -105,6 +106,7 @@ internal fun AddToPlaylistContent(
     onPick: (Long) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val scheme = MaterialTheme.colorScheme
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -117,13 +119,13 @@ internal fun AddToPlaylistContent(
         Text(
             text = stringResource(R.string.add_to_playlist),
             style = MaterialTheme.typography.titleLarge,
-            color = TextHigh,
+            color = scheme.onSurface,
             modifier = Modifier.padding(start = 8.dp),
         )
         TrackTitle(
             text = trackTitle,
             style = MaterialTheme.typography.bodyMedium,
-            color = TextMed,
+            color = scheme.onSurfaceVariant,
             modifier = Modifier.padding(start = 8.dp, top = 4.dp, bottom = 12.dp),
         )
         if (creating) {
@@ -136,13 +138,13 @@ internal fun AddToPlaylistContent(
                     .fillMaxWidth()
                     .padding(horizontal = 8.dp),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = TextHigh,
-                    unfocusedTextColor = TextHigh,
+                    focusedTextColor = scheme.onSurface,
+                    unfocusedTextColor = scheme.onSurface,
                     focusedBorderColor = Accent,
                     unfocusedBorderColor = Outline,
                     cursorColor = Secondary,
-                    focusedPlaceholderColor = TextMed,
-                    unfocusedPlaceholderColor = TextMed,
+                    focusedPlaceholderColor = scheme.onSurfaceVariant,
+                    unfocusedPlaceholderColor = scheme.onSurfaceVariant,
                 ),
             )
             Spacer(Modifier.height(12.dp))
@@ -157,7 +159,7 @@ internal fun AddToPlaylistContent(
                     containerColor = AccentContainer,
                     contentColor = OnAccentContainer,
                     disabledContainerColor = Base4,
-                    disabledContentColor = TextMed,
+                    disabledContentColor = scheme.onSurfaceVariant,
                 ),
             ) {
                 Text(stringResource(R.string.create_playlist))
@@ -187,7 +189,7 @@ internal fun AddToPlaylistContent(
             Text(
                 text = stringResource(R.string.playlists_empty),
                 style = MaterialTheme.typography.bodyMedium,
-                color = TextMed,
+                color = scheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
             )
         }
@@ -209,7 +211,7 @@ internal fun AddToPlaylistContent(
                     TrackTitle(
                         text = playlist.name,
                         style = MaterialTheme.typography.titleSmall,
-                        color = TextHigh,
+                        color = scheme.onSurface,
                     )
                     Text(
                         text = pluralStringResource(
@@ -218,7 +220,7 @@ internal fun AddToPlaylistContent(
                             playlist.songCount,
                         ),
                         style = MaterialTheme.typography.bodySmall,
-                        color = TextMed,
+                        color = scheme.onSurfaceVariant,
                     )
                 }
             }
@@ -235,7 +237,7 @@ private fun IconBadge(
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = if (filled) Color.White else TextHigh,
+            tint = if (filled) Color.White else MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.size(22.dp),
         )
     }

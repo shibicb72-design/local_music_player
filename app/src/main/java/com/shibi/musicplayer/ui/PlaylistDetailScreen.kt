@@ -71,11 +71,11 @@ import com.shibi.musicplayer.domain.PlaylistOrder
 import com.shibi.musicplayer.domain.Track
 import com.shibi.musicplayer.domain.TrackDisplay
 import com.shibi.musicplayer.playlist.PlaylistViewModel
+import com.shibi.musicplayer.ui.background.LocalBackgroundChrome
+import com.shibi.musicplayer.ui.background.contentColorForContainer
 import com.shibi.musicplayer.ui.theme.Base0
 import com.shibi.musicplayer.ui.theme.Base3
 import com.shibi.musicplayer.ui.theme.Error
-import com.shibi.musicplayer.ui.theme.TextHigh
-import com.shibi.musicplayer.ui.theme.TextMed
 import kotlin.math.abs
 
 data class PlaylistSongRow(
@@ -162,8 +162,13 @@ fun PlaylistDetailScreen(
         )
     }
     if (confirmingDelete) {
+        val dialogColor = LocalBackgroundChrome.current.dialog
+        val onDialog = contentColorForContainer(dialogColor)
         AlertDialog(
             onDismissRequest = { confirmingDelete = false },
+            containerColor = dialogColor,
+            titleContentColor = onDialog,
+            textContentColor = onDialog,
             title = { Text(stringResource(R.string.delete_playlist)) },
             text = { Text(stringResource(R.string.delete_playlist_body)) },
             confirmButton = {
@@ -230,19 +235,19 @@ internal fun PlaylistDetailContent(
                 Icon(
                     imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                     contentDescription = stringResource(R.string.back),
-                    tint = TextHigh,
+                    tint = MaterialTheme.colorScheme.onBackground,
                 )
             }
             Column(modifier = Modifier.weight(1f)) {
                 TrackTitle(
                     text = name,
                     style = MaterialTheme.typography.headlineSmall,
-                    color = TextHigh,
+                    color = MaterialTheme.colorScheme.onBackground,
                 )
                 Text(
                     text = pluralStringResource(R.plurals.song_count, songs.size, songs.size),
                     style = MaterialTheme.typography.bodyMedium,
-                    color = TextMed,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             Box {
@@ -250,7 +255,7 @@ internal fun PlaylistDetailContent(
                     Icon(
                         imageVector = Icons.Rounded.MoreVert,
                         contentDescription = stringResource(R.string.more_actions),
-                        tint = TextMed,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 DropdownMenu(
@@ -289,7 +294,7 @@ internal fun PlaylistDetailContent(
                     containerColor = Color.White,
                     contentColor = Base0,
                     disabledContainerColor = Color.White.copy(alpha = 0.12f),
-                    disabledContentColor = TextMed,
+                    disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                 ),
             ) {
                 Icon(
@@ -307,8 +312,8 @@ internal fun PlaylistDetailContent(
                 shape = CircleShape,
                 border = BorderStroke(1.5.dp, Color.White.copy(alpha = 0.72f)),
                 colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = TextHigh,
-                    disabledContentColor = TextMed,
+                    contentColor = MaterialTheme.colorScheme.onBackground,
+                    disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                 ),
             ) {
                 Icon(
@@ -331,7 +336,7 @@ internal fun PlaylistDetailContent(
                 Text(
                     text = stringResource(R.string.playlist_empty),
                     style = MaterialTheme.typography.bodyLarge,
-                    color = TextMed,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         } else {
@@ -417,7 +422,7 @@ private fun PlaylistSongLine(
         Icon(
             imageVector = Icons.Rounded.DragIndicator,
             contentDescription = stringResource(R.string.reorder),
-            tint = TextHigh,
+            tint = MaterialTheme.colorScheme.onBackground,
             modifier = handleModifier
                 .size(48.dp)
                 .padding(13.dp),
@@ -446,7 +451,7 @@ private fun PlaylistSongLine(
                     text = TrackDisplay.title(song.title),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
-                    color = if (song.missing) TextMed else TextHigh,
+                    color = if (song.missing) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onBackground,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 val subtitle = song.artist ?: song.album
@@ -454,7 +459,7 @@ private fun PlaylistSongLine(
                     Text(
                         text = subtitle,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = TextMed,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.fillMaxWidth(),
@@ -467,7 +472,7 @@ private fun PlaylistSongLine(
                 Icon(
                     imageVector = Icons.Rounded.MoreVert,
                     contentDescription = stringResource(R.string.more_actions),
-                    tint = TextMed,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             DropdownMenu(
