@@ -352,7 +352,7 @@ internal fun SongColumn(
             state = listState,
             contentPadding = PaddingValues(bottom = contentBottomPadding),
         ) {
-            items(tracks, key = { it.id }) { track ->
+            items(tracks, key = { it.id }, contentType = { "track" }) { track ->
                 TrackRow(
                     track = track,
                     isPlaying = nowPlaying.currentMediaId == track.id.toString(),
