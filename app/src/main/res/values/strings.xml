@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Spectacula</string>
+    <string name="app_name">Theatrum</string>
     <string name="library_title">Your music</string>
     <string name="player_title">Now playing</string>
     <string name="play">Play</string>
@@ -25,7 +25,7 @@
     <string name="missing_artist">—</string>
     <string name="unknown_album">Unknown album</string>
     <string name="permission_title">Music access needed</string>
-    <string name="permission_body">Allow access to audio files so Spectacula can list the music stored on this device.</string>
+    <string name="permission_body">Allow access to audio files so Theatrum can list the music stored on this device.</string>
     <string name="grant_access">Grant access</string>
     <string name="open_settings">Open settings</string>
     <string name="empty_library">No music found on this device.</string>
