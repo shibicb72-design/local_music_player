@@ -158,6 +158,14 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         publish(player)
     }
 
+    /** A pause, not a stop: a video starting keeps the queue and position for later. */
+    fun pause() {
+        val player = controller ?: return
+        if (!player.playWhenReady) return
+        player.pause()
+        publish(player)
+    }
+
     fun skipNext() {
         val player = controller ?: return
         if (!player.hasNextMediaItem()) return
