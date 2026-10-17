@@ -589,6 +589,9 @@ private fun AppNavHost(
 }
 
 private fun NavHostController.openSection(route: String) {
+    // Now Playing sits on top of a section but is not part of it. Saved with the
+    // section, it would come back on restore, and two-pane draws nothing for it.
+    if (currentDestination?.route == PlayerRoute) popBackStack()
     navigate(route) {
         popUpTo(SongsRoute) { saveState = true }
         launchSingleTop = true
