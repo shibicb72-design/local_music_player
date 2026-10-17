@@ -10,7 +10,8 @@ import kotlin.math.sin
 /**
  * Geometry for the bottom carousel.
  *
- * Eight items sit 45° apart on a ring. Angle 0 is the front. Positive angles
+ * [itemCount] items sit `360° / itemCount` apart on a ring: nine at 40° on the
+ * compact ring, eight at 45° on the expanded one. Angle 0 is the front. Positive angles
  * run to the right. Every pose is an odd or even function of that angle, so
  * the left side mirrors the right. The back of the ring (cos θ < -0.1) is
  * hidden. Screen Y grows downward; a negative Y offset lifts a tile.

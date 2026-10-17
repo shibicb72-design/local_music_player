@@ -133,6 +133,21 @@ class TwoPaneNavigationTest {
         walkExpanded()
     }
 
+    /** Videos is on both rings: opened folded, it survives an unfold and a fold back. */
+    @Test
+    fun videosSurvivesFoldAndUnfold() {
+        start()
+        fold(Compact)
+        select("Videos")
+        assertShown("Videos", "Video access needed")
+        fold(Expanded)
+        tab("Videos").assertIsSelected()
+        assertShown("Videos", "Video access needed")
+        fold(Compact)
+        tab("Videos").assertIsSelected()
+        assertShown("Videos", "Video access needed")
+    }
+
     /** Folded, picking a section again shows that section, never a restored Now Playing. */
     @Test
     fun compactRestoresSectionWithoutNowPlaying() {
@@ -211,6 +226,7 @@ class TwoPaneNavigationTest {
             "Recent" to "Songs you play show up here.",
             "Search" to "Search songs by title or artist.",
             "Settings" to "Dark theme",
+            "Videos" to "Video access needed",
             "Songs" to "Music access needed",
         )
     }

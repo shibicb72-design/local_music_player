@@ -51,6 +51,15 @@
     <string name="nav_recent">Recent</string>
     <string name="nav_search">Search</string>
     <string name="nav_settings">Settings</string>
+    <string name="nav_videos">Videos</string>
+    <string name="videos_title">Videos</string>
+    <string name="videos_empty">No videos found on this device.</string>
+    <string name="video_library_error">Could not read videos from this device.</string>
+    <string name="video_permission_title">Video access needed</string>
+    <string name="video_permission_body">Allow access to videos so Theatrum can list the videos stored on this device.</string>
+    <string name="video_partial_body">Showing videos you picked</string>
+    <string name="video_allow_all">Allow all</string>
+    <string name="video_pick_more">Pick more</string>
     <string name="favorites_title">Favorites</string>
     <string name="favorites_empty">No favorites yet. Heart a song to keep it here.</string>
     <string name="recent_title">Recently played</string>
@@ -167,6 +176,10 @@
     <plurals name="song_count">
         <item quantity="one">%d song</item>
         <item quantity="other">%d songs</item>
+    </plurals>
+    <plurals name="video_count">
+        <item quantity="one">%d video</item>
+        <item quantity="other">%d videos</item>
     </plurals>
     <plurals name="playlist_count">
         <item quantity="one">%d playlist</item>
