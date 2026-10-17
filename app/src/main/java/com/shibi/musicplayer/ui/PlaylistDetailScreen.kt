@@ -408,6 +408,8 @@ private fun PlaylistSongLine(
     handleModifier: Modifier = Modifier,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
+    val chrome = LocalBackgroundChrome.current
+    val dragFill = if (chrome.isLight) chrome.frost else Base3
     Row(
         modifier = Modifier
             .zIndex(if (dragging) 1f else 0f)
@@ -415,7 +417,7 @@ private fun PlaylistSongLine(
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 4.dp)
             .clip(RoundedCornerShape(16.dp))
-            .background(if (dragging) Base3 else Color.Transparent)
+            .background(if (dragging) dragFill else Color.Transparent)
             .padding(start = 4.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

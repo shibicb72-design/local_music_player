@@ -28,7 +28,7 @@ fun AppBackgroundHost(
         AppBackgroundLayer(
             background = background,
             colors = colors,
-            phase = phase,
+            phase = { phase.value },
             modifier = Modifier.fillMaxSize(),
         )
         BackgroundContentTheme(
@@ -44,7 +44,7 @@ fun AppBackgroundHost(
 internal fun AppBackgroundLayer(
     background: AppBackground,
     colors: List<Long>,
-    phase: Float,
+    phase: () -> Float,
     modifier: Modifier = Modifier,
 ) {
     val scratch = remember { SceneScratch() }
@@ -66,7 +66,7 @@ internal fun AppBackgroundLayer(
             is AppBackground.Solid -> drawRect(colors.colorOr(Base0))
             is AppBackground.Gradient -> drawRect(brush = Brush.linearGradient(blendColors))
             is AppBackground.Animated -> {
-                drawScene(background.sceneId, colors, phase, scratch, field)
+                drawScene(background.sceneId, colors, phase(), scratch, field)
             }
         }
     }

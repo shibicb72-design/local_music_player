@@ -1,5 +1,6 @@
 package com.shibi.musicplayer.ui.background
 
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -10,6 +11,7 @@ import com.shibi.musicplayer.domain.AppBackground
 import com.shibi.musicplayer.domain.BackgroundCatalog
 import com.shibi.musicplayer.domain.BackgroundContrast
 import com.shibi.musicplayer.ui.theme.Accent
+import com.shibi.musicplayer.ui.theme.MusicDarkColors
 import com.shibi.musicplayer.ui.theme.TextHigh
 
 data class BackgroundChrome(
@@ -29,6 +31,8 @@ data class BackgroundChrome(
     val sheet: Color,
     val dialog: Color,
     val pageFill: Color,
+    /** Accent for text and small icons on the page, row, and sheet. */
+    val accentText: Color,
 )
 
 val DarkBackgroundChrome = BackgroundChrome(
@@ -48,6 +52,7 @@ val DarkBackgroundChrome = BackgroundChrome(
     sheet = Color(0xFF2E2E3A),
     dialog = Color(0xFF24242E),
     pageFill = Color(0xFF0E0E12),
+    accentText = Color(0xFFB9A8FF),
 )
 
 val LightBackgroundChrome = BackgroundChrome(
@@ -67,6 +72,7 @@ val LightBackgroundChrome = BackgroundChrome(
     sheet = Color(0xFFF7F4FB),
     dialog = Color(0xFFFBF8FF),
     pageFill = Color(0xFFF8C8D4),
+    accentText = Color(0xFF4A34B0),
 )
 
 val LocalBackgroundChrome = staticCompositionLocalOf { DarkBackgroundChrome }
@@ -92,8 +98,23 @@ fun BackgroundContentTheme(
     }
     val roles = remember(sample) { BackgroundContrast.rolesFor(background, customColors) }
     val chrome = remember(roles) { chromeFor(roles) }
-    val base = MaterialTheme.colorScheme
-    val scheme = if (roles.isLight) {
+    val scheme = backgroundContentScheme(MaterialTheme.colorScheme, roles, chrome)
+    CompositionLocalProvider(LocalBackgroundChrome provides chrome) {
+        MaterialTheme(colorScheme = scheme, content = content)
+    }
+}
+
+/**
+ * Content roles follow the backdrop, not the theme flag. A dark backdrop gets
+ * the dark scheme even when the theme is light, so text never goes dark-on-dark.
+ */
+internal fun backgroundContentScheme(
+    base: ColorScheme,
+    roles: BackgroundContrast.Roles,
+    chrome: BackgroundChrome,
+    darkScheme: ColorScheme = MusicDarkColors,
+): ColorScheme {
+    return if (roles.isLight) {
         base.copy(
             onBackground = roles.onBackgroundArgb.toComposeColor(),
             surface = chrome.dialog,
@@ -110,10 +131,7 @@ fun BackgroundContentTheme(
             outlineVariant = Color(0xFFD4D0DE),
         )
     } else {
-        base
-    }
-    CompositionLocalProvider(LocalBackgroundChrome provides chrome) {
-        MaterialTheme(colorScheme = scheme, content = content)
+        darkScheme
     }
 }
 

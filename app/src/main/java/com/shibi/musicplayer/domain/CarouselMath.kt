@@ -2,6 +2,7 @@ package com.shibi.musicplayer.domain
 
 import java.lang.Math.toDegrees
 import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.roundToInt
 import kotlin.math.sin
@@ -116,7 +117,43 @@ class CarouselMath(val itemCount: Int) {
         return -deltaPx / arcPerItem
     }
 
+    /**
+     * Where a release with [velocity] (items per second) comes to rest: the
+     * momentum is projected for [FLING_PROJECTION_SECONDS], capped at one full
+     * turn, and rounded to a detent. One spring then carries the ring there,
+     * so a fling never decays and then visibly re-snaps. Without [momentum]
+     * (reduce motion) the ring only snaps to the nearest detent.
+     */
+    fun flingTarget(rotation: Float, velocity: Float, momentum: Boolean = true): Float {
+        if (!momentum) return snapTarget(rotation)
+        val travel = (velocity * FLING_PROJECTION_SECONDS)
+            .coerceIn(-itemCount.toFloat(), itemCount.toFloat())
+        return snapTarget(rotation + travel)
+    }
+
+    /** 1 at the front, 0 one step away or further. Drives the selected-state morph. */
+    fun frontness(offsetRadians: Float): Float =
+        (1f - abs(offsetRadians) / stepRadians).coerceIn(0f, 1f)
+
+    /**
+     * Label opacity. A hand-off, not a blend: each label fades in over the
+     * last half step, so halfway between two items both are clear and the two
+     * words never stack into a smear.
+     */
+    fun labelAlpha(offsetRadians: Float): Float {
+        val t = ((frontness(offsetRadians) - 0.5f) / 0.5f).coerceIn(0f, 1f)
+        return t * t * (3f - 2f * t)
+    }
+
+    /** 0 for the front and its neighbours, rising to 1 at the hidden back. */
+    fun blurFraction(offsetRadians: Float): Float {
+        val beyond = abs(offsetRadians) - stepRadians
+        if (beyond <= 0f) return 0f
+        return (beyond / (PI.toFloat() - stepRadians)).coerceIn(0f, 1f)
+    }
+
     companion object {
+        const val FLING_PROJECTION_SECONDS = 0.22f
         const val MIN_SCALE = 0.62f
         const val MIN_ALPHA = 0.35f
         const val BACK_COS = -0.1f

@@ -39,6 +39,10 @@
     <string name="output_kind_wired">Wired</string>
     <string name="output_kind_usb">USB</string>
     <string name="output_kind_bluetooth">Bluetooth</string>
+    <string name="devices_title">Devices</string>
+    <string name="devices_subtitle">Choose where your music plays</string>
+    <string name="devices_only_phone">Only this phone right now</string>
+    <string name="devices_only_phone_hint">Turn on Bluetooth headphones or a speaker, or plug in headphones. They show up here on their own.</string>
     <string name="nav_songs">Songs</string>
     <string name="nav_playlists">Playlists</string>
     <string name="nav_now_playing">Now playing</string>
@@ -61,6 +65,7 @@
     <string name="settings_dark">Dark theme</string>
     <string name="settings_backgrounds">Backgrounds</string>
     <string name="settings_backgrounds_body">The color behind your music</string>
+    <string name="settings_backgrounds_dark_on">Dark theme is on. Turn it off to see your pick.</string>
     <string name="settings_about">About</string>
     <string name="settings_about_body">A local player for the music on this device.</string>
     <string name="bg_tab_solid">Solid</string>

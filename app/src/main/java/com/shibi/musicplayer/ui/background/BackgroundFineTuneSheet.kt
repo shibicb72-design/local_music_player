@@ -118,7 +118,7 @@ internal fun BackgroundFineTuneContent(
             AppBackgroundLayer(
                 background = AppBackground.Animated(scene.id),
                 colors = colors,
-                phase = phase,
+                phase = { phase.value },
                 modifier = Modifier.matchParentSize(),
             )
         }

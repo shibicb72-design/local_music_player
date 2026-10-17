@@ -82,6 +82,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.shibi.musicplayer.R
 import com.shibi.musicplayer.domain.PlaybackTime
@@ -123,8 +124,9 @@ fun LibraryScreen(
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
     ) { result ->
-        audioGranted = result[audioPermission] == true
-        if (audioGranted) viewModel.refresh()
+        val granted = result[audioPermission] == true
+        if (granted && !audioGranted) viewModel.refresh()
+        audioGranted = granted
     }
 
     LaunchedEffect(Unit) {
@@ -133,6 +135,15 @@ fun LibraryScreen(
         } else {
             permissionLauncher.launch(startupPermissions())
         }
+    }
+
+    // Access granted from system Settings only shows up when the app resumes.
+    LifecycleResumeEffect(audioPermission) {
+        val granted = ContextCompat.checkSelfPermission(context, audioPermission) ==
+            PackageManager.PERMISSION_GRANTED
+        if (granted && !audioGranted) viewModel.refresh()
+        audioGranted = granted
+        onPauseOrDispose { }
     }
 
     when {
@@ -416,7 +427,7 @@ internal fun TrackRow(
             Icon(
                 imageVector = Icons.Filled.GraphicEq,
                 contentDescription = null,
-                tint = Color(0xFFB9A8FF),
+                tint = chrome.accentText,
                 modifier = Modifier.size(18.dp),
             )
             Spacer(Modifier.width(Spacing.sm))

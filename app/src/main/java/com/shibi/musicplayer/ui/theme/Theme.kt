@@ -13,7 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 
-private val MusicDarkColors = darkColorScheme(
+internal val MusicDarkColors = darkColorScheme(
     primary = Accent,
     onPrimary = OnAccent,
     primaryContainer = AccentContainer,
@@ -43,7 +43,7 @@ private val MusicDarkColors = darkColorScheme(
 
 private val SelectedPrimary = Color(0xFF6E4EF0)
 
-private val MusicLightColors = lightColorScheme(
+internal val MusicLightColors = lightColorScheme(
     primary = SelectedPrimary,
     onPrimary = Color.White,
     primaryContainer = Color(0xFFE4DDFF),

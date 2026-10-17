@@ -164,4 +164,57 @@ class CarouselMathTest {
         assertEquals(0.5f, math.dragItems(-arc / 2f, radius), 0.001f)
         assertEquals(0f, math.dragItems(40f, 0f), 0.001f)
     }
+
+    @Test
+    fun flingTargetProjectsMomentumAndLandsOnADetent() {
+        // 5 items/s for 0.22 s projects 1.1 items, so it lands one detent on.
+        assertEquals(3f, math.flingTarget(2.0f, 5f), 0.001f)
+        assertEquals(1f, math.flingTarget(2.0f, -5f), 0.001f)
+        // A slow release falls back to the nearest detent.
+        assertEquals(2f, math.flingTarget(2.3f, 0.2f), 0.001f)
+        // Always a whole detent, whatever the input.
+        val target = math.flingTarget(0.37f, 13.3f)
+        assertEquals(target, target.toInt().toFloat(), 0.0001f)
+    }
+
+    @Test
+    fun flingTargetNeverSpinsMoreThanOneTurn() {
+        assertEquals(8f, math.flingTarget(0f, 500f), 0.001f)
+        assertEquals(-8f, math.flingTarget(0f, -500f), 0.001f)
+    }
+
+    @Test
+    fun flingTargetWithoutMomentumOnlySnaps() {
+        assertEquals(2f, math.flingTarget(2.3f, 40f, momentum = false), 0.001f)
+        assertEquals(3f, math.flingTarget(2.6f, -40f, momentum = false), 0.001f)
+    }
+
+    @Test
+    fun frontnessPeaksAtTheFrontAndFadesOverOneStep() {
+        assertEquals(1f, math.frontness(0f), 0.001f)
+        assertEquals(0.5f, math.frontness(math.stepRadians / 2f), 0.001f)
+        assertEquals(0.5f, math.frontness(-math.stepRadians / 2f), 0.001f)
+        assertEquals(0f, math.frontness(math.stepRadians), 0.001f)
+        assertEquals(0f, math.frontness(PI.toFloat()), 0.001f)
+    }
+
+    @Test
+    fun labelAlphaCrossfadesWithoutTwoFullLabels() {
+        // Halfway between two items neither label is fully opaque.
+        val half = math.stepRadians / 2f
+        assertEquals(0f, math.labelAlpha(half), 0.001f)
+        assertEquals(0f, math.labelAlpha(-half), 0.001f)
+        assertTrue(math.labelAlpha(half / 2f) in 0.4f..0.6f)
+        assertEquals(1f, math.labelAlpha(0f), 0.001f)
+        assertEquals(0f, math.labelAlpha(math.stepRadians), 0.001f)
+    }
+
+    @Test
+    fun backBlurIsZeroNearTheFrontAndGrowsTowardTheBack() {
+        assertEquals(0f, math.blurFraction(0f), 0.001f)
+        assertEquals(0f, math.blurFraction(math.stepRadians), 0.001f)
+        val side = math.blurFraction(2f * math.stepRadians)
+        assertTrue(side > 0f && side <= 1f)
+        assertTrue(math.blurFraction(3f * math.stepRadians) > side)
+    }
 }

@@ -64,6 +64,7 @@ fun BackgroundPickerScreen(
     onBack: () -> Unit,
     contentBottomPadding: Dp = 0.dp,
     modifier: Modifier = Modifier,
+    darkThemeOn: Boolean = false,
 ) {
     var tab by remember {
         mutableStateOf(
@@ -89,6 +90,7 @@ fun BackgroundPickerScreen(
         onBack = onBack,
         contentBottomPadding = contentBottomPadding,
         modifier = modifier,
+        darkThemeOn = darkThemeOn,
     )
     val sceneId = fineTuneId
     val scene = sceneId?.let { BackgroundCatalog.scene(it) }
@@ -119,6 +121,7 @@ internal fun BackgroundPickerContent(
     contentBottomPadding: Dp = 0.dp,
     modifier: Modifier = Modifier,
     forceStatic: Boolean = false,
+    darkThemeOn: Boolean = false,
 ) {
     val play = rememberBackgroundMotion(forceStatic)
     val phase = rememberScenePhase(play)
@@ -150,11 +153,18 @@ internal fun BackgroundPickerContent(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+                // Dark theme covers the backdrop, so say where the pick will show.
                 Text(
-                    text = stringResource(R.string.settings_backgrounds_body),
+                    text = stringResource(
+                        if (darkThemeOn) {
+                            R.string.settings_backgrounds_dark_on
+                        } else {
+                            R.string.settings_backgrounds_body
+                        },
+                    ),
                     style = MaterialTheme.typography.bodyMedium,
                     color = scheme.onSurfaceVariant,
-                    maxLines = 1,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
@@ -203,7 +213,7 @@ internal fun BackgroundPickerContent(
                     AppBackgroundLayer(
                         background = tile,
                         colors = tile.previewColors(customColors),
-                        phase = phase,
+                        phase = { phase.value },
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
