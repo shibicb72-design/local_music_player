@@ -15,12 +15,14 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         RecentPlayEntity::class,
         RecentSearchEntity::class,
         AppSettingsEntity::class,
+        VideoProgressEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = false,
 )
 abstract class PlaylistDatabase : RoomDatabase() {
     abstract fun playlistDao(): PlaylistDao
+    abstract fun videoProgressDao(): VideoProgressDao
 
     companion object {
         @Volatile
@@ -70,13 +72,27 @@ abstract class PlaylistDatabase : RoomDatabase() {
             }
         }
 
+        /** V9: video resume positions. Only a new table; nothing existing is touched. */
+        internal val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `video_progress` (" +
+                        "`uri` TEXT NOT NULL, " +
+                        "`positionMs` INTEGER NOT NULL, " +
+                        "`durationMs` INTEGER NOT NULL, " +
+                        "`updatedAt` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`uri`))",
+                )
+            }
+        }
+
         fun get(context: Context): PlaylistDatabase {
             return instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
                     context.applicationContext,
                     PlaylistDatabase::class.java,
                     "playlists.db",
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                     .build()
                     .also { instance = it }
             }

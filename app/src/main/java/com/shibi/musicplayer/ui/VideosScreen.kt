@@ -51,7 +51,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -59,6 +62,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -72,9 +77,11 @@ import coil3.compose.SubcomposeAsyncImage
 import coil3.compose.SubcomposeAsyncImageContent
 import com.shibi.musicplayer.R
 import com.shibi.musicplayer.domain.ArtTile
+import com.shibi.musicplayer.domain.ResumePolicy
 import com.shibi.musicplayer.domain.Video
 import com.shibi.musicplayer.domain.VideoAccess
 import com.shibi.musicplayer.domain.VideoFormat
+import com.shibi.musicplayer.domain.VideoProgress
 import com.shibi.musicplayer.library.VideoLibraryUiState
 import com.shibi.musicplayer.library.VideoLibraryViewModel
 import com.shibi.musicplayer.library.videoThumbnailRequest
@@ -84,6 +91,7 @@ import com.shibi.musicplayer.ui.background.toComposeColor
 import com.shibi.musicplayer.ui.theme.Spacing
 import com.shibi.musicplayer.video.VideoEngine
 import com.shibi.musicplayer.video.VideoUiState
+import kotlin.math.roundToInt
 
 private val ThumbnailShape = RoundedCornerShape(12.dp)
 
@@ -98,6 +106,9 @@ fun VideosScreen(
     contentBottomPadding: Dp,
     modifier: Modifier = Modifier,
     video: VideoUiState = VideoUiState(),
+    /** Saved resume positions by URI: the rows' hairlines and missing durations. */
+    savedProgress: Map<String, VideoProgress> = emptyMap(),
+    onStartOver: () -> Unit = {},
     videoEngine: VideoEngine? = null,
     onTogglePlayPause: () -> Unit = {},
     onSeek: (Long) -> Unit = {},
@@ -138,6 +149,7 @@ fun VideosScreen(
         contentBottomPadding = contentBottomPadding,
         modifier = modifier,
         playingVideoId = video.video?.id,
+        savedProgress = savedProgress,
         player = if (video.isActive && showInlinePlayer) {
             { maxHeight ->
                 InlineVideoPlayer(
@@ -150,6 +162,7 @@ fun VideosScreen(
                     onFullscreen = onFullscreen,
                     onOpenTracks = onOpenTracks,
                     holdControls = holdControls,
+                    onStartOver = onStartOver,
                 )
             }
         } else {
@@ -169,6 +182,7 @@ internal fun VideosContent(
     modifier: Modifier = Modifier,
     checked: Boolean = true,
     playingVideoId: Long? = null,
+    savedProgress: Map<String, VideoProgress> = emptyMap(),
     listState: LazyListState = rememberLazyListState(),
     player: (@Composable (maxHeight: Dp) -> Unit)? = null,
 ) {
@@ -182,6 +196,7 @@ internal fun VideosContent(
                 onVideoClick = onVideoClick,
                 contentBottomPadding = contentBottomPadding,
                 playingVideoId = playingVideoId,
+                savedProgress = savedProgress,
                 listState = listState,
                 topPadding = 8.dp,
                 modifier = Modifier.fillMaxSize(),
@@ -229,6 +244,7 @@ internal fun VideosContent(
                     onVideoClick = onVideoClick,
                     contentBottomPadding = contentBottomPadding,
                     playingVideoId = playingVideoId,
+                    savedProgress = savedProgress,
                     listState = listState,
                     modifier = Modifier
                         .weight(1f)
@@ -245,6 +261,7 @@ private fun VideoList(
     onVideoClick: (Video) -> Unit,
     contentBottomPadding: Dp,
     playingVideoId: Long?,
+    savedProgress: Map<String, VideoProgress>,
     listState: LazyListState,
     modifier: Modifier = Modifier,
     topPadding: Dp = 0.dp,
@@ -273,6 +290,7 @@ private fun VideoList(
                 VideoRow(
                     video = video,
                     isPlaying = video.id == playingVideoId,
+                    saved = savedProgress[video.contentUri],
                     onClick = { onVideoClick(video) },
                     modifier = Modifier.animateItem(),
                 )
@@ -281,17 +299,24 @@ private fun VideoList(
     }
 }
 
-/** The `TrackRow` pill with a 16:9 thumbnail; text colours come from the row's own fill. */
+/**
+ * The `TrackRow` pill with a 16:9 thumbnail; text colours come from the row's own fill. A
+ * partly watched video ([saved] would resume) gets a hairline under its thumbnail, drawn in
+ * the row's own text colour, so it reads on the dark row and on every pastel one.
+ */
 @Composable
 internal fun VideoRow(
     video: Video,
     isPlaying: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    saved: VideoProgress? = null,
 ) {
     val chrome = LocalBackgroundChrome.current
     val fill = if (isPlaying) chrome.playingRowFill else chrome.rowFill
     val roles = rememberSurfaceRoles(fill)
+    val watched = ResumePolicy.watchedFraction(saved, video.durationMs)
+    val watchedText = watched?.let { stringResource(R.string.video_watched, (it * 100).roundToInt()) }
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -304,7 +329,16 @@ internal fun VideoRow(
     ) {
         VideoThumbnail(
             video = video,
-            modifier = Modifier.size(width = 96.dp, height = 54.dp),
+            durationMs = ResumePolicy.displayDuration(video.durationMs, saved),
+            modifier = Modifier
+                .size(width = 96.dp, height = 54.dp)
+                .then(
+                    if (watched != null && watchedText != null) {
+                        Modifier.watchedHairline(watched, roles.onSurfaceArgb.toComposeColor(), watchedText)
+                    } else {
+                        Modifier
+                    },
+                ),
         )
         Column(
             modifier = Modifier
@@ -350,8 +384,34 @@ internal fun videoSubtitle(video: Video): String = listOfNotNull(
     video.folder,
 ).joinToString(" · ")
 
+/**
+ * A 3dp bar in the row's bottom padding, 3dp under the thumbnail: the watched part in
+ * [color], the rest in [color] at 25%. It sits outside the thumbnail's clip, so the row's
+ * height is the same with or without it.
+ */
+private fun Modifier.watchedHairline(fraction: Float, color: Color, description: String): Modifier =
+    semantics { stateDescription = description }
+        .drawBehind {
+            val gap = 3.dp.toPx()
+            val thickness = 3.dp.toPx()
+            val top = size.height + gap
+            val radius = CornerRadius(thickness / 2f)
+            drawRoundRect(
+                color = color.copy(alpha = 0.25f),
+                topLeft = Offset(0f, top),
+                size = Size(size.width, thickness),
+                cornerRadius = radius,
+            )
+            drawRoundRect(
+                color = color,
+                topLeft = Offset(0f, top),
+                size = Size((size.width * fraction).coerceAtLeast(thickness), thickness),
+                cornerRadius = radius,
+            )
+        }
+
 @Composable
-private fun VideoThumbnail(video: Video, modifier: Modifier = Modifier) {
+private fun VideoThumbnail(video: Video, durationMs: Long?, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     // The request carries its own fetcher factory, so build it once per video.
     val request = remember(video.contentUri) { videoThumbnailRequest(context, video.contentUri) }
@@ -370,7 +430,7 @@ private fun VideoThumbnail(video: Video, modifier: Modifier = Modifier) {
             }
         }
         DurationBadge(
-            text = VideoFormat.duration(video.durationMs),
+            text = VideoFormat.duration(durationMs),
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(4.dp),

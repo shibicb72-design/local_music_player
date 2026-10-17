@@ -122,19 +122,20 @@ internal class VlcVideoEngine(context: Context) : VideoEngine {
         }
     }
 
-    override fun load(uri: String) {
+    override fun load(uri: String, startMs: Long) {
         if (released) return
         restore = null
         currentUri = uri
         // Another file has its own track ids.
         savedVideoTrack = null
         dispatch(VideoEngineEvent.Opening)
+        if (startMs > 0L) dispatch(VideoEngineEvent.Time(startMs))
         _tracks.value = TrackSnapshot()
         val mediaPlayer = ensurePlayer() ?: return
         mediaPlayer.stop()
         // A new video starts with no loaded files; their descriptors close after the stop.
         closeExternals()
-        openMedia(mediaPlayer, uri)
+        openMedia(mediaPlayer, uri, startMs = startMs)
     }
 
     override fun play() {
@@ -335,7 +336,7 @@ internal class VlcVideoEngine(context: Context) : VideoEngine {
         return created
     }
 
-    private fun openMedia(mediaPlayer: MediaPlayer, uri: String, resume: Restore? = null) {
+    private fun openMedia(mediaPlayer: MediaPlayer, uri: String, resume: Restore? = null, startMs: Long = 0L) {
         val vlc = libVlc ?: return
         val opened = try {
             appContext.contentResolver.openFileDescriptor(Uri.parse(uri), "r")
@@ -360,6 +361,9 @@ internal class VlcVideoEngine(context: Context) : VideoEngine {
             // libVLC starts at the saved position itself, and paused if it was paused.
             if (resume.positionMs > 0L) media.addOption(":start-time=${resume.positionMs / 1000.0}")
             if (!resume.play) media.addOption(":start-paused")
+        } else if (startMs > 0L) {
+            // A saved resume position (V9): libVLC opens there, with no frame from 0 first.
+            media.addOption(":start-time=${startMs / 1000.0}")
         }
         mediaPlayer.setMedia(media)
         // The player holds its own reference.

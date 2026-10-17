@@ -50,8 +50,11 @@ interface VideoEngine {
     /** Audio and subtitle tracks, the selection and the delays; empty until the video starts. */
     val tracks: StateFlow<TrackSnapshot>
 
-    /** Opens a `content://` (or file) URI and starts playing once a view is attached. */
-    fun load(uri: String)
+    /**
+     * Opens a `content://` (or file) URI and starts playing once a view is attached, at
+     * [startMs] when resuming. The state reports [startMs] as the position from the start.
+     */
+    fun load(uri: String, startMs: Long = 0L)
     fun play()
     fun pause()
     fun seekTo(positionMs: Long)

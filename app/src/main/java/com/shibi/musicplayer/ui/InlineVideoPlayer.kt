@@ -93,6 +93,7 @@ internal fun InlineVideoPlayer(
     onOpenTracks: (() -> Unit)? = null,
     holdControls: Boolean = false,
     initialControlsVisible: Boolean = false,
+    onStartOver: () -> Unit = {},
 ) {
     BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
         val boxHeight = InlineVideoBox.height(maxWidth.value, maxHeight.value, state.aspect).dp
@@ -106,6 +107,7 @@ internal fun InlineVideoPlayer(
             onOpenTracks = onOpenTracks,
             holdControls = holdControls,
             initialControlsVisible = initialControlsVisible,
+            onStartOver = onStartOver,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(boxHeight)
@@ -132,6 +134,8 @@ internal fun VideoPlayerBox(
     /** The tracks sheet is open: the controls stay up behind it. */
     holdControls: Boolean = false,
     initialControlsVisible: Boolean = false,
+    /** The resume chip's Start over. */
+    onStartOver: () -> Unit = {},
 ) {
     ContrastSurface(
         color = Color.Black,
@@ -194,6 +198,15 @@ internal fun VideoPlayerBox(
                     },
                 )
             }
+            // Over the title, clear of the tracks and close buttons; above the controls, so
+            // Start over works whether they show or not.
+            ResumeChipSlot(
+                resumedAtMs = state.resumedAtMs,
+                onStartOver = onStartOver,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(start = 8.dp, top = 6.dp, end = 104.dp),
+            )
         }
     }
 }

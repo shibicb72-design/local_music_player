@@ -36,6 +36,7 @@ import com.shibi.musicplayer.ui.VideoPaneTag
 import com.shibi.musicplayer.video.RawTrackDescription
 import com.shibi.musicplayer.video.TrackSnapshot
 import com.shibi.musicplayer.video.VideoEngineEvent
+import com.shibi.musicplayer.video.VideoProgressHooks
 import com.shibi.musicplayer.video.VideoSessionLink
 import com.shibi.musicplayer.video.VideoStatus
 import com.shibi.musicplayer.video.VideoViewModel
@@ -380,11 +381,14 @@ internal class MediaSetup(private val engines: MutableList<FakeVideoEngine>) : T
                 VideoViewModel.testEngineFactory = { FakeVideoEngine().also(engines::add) }
                 // Robolectric cannot bind the session service; tests that care record the link.
                 VideoViewModel.testSessionLink = { VideoSessionLink.None }
+                // No position saved by one test resumes the next one's video.
+                VideoViewModel.testProgress = { VideoProgressHooks.None }
                 try {
                     base.evaluate()
                 } finally {
                     VideoViewModel.testEngineFactory = null
                     VideoViewModel.testSessionLink = null
+                    VideoViewModel.testProgress = null
                 }
             }
         }

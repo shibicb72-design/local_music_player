@@ -1,6 +1,7 @@
 package com.shibi.musicplayer.video
 
 import android.app.Application
+import android.os.SystemClock
 import androidx.annotation.VisibleForTesting
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -14,14 +15,17 @@ import com.shibi.musicplayer.domain.BackgroundPolicy
 import com.shibi.musicplayer.domain.InlineVideoBox
 import com.shibi.musicplayer.domain.MediaFacts
 import com.shibi.musicplayer.domain.PlaybackArbiter
+import com.shibi.musicplayer.domain.ResumePolicy
 import com.shibi.musicplayer.domain.Video
 import com.shibi.musicplayer.domain.VideoAudioEvent
 import com.shibi.musicplayer.domain.VideoFocusPolicy
+import com.shibi.musicplayer.domain.VideoProgress
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -46,22 +50,41 @@ data class VideoUiState(
     /** Display width / height; MediaStore's size until the engine reports the real one. */
     val aspect: Float? = null,
     val error: VideoError? = null,
+    /** The video resumed here: the "Resumed at 12:34 · Start over" chip shows for 4 s. */
+    val resumedAtMs: Long? = null,
 ) {
     /** Loaded, playing, paused, ended or failed: the box is on screen and the mini player is not. */
     val isActive: Boolean get() = video != null
     val isPlaying: Boolean get() = status == VideoStatus.Playing
 }
 
-/** Where V9 saves resume positions. V4 saves nothing; the calls are already in place. */
+/**
+ * Where resume positions live ([VideoProgressRepository] in the app). [saved] is read
+ * synchronously as a video opens, so it must answer from memory.
+ */
 interface VideoProgressHooks {
+    /** Every saved video by its `content://` URI, for the list's hairlines and durations. */
+    val progress: StateFlow<Map<String, VideoProgress>> get() = NoProgress
+
+    fun saved(video: Video): VideoProgress? = null
+
+    /** A save point: every 5 s while playing, and on pause, close and leaving the app. */
     fun onCheckpoint(video: Video, positionMs: Long, durationMs: Long)
-    fun onFinished(video: Video)
+
+    /** The end was reached: the position is cleared, the length kept. */
+    fun onFinished(video: Video, durationMs: Long)
+
+    /** The chip's Start over: the same as finishing. */
+    fun onStartOver(video: Video, durationMs: Long)
 
     object None : VideoProgressHooks {
         override fun onCheckpoint(video: Video, positionMs: Long, durationMs: Long) = Unit
-        override fun onFinished(video: Video) = Unit
+        override fun onFinished(video: Video, durationMs: Long) = Unit
+        override fun onStartOver(video: Video, durationMs: Long) = Unit
     }
 }
+
+private val NoProgress: StateFlow<Map<String, VideoProgress>> = MutableStateFlow(emptyMap())
 
 /** Music's side, as the video sees it: a video played from anywhere keeps the music paused. */
 interface MusicControl {
@@ -96,13 +119,15 @@ class VideoViewModel internal constructor(
     private val externalTracks: ExternalTrackSource? = null,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val sessionLink: VideoSessionLink = VideoSessionLink.None,
+    /** Paces the 5 s saves; tests pass their own. */
+    private val clock: () -> Long = SystemClock::elapsedRealtime,
 ) : AndroidViewModel(application) {
 
     constructor(application: Application) : this(
         application = application,
         engineFactory = { testEngineFactory?.invoke() ?: VlcVideoEngine(application) },
         audioFocus = AndroidVideoAudioFocus(application),
-        progress = VideoProgressHooks.None,
+        progress = testProgress?.invoke() ?: VideoProgressRepository.get(application),
         prefs = DataStoreVideoPrefs(application),
         errorLogger = ErrorLog.get(application),
         externalTracks = ContentExternalTrackSource(application),
@@ -125,6 +150,14 @@ class VideoViewModel internal constructor(
         @VisibleForTesting
         @Volatile
         var testSessionLink: (() -> VideoSessionLink)? = null
+
+        /**
+         * The same for resume positions: the database is one per process, so a position saved
+         * by one real-activity test would resume the next one's video.
+         */
+        @VisibleForTesting
+        @Volatile
+        var testProgress: (() -> VideoProgressHooks)? = null
     }
 
     private val _engine = MutableStateFlow<VideoEngine?>(null)
@@ -137,6 +170,20 @@ class VideoViewModel internal constructor(
 
     private var stateJob: Job? = null
     private var pausedForTransientLoss = false
+
+    /** Saved positions by URI, for the Videos list. */
+    val savedProgress: StateFlow<Map<String, VideoProgress>> = progress.progress
+
+    /** Where the open video started; 0 unless it resumed. */
+    private var resumeFromMs = 0L
+
+    /**
+     * The open video has played or paused at its real position. Until then the engine's
+     * position is still 0 (or the opening seek), so nothing is saved over the old place.
+     */
+    private var started = false
+    private var lastSavedAtMs = 0L
+    private var noticeJob: Job? = null
 
     /** The last aspect mode picked in fullscreen (saved); the box and the pane always fit. */
     val aspectMode: StateFlow<AspectMode> =
@@ -234,7 +281,8 @@ class VideoViewModel internal constructor(
         val playing = status == VideoStatus.Playing || status == VideoStatus.Buffering
         when (BackgroundPolicy.decide(event, playing)) {
             BackgroundAction.Pause -> pause()
-            BackgroundAction.KeepAudio, BackgroundAction.None -> Unit
+            // Locked, or picking a file: still a save point, in case the process goes.
+            BackgroundAction.KeepAudio, BackgroundAction.None -> checkpoint()
         }
         engine.setPictureEnabled(false)
         pictureOff = true
@@ -267,7 +315,10 @@ class VideoViewModel internal constructor(
         }
     }
 
-    /** Plays [video] at once; the same video again just resumes it. */
+    /**
+     * Plays [video] at once; the same video again just resumes it. A video left past its first
+     * 5 s and before its last 5% starts where it was left ([ResumePolicy]).
+     */
     fun open(video: Video) {
         val current = _uiState.value
         if (current.video?.id == video.id && current.status != VideoStatus.Error) {
@@ -276,6 +327,7 @@ class VideoViewModel internal constructor(
         }
         checkpoint()
         stateJob?.cancel()
+        noticeJob?.cancel()
         resetTrackLoad()
         externalTracks?.clear()
         val engine = _engine.value ?: engineFactory().also { created ->
@@ -284,15 +336,22 @@ class VideoViewModel internal constructor(
             if (fullscreen) applyAspect()
         }
         engine.configure(engineOptions.value)
+        val saved = progress.saved(video)
+        val startMs = ResumePolicy.startAt(saved, video.durationMs)
+        resumeFromMs = startMs
+        started = false
+        lastSavedAtMs = clock()
         _uiState.value = VideoUiState(
             video = video,
             status = VideoStatus.Buffering,
-            durationMs = video.durationMs ?: 0L,
+            positionMs = startMs,
+            // MediaStore often has no length for MKV/WMV; libVLC's from an earlier play is saved.
+            durationMs = ResumePolicy.displayDuration(video.durationMs, saved) ?: 0L,
             aspect = InlineVideoBox.displayAspect(video.width ?: 0, video.height ?: 0),
         )
         pausedForTransientLoss = false
         audioFocus.acquire(::onAudioEvent)
-        engine.load(video.contentUri)
+        engine.load(video.contentUri, startMs)
         stateJob = viewModelScope.launch {
             engine.state.collect { engineState -> merge(video, engineState) }
         }
@@ -323,6 +382,19 @@ class VideoViewModel internal constructor(
 
     fun seekTo(positionMs: Long) {
         _engine.value?.seekTo(positionMs)
+    }
+
+    /** The chip's Start over: back to 0, and the saved place is cleared. */
+    fun startOver() {
+        val engine = _engine.value ?: return
+        val state = _uiState.value
+        val video = state.video ?: return
+        noticeJob?.cancel()
+        resumeFromMs = 0L
+        lastSavedAtMs = clock()
+        engine.seekTo(0L)
+        progress.onStartOver(video, state.durationMs)
+        _uiState.update { it.copy(resumedAtMs = null) }
     }
 
     /** Fullscreen uses the saved aspect mode; leaving it goes back to fit for the box and pane. */
@@ -449,6 +521,9 @@ class VideoViewModel internal constructor(
         checkpoint()
         stateJob?.cancel()
         stateJob = null
+        noticeJob?.cancel()
+        noticeJob = null
+        started = false
         resetTrackLoad()
         externalTracks?.clear()
         // The notification goes at once, before the engine it controls.
@@ -478,12 +553,37 @@ class VideoViewModel internal constructor(
                 error = engineState.error,
             )
         }
-        if (!wasEnded && engineState.status == VideoStatus.Ended) {
-            progress.onFinished(video)
+        val status = engineState.status
+        if (!started && (status == VideoStatus.Playing || status == VideoStatus.Paused) &&
+            (resumeFromMs == 0L || engineState.positionMs > 0L)
+        ) {
+            started = true
+            lastSavedAtMs = clock()
+            if (resumeFromMs > 0L) showResumeNotice(resumeFromMs)
+        }
+        if (status == VideoStatus.Playing && ResumePolicy.isSaveDue(clock(), lastSavedAtMs)) checkpoint()
+        if (!wasEnded && status == VideoStatus.Ended) {
+            noticeJob?.cancel()
+            _uiState.update { it.copy(resumedAtMs = null) }
+            progress.onFinished(video, _uiState.value.durationMs)
             // Nothing is playing; a later play() asks again.
             audioFocus.release()
         }
-        if (!wasFailed && engineState.status == VideoStatus.Error) logPlaybackError(video, engineState)
+        if (!wasFailed && status == VideoStatus.Error) {
+            noticeJob?.cancel()
+            _uiState.update { it.copy(resumedAtMs = null) }
+            logPlaybackError(video, engineState)
+        }
+    }
+
+    /** The chip shows once the video plays from the saved place, and goes 4 s later. */
+    private fun showResumeNotice(positionMs: Long) {
+        _uiState.update { it.copy(resumedAtMs = positionMs) }
+        noticeJob?.cancel()
+        noticeJob = viewModelScope.launch {
+            delay(ResumePolicy.NoticeMs)
+            _uiState.update { it.copy(resumedAtMs = null) }
+        }
     }
 
     /** The box, pane or fullscreen shows a short message; the log gets the cause and the file. */
@@ -570,10 +670,15 @@ class VideoViewModel internal constructor(
         _engine.value?.setAspectMode(if (fullscreen) aspectMode.value else AspectMode.Fit)
     }
 
+    /**
+     * Saves where the open video is. Not before it has played (its position is not real yet),
+     * not after a failure, and not after the end, which already cleared it.
+     */
     private fun checkpoint() {
         val state = _uiState.value
         val video = state.video ?: return
-        if (state.status == VideoStatus.Error) return
+        if (!started || state.status == VideoStatus.Error || state.status == VideoStatus.Ended) return
+        lastSavedAtMs = clock()
         progress.onCheckpoint(video, state.positionMs, state.durationMs)
     }
 }

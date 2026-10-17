@@ -26,7 +26,7 @@ internal const val GestureChipTag = "gesture_chip"
 internal const val GestureChipHoldMs = 800L
 
 /** Solid, never see-through: the chip reads the same over any frame of the video. */
-private val ChipFill = Color(0xFF1C1C22)
+internal val ChipFill = Color(0xFF1C1C22)
 
 /**
  * The only feedback for the fullscreen swipes, double-taps and aspect button: an icon and a
