@@ -40,6 +40,7 @@ import com.shibi.musicplayer.domain.AppBackground
 import com.shibi.musicplayer.domain.AudioOutput
 import com.shibi.musicplayer.domain.ShuffleContext
 import com.shibi.musicplayer.domain.Track
+import com.shibi.musicplayer.domain.shownWith
 import com.shibi.musicplayer.library.LibraryViewModel
 import com.shibi.musicplayer.playback.PlayerUiState
 import com.shibi.musicplayer.playback.PlayerViewModel
@@ -92,28 +93,29 @@ fun MusicApp(
     val backStackEntry by navController.currentBackStackEntryAsState()
     val route = backStackEntry?.destination?.route
     var section by remember { mutableStateOf(NavSection.Songs) }
+    // The section before the current one: where an unfold lands if Now Playing leaves the ring.
+    var previousSection by remember { mutableStateOf<NavSection?>(null) }
     var showDevices by remember { mutableStateOf(false) }
     var pendingTrack by remember { mutableStateOf<Track?>(null) }
     val outputs by rememberAudioOutputs()
 
-    LaunchedEffect(route) {
-        val mapped = SectionRoutes.sectionFor(route) ?: return@LaunchedEffect
-        if (mapped != section) section = mapped
+    fun select(next: NavSection) {
+        if (next == section) return
+        previousSection = section
+        section = next
     }
 
+    // Dark theme paints the dark default over the chosen backdrop without rewriting it.
     AppBackgroundHost(
-        background = appBackground,
+        background = appBackground.shownWith(darkTheme),
         customColors = backgroundColors,
     ) {
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val wide = maxWidth >= TwoPaneBreakpoint
-        LaunchedEffect(wide) {
-            if (wide && navController.currentDestination?.route == PlayerRoute) {
-                navController.popBackStack()
-            }
-        }
+        val sections = SectionRoutes.sectionsFor(expanded = wide)
+        // Pure, so the first expanded frame already shows the fallback: the ring never spins in.
+        val carouselSection = SectionRoutes.selectionFor(wide, section, previousSection)
         val showMini = playerState.hasMedia && route != PlayerRoute
-        val showCarousel = wide || route != PlayerRoute
         val activeOutputId = playbackRoute.activeDeviceId
 
         fun playQueue(
@@ -125,13 +127,13 @@ fun MusicApp(
             playerViewModel.playTrack(tracks, startId, context)
             playlistViewModel.recordPlay(startId)
             if (!wide) {
-                section = NavSection.NowPlaying
+                select(NavSection.NowPlaying)
                 navController.openPlayer()
             }
         }
 
         fun onSection(destination: NavSection) {
-            section = destination
+            select(destination)
             when (destination) {
                 NavSection.Songs -> {
                     if (route != SongsRoute) navController.openSection(SongsRoute)
@@ -161,12 +163,27 @@ fun MusicApp(
             }
         }
 
+        LaunchedEffect(route, wide) {
+            val mapped = SectionRoutes.sectionFor(route) ?: return@LaunchedEffect
+            if (mapped in sections) select(mapped)
+        }
+        LaunchedEffect(wide) {
+            if (wide && navController.currentDestination?.route == PlayerRoute) {
+                navController.popBackStack()
+            }
+            // Unfolding on Now Playing: keep the fallback the ring already shows.
+            if (carouselSection != section) onSection(carouselSection)
+        }
+
         val miniBar: @Composable () -> Unit = {
             NowPlayingBar(
                 state = playerState,
                 onOpen = {
-                    section = NavSection.NowPlaying
-                    navController.openPlayer()
+                    // Two-pane already shows Now Playing on the right.
+                    if (!wide) {
+                        select(NavSection.NowPlaying)
+                        navController.openPlayer()
+                    }
                 },
                 onTogglePlayPause = playerViewModel::togglePlayPause,
                 route = playbackRoute.presentation,
@@ -181,8 +198,9 @@ fun MusicApp(
         }
         val carouselBar: @Composable (Modifier) -> Unit = { carouselModifier ->
             NavCarousel(
-                selected = section,
+                selected = carouselSection,
                 onSelect = { destination -> onSection(destination) },
+                sections = sections,
                 modifier = carouselModifier.windowInsetsPadding(
                     WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal),
                 ),
@@ -213,7 +231,8 @@ fun MusicApp(
             SectionScaffold(
                 modifier = Modifier.fillMaxSize(),
                 showMiniPlayer = showMini,
-                showCarousel = showCarousel,
+                // Stays on Now Playing too, so any section is one tap away.
+                showCarousel = true,
                 contentBottomPadding = SongListBottomPadding,
                 miniPlayer = miniBar,
                 carousel = { carouselBar(Modifier) },
@@ -241,7 +260,7 @@ fun MusicApp(
                     outputs = outputs,
                     onPlayQueue = { tracks, startId, context -> playQueue(tracks, startId, context) },
                     onOpenPlayer = {
-                        section = NavSection.NowPlaying
+                        select(NavSection.NowPlaying)
                         navController.openPlayer()
                     },
                     onAddToPlaylist = { pendingTrack = it },
@@ -293,7 +312,7 @@ fun MusicApp(
                 }
                 ChromeSlot {
                     miniBar()
-                    if (showCarousel) carouselBar(Modifier)
+                    carouselBar(Modifier)
                 }
             }
         } else {
@@ -536,6 +555,7 @@ private fun AppNavHost(
         composable(BackgroundsRoute) {
             BackgroundPickerScreen(
                 selected = appBackground,
+                darkThemeOn = darkTheme,
                 customColors = backgroundColors,
                 onSelect = onSelectBackground,
                 onColorsChange = onBackgroundColors,
@@ -558,6 +578,10 @@ private fun AppNavHost(
                     onSelectOutput = playerViewModel::setOutputDevice,
                     onToggleShuffle = playerViewModel::toggleShuffle,
                     onCycleRepeat = playerViewModel::cycleRepeat,
+                    // The carousel under it owns the navigation-bar inset.
+                    includeNavigationBars = false,
+                    contentBottomPadding = contentBottomPadding,
+                    modifier = Modifier.fillMaxSize(),
                 )
             }
         }

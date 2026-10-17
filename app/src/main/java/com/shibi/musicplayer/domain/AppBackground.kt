@@ -31,6 +31,14 @@ sealed class AppBackground {
     }
 }
 
+/**
+ * The backdrop actually painted. Dark theme paints the dark default over any
+ * choice; the stored choice (and its fine-tune colors) is never rewritten, so
+ * turning dark off shows it again exactly.
+ */
+fun AppBackground.shownWith(darkTheme: Boolean): AppBackground =
+    if (darkTheme) AppBackground.Default else this
+
 enum class BackgroundTab {
     SOLID,
     MULTICOLOR,

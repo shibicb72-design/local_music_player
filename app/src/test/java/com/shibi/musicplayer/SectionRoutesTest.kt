@@ -3,7 +3,9 @@ package com.shibi.musicplayer
 import com.shibi.musicplayer.ui.NavSection
 import com.shibi.musicplayer.ui.SectionRoutes
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SectionRoutesTest {
@@ -38,6 +40,69 @@ class SectionRoutesTest {
         assertEquals(NavSection.Settings, SectionRoutes.sectionFor(SectionRoutes.Backgrounds))
         assertNull(SectionRoutes.sectionFor(null))
         assertNull(SectionRoutes.sectionFor("unknown"))
+    }
+
+    @Test
+    fun compactCarouselKeepsAllEightSections() {
+        assertEquals(NavSection.entries, SectionRoutes.sectionsFor(expanded = false))
+    }
+
+    /** Two-pane already shows Now Playing on the right, so the ring drops it. */
+    @Test
+    fun expandedCarouselDropsNowPlayingOnly() {
+        val expanded = SectionRoutes.sectionsFor(expanded = true)
+        assertFalse(NavSection.NowPlaying in expanded)
+        assertEquals(NavSection.entries.size - 1, expanded.size)
+        assertEquals(NavSection.entries.filter { it != NavSection.NowPlaying }, expanded)
+    }
+
+    @Test
+    fun unfoldingOnNowPlayingFallsBackToThePreviousSection() {
+        assertEquals(
+            NavSection.Favorites,
+            SectionRoutes.selectionFor(
+                expanded = true,
+                selected = NavSection.NowPlaying,
+                previous = NavSection.Favorites,
+            ),
+        )
+    }
+
+    @Test
+    fun unfoldingOnNowPlayingWithoutAPreviousSectionFallsBackToSongs() {
+        assertEquals(
+            NavSection.Songs,
+            SectionRoutes.selectionFor(expanded = true, selected = NavSection.NowPlaying, previous = null),
+        )
+        assertEquals(
+            NavSection.Songs,
+            SectionRoutes.selectionFor(
+                expanded = true,
+                selected = NavSection.NowPlaying,
+                previous = NavSection.NowPlaying,
+            ),
+        )
+    }
+
+    @Test
+    fun unfoldingKeepsAnySectionThatIsStillOnTheRing() {
+        NavSection.entries.filter { it != NavSection.NowPlaying }.forEach { section ->
+            assertEquals(
+                section,
+                SectionRoutes.selectionFor(expanded = true, selected = section, previous = NavSection.Songs),
+            )
+        }
+    }
+
+    @Test
+    fun foldingRestoresNowPlayingWithoutMovingTheSelection() {
+        assertTrue(NavSection.NowPlaying in SectionRoutes.sectionsFor(expanded = false))
+        NavSection.entries.forEach { section ->
+            assertEquals(
+                section,
+                SectionRoutes.selectionFor(expanded = false, selected = section, previous = NavSection.Recent),
+            )
+        }
     }
 
     @Test

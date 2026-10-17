@@ -37,6 +37,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -165,9 +166,28 @@ fun NavCarousel(
     selected: NavSection,
     onSelect: (NavSection) -> Unit,
     modifier: Modifier = Modifier,
+    sections: List<NavSection> = NavSection.entries,
 ) {
-    val math = remember { CarouselMath(NavSection.entries.size) }
-    val rotation = remember { Animatable(selected.ordinal.toFloat()) }
+    // A new section list is a new ring: start it at the selection, never spin in.
+    key(sections) {
+        NavCarouselRing(
+            sections = sections,
+            selected = selected,
+            onSelect = onSelect,
+            modifier = modifier,
+        )
+    }
+}
+
+@Composable
+private fun NavCarouselRing(
+    sections: List<NavSection>,
+    selected: NavSection,
+    onSelect: (NavSection) -> Unit,
+    modifier: Modifier,
+) {
+    val math = remember { CarouselMath(sections.size) }
+    val rotation = remember { Animatable(sections.indexOf(selected).coerceAtLeast(0).toFloat()) }
     val energy = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
     val haptics = LocalHapticFeedback.current
@@ -180,7 +200,9 @@ fun NavCarousel(
 
     LaunchedEffect(selected) {
         if (gestureActive) return@LaunchedEffect
-        val target = math.rotationForIndex(rotation.value, selected.ordinal)
+        val index = sections.indexOf(selected)
+        if (index < 0) return@LaunchedEffect
+        val target = math.rotationForIndex(rotation.value, index)
         if (abs(rotation.value - target) > 0.01f) {
             if (reduceMotion) rotation.snapTo(target) else rotation.animateTo(target, SpatialSpring)
         }
@@ -211,7 +233,7 @@ fun NavCarousel(
             if (settleGeneration != generation) return@launch
             haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
             gestureActive = false
-            onSelectState.value(NavSection.entries[math.selectedIndex(target)])
+            onSelectState.value(sections[math.selectedIndex(target)])
             if (reduceMotion) energy.snapTo(0f) else energy.animateTo(0f, LensSettleSpring)
         }
     }
@@ -225,6 +247,7 @@ fun NavCarousel(
     }
 
     NavCarouselContent(
+        sections = sections,
         rotation = { rotation.value },
         energy = { energy.value },
         selectedIndex = selectedIndex,
@@ -319,10 +342,11 @@ internal fun NavCarouselContent(
     selectedIndex: Int,
     blurBack: Boolean,
     modifier: Modifier = Modifier,
+    sections: List<NavSection> = NavSection.entries,
     onSelectIndex: (Int) -> Unit = {},
     overlay: @Composable BoxScope.(layout: () -> CarouselLayout) -> Unit = {},
 ) {
-    val math = remember { CarouselMath(NavSection.entries.size) }
+    val math = remember(sections.size) { CarouselMath(sections.size) }
     val chrome = LocalBackgroundChrome.current
     val lens = remember(chrome) { lensColors(chrome) }
 
@@ -417,6 +441,7 @@ internal fun NavCarouselContent(
                 )
 
                 CarouselRing(
+                    sections = sections,
                     math = math,
                     rotation = rotation,
                     layout = layout,
@@ -430,6 +455,7 @@ internal fun NavCarouselContent(
                 )
 
                 CarouselLabels(
+                    sections = sections,
                     math = math,
                     rotation = rotation,
                     modifier = Modifier
@@ -445,12 +471,13 @@ internal fun NavCarouselContent(
 }
 
 /**
- * Eight icons on the ring. Placement, depth order, scale, tilt, dim and blur
+ * The section icons on the ring. Placement, depth order, scale, tilt, dim and blur
  * all come from [rotation] inside the placement block, so a spin only re-places
  * and redraws layers.
  */
 @Composable
 private fun CarouselRing(
+    sections: List<NavSection>,
     math: CarouselMath,
     rotation: () -> Float,
     layout: CarouselLayout,
@@ -467,7 +494,7 @@ private fun CarouselRing(
     Layout(
         modifier = Modifier.fillMaxSize().zIndex(2f),
         content = {
-            NavSection.entries.forEachIndexed { index, section ->
+            sections.forEachIndexed { index, section ->
                 RingItem(
                     section = section,
                     frontness = { math.frontness(math.offsetRadians(index, rotation())) },
@@ -583,9 +610,10 @@ private fun RingItem(
     }
 }
 
-/** All eight labels stacked; each fades and slides with its own item. */
+/** All labels stacked; each fades and slides with its own item. */
 @Composable
 private fun CarouselLabels(
+    sections: List<NavSection>,
     math: CarouselMath,
     rotation: () -> Float,
     modifier: Modifier = Modifier,
@@ -597,7 +625,7 @@ private fun CarouselLabels(
             .clearAndSetSemantics {},
         contentAlignment = Alignment.Center,
     ) {
-        NavSection.entries.forEachIndexed { index, section ->
+        sections.forEachIndexed { index, section ->
             Text(
                 text = stringResource(section.labelRes),
                 fontSize = 13.sp,

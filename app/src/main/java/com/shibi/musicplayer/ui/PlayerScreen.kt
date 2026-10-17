@@ -112,6 +112,7 @@ fun PlayerScreen(
     onCycleRepeat: () -> Unit = {},
     showBack: Boolean = true,
     includeNavigationBars: Boolean = true,
+    contentBottomPadding: Dp = 0.dp,
     modifier: Modifier = Modifier,
 ) {
     val backDescription = stringResource(R.string.back)
@@ -205,7 +206,8 @@ fun PlayerScreen(
             BoxWithConstraints(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(padding),
+                    .padding(padding)
+                    .padding(bottom = contentBottomPadding),
             ) {
                 val compact = maxHeight < 700.dp
                 val artSize = minOf(

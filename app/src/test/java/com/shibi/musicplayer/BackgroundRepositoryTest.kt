@@ -5,6 +5,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.shibi.musicplayer.background.BackgroundRepository
 import com.shibi.musicplayer.domain.AppBackground
 import com.shibi.musicplayer.domain.BackgroundCatalog
+import com.shibi.musicplayer.domain.shownWith
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -49,6 +50,41 @@ class BackgroundRepositoryTest {
 
         repository.setBackground(AppBackground.Default)
         assertEquals(AppBackground.Default, repository.selection.first())
+    }
+
+    /**
+     * Dark theme paints the dark default over the chosen backdrop but never
+     * writes it. Turning dark off shows the stored choice again, fine-tune too.
+     */
+    @Test
+    fun darkThemeOnThenOffRestoresTheLastChosenBackground() = runBlocking {
+        val scene = BackgroundCatalog.scene("waves")!!
+        val tuned = listOf(0xFFF8C8D4, 0xFFC8EDE0, 0xFFDCC8F0)
+        repository.setBackground(AppBackground.Solid("mint"))
+        repository.setBackground(AppBackground.Animated(scene.id))
+        repository.setColors(scene.id, tuned)
+
+        val chosen = repository.selection.first()
+        assertEquals(AppBackground.Default, chosen.shownWith(darkTheme = true))
+        assertEquals(AppBackground.Animated(scene.id), repository.selection.first())
+        assertEquals(tuned, repository.customColors.first()[scene.id])
+
+        val restored = repository.selection.first().shownWith(darkTheme = false)
+        assertEquals(AppBackground.Animated(scene.id), restored)
+        assertEquals(tuned, repository.customColors.first()[scene.id])
+    }
+
+    @Test
+    fun darkThemeOffShowsEveryChoiceAsIs() {
+        listOf(
+            AppBackground.Default,
+            AppBackground.Solid("blush"),
+            AppBackground.Gradient("cotton_candy"),
+            AppBackground.Animated("waves"),
+        ).forEach { choice ->
+            assertEquals(choice, choice.shownWith(darkTheme = false))
+            assertEquals(AppBackground.Default, choice.shownWith(darkTheme = true))
+        }
     }
 
     @Test
