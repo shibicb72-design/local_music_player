@@ -8,8 +8,12 @@ import com.shibi.musicplayer.R
 import com.shibi.musicplayer.diagnostics.ErrorLog
 import com.shibi.musicplayer.diagnostics.ErrorLogger
 import com.shibi.musicplayer.domain.AspectMode
+import com.shibi.musicplayer.domain.BackgroundAction
+import com.shibi.musicplayer.domain.BackgroundEvent
+import com.shibi.musicplayer.domain.BackgroundPolicy
 import com.shibi.musicplayer.domain.InlineVideoBox
 import com.shibi.musicplayer.domain.MediaFacts
+import com.shibi.musicplayer.domain.PlaybackArbiter
 import com.shibi.musicplayer.domain.Video
 import com.shibi.musicplayer.domain.VideoAudioEvent
 import com.shibi.musicplayer.domain.VideoFocusPolicy
@@ -23,9 +27,11 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -57,6 +63,12 @@ interface VideoProgressHooks {
     }
 }
 
+/** Music's side, as the video sees it: a video played from anywhere keeps the music paused. */
+interface MusicControl {
+    val isPlaying: Boolean
+    fun pause()
+}
+
 /** Where the picture is on screen, for the error log's step. */
 enum class PlayerSurface(val label: String) {
     InlineBox("inline box"),
@@ -65,9 +77,14 @@ enum class PlayerSurface(val label: String) {
 }
 
 /**
- * Owns the video engine, so playback survives a fold, unfold or rotation (the activity is
- * recreated; this view model is not). The engine is created on the first [open], never at
- * construction, so music-only sessions and Robolectric never touch libVLC.
+ * Creates the video engine and drives it, so playback survives a fold, unfold or rotation
+ * (the activity is recreated; this view model is not). The engine is created on the first
+ * [open], never at construction, so music-only sessions and Robolectric never touch libVLC.
+ *
+ * While a video is loaded (not ended or failed) the engine is also handed to
+ * [VideoPlaybackService] through [sessionLink]: its session gives earbud, watch, notification
+ * and lock-screen control, and its foreground state keeps the sound playing with the screen
+ * locked ([onAppBackground], [onAppForeground]).
  */
 class VideoViewModel internal constructor(
     application: Application,
@@ -78,6 +95,7 @@ class VideoViewModel internal constructor(
     private val errorLogger: ErrorLogger = ErrorLogger.None,
     private val externalTracks: ExternalTrackSource? = null,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val sessionLink: VideoSessionLink = VideoSessionLink.None,
 ) : AndroidViewModel(application) {
 
     constructor(application: Application) : this(
@@ -88,6 +106,7 @@ class VideoViewModel internal constructor(
         prefs = DataStoreVideoPrefs(application),
         errorLogger = ErrorLog.get(application),
         externalTracks = ContentExternalTrackSource(application),
+        sessionLink = testSessionLink?.invoke() ?: ServiceVideoSessionLink(application, ErrorLog.get(application)),
     )
 
     internal companion object {
@@ -101,6 +120,11 @@ class VideoViewModel internal constructor(
         @VisibleForTesting
         @Volatile
         var testEngineFactory: (() -> VideoEngine)? = null
+
+        /** The same for the session service, which Robolectric cannot bind for real. */
+        @VisibleForTesting
+        @Volatile
+        var testSessionLink: (() -> VideoSessionLink)? = null
     }
 
     private val _engine = MutableStateFlow<VideoEngine?>(null)
@@ -124,6 +148,24 @@ class VideoViewModel internal constructor(
 
     private var fullscreen = false
     private var surface = PlayerSurface.InlineBox
+
+    /** Set by the app's composition; null when nothing can play music (tests, no activity). */
+    private var musicControl: MusicControl? = null
+
+    /** Why the app is out of view, or null while it is in view. */
+    private var background: BackgroundEvent? = null
+
+    /** The engine's picture is off until the app is in view again. */
+    private var pictureOff = false
+
+    /** The session's buttons: the same calls as the app's own controls. */
+    private val sessionControls = object : VideoSessionControls {
+        override val positionMs: Long get() = _uiState.value.positionMs
+        override fun play() = this@VideoViewModel.play()
+        override fun pause() = this@VideoViewModel.pause()
+        override fun seekTo(positionMs: Long) = this@VideoViewModel.seekTo(positionMs)
+        override fun stop() = close()
+    }
 
     private val engineOptions: StateFlow<EngineOptions> =
         combine(prefs.hardwareDecoding, prefs.subtitleTextSize) { hardware, textSize ->
@@ -156,6 +198,72 @@ class VideoViewModel internal constructor(
         // A changed decoding or text size reopens the open video in place.
         viewModelScope.launch {
             engineOptions.collect { options -> _engine.value?.configure(options) }
+        }
+        // The session (and its service) is up while a video is loaded and not finished.
+        viewModelScope.launch {
+            _uiState.map(VideoSessionMapping::snapshotOf).distinctUntilChanged().collect { snapshot ->
+                val engine = _engine.value
+                if (snapshot != null && engine != null) {
+                    sessionLink.show(snapshot, sessionControls, engine)
+                } else {
+                    sessionLink.end()
+                }
+            }
+        }
+    }
+
+    /** The app's music player; a video played from its notification or earbuds pauses it. */
+    fun setMusicControl(control: MusicControl) {
+        musicControl = control
+    }
+
+    /** Only the composition that set [control] takes it away, so a newer one keeps its own. */
+    fun clearMusicControl(control: MusicControl) {
+        if (musicControl === control) musicControl = null
+    }
+
+    /**
+     * The activity stopped for real (not a rotation or fold). The picture goes, since its
+     * surface goes with the window; the sound follows [BackgroundPolicy]: a lock keeps it,
+     * leaving the app pauses it (picture-in-picture in V10).
+     */
+    fun onAppBackground(event: BackgroundEvent) {
+        background = event
+        val engine = _engine.value ?: return
+        val status = _uiState.value.status
+        val playing = status == VideoStatus.Playing || status == VideoStatus.Buffering
+        when (BackgroundPolicy.decide(event, playing)) {
+            BackgroundAction.Pause -> pause()
+            BackgroundAction.KeepAudio, BackgroundAction.None -> Unit
+        }
+        engine.setPictureEnabled(false)
+        pictureOff = true
+    }
+
+    /**
+     * The tracks sheet's system file picker opened (it stops the activity) or returned. Known
+     * gap: Home pressed inside the picker brings no second stop, so the video plays on there.
+     */
+    fun setFilePickerShown(shown: Boolean) {
+        isPickingFile = shown
+    }
+
+    /** While the tracks sheet's file picker covers the app. */
+    var isPickingFile: Boolean = false
+        private set
+
+    /** Back in view (unlocked): the picture returns where the sound is. */
+    fun onAppForeground() {
+        background = null
+        isPickingFile = false
+        if (!pictureOff) return
+        pictureOff = false
+        val engine = _engine.value ?: return
+        engine.setPictureEnabled(true)
+        val state = _uiState.value
+        if (state.status == VideoStatus.Playing || state.status == VideoStatus.Paused) {
+            // The decoder restarts from a key frame here, so the picture matches the sound.
+            engine.seekTo(state.positionMs)
         }
     }
 
@@ -192,6 +300,10 @@ class VideoViewModel internal constructor(
 
     fun play() {
         val engine = _engine.value ?: return
+        // From the box, the notification, the lock screen or earbuds: never two sounds.
+        musicControl?.let { music ->
+            if (PlaybackArbiter.onVideoStart(music.isPlaying).pauseMusic) music.pause()
+        }
         pausedForTransientLoss = false
         audioFocus.acquire(::onAudioEvent)
         engine.play()
@@ -339,10 +451,13 @@ class VideoViewModel internal constructor(
         stateJob = null
         resetTrackLoad()
         externalTracks?.clear()
+        // The notification goes at once, before the engine it controls.
+        sessionLink.end()
         _engine.value?.release()
         _engine.value = null
         audioFocus.release()
         pausedForTransientLoss = false
+        pictureOff = false
         _uiState.value = VideoUiState()
     }
 
@@ -374,9 +489,16 @@ class VideoViewModel internal constructor(
     /** The box, pane or fullscreen shows a short message; the log gets the cause and the file. */
     private fun logPlaybackError(video: Video, engineState: VideoEngineState) {
         val error = engineState.error ?: VideoError.Playback
+        // Out of view, the short message waits on the box, pane or fullscreen for the return.
+        val where = when (background) {
+            BackgroundEvent.ScreenOff -> "${surface.label}, screen locked"
+            BackgroundEvent.LeftApp -> "${surface.label}, app in background"
+            BackgroundEvent.PickingFile -> "${surface.label}, file picker open"
+            null -> surface.label
+        }
         val step = when (error) {
-            VideoError.CannotOpen -> "Open video (${surface.label})"
-            VideoError.Playback -> "Play video (${surface.label}): libVLC error"
+            VideoError.CannotOpen -> "Open video ($where)"
+            VideoError.Playback -> "Play video ($where): libVLC error"
         }
         val codecs = _engine.value?.tracks?.value?.mediaTracks.orEmpty()
         errorLogger.log(

@@ -63,14 +63,31 @@ internal class VlcVideoEngine(context: Context) : VideoEngine {
     /** libVLC's Android vout needs a surface before the first frame; play waits for a view. */
     private var playWhenAttached = false
 
+    /** Screen locked: no views and no video track, audio only (V8). */
+    private var pictureOff = false
+
+    /** The view the UI attached last; it gets the picture back when [pictureOff] ends. */
+    private var latest: VLCVideoLayout? = null
+
+    /** The video track to bring back, as libVLC numbered it before it was disabled. */
+    private var savedVideoTrack: Int? = null
+
+    /** The lock is over; the next attached view gets the video track back. */
+    private var restoreTrackOnAttach = false
+
     private val listener = MediaPlayer.EventListener { event ->
         when (event.type) {
             MediaPlayer.Event.ESAdded -> {
+                // A reopen while locked (even one starting paused) brings a video track back.
+                if (pictureOff && event.esChangedType == IMedia.Track.Type.Video) {
+                    player?.setVideoTrack(TrackMapping.DisabledId)
+                }
                 onTrackAdded(event.esChangedType, event.esChangedID)
                 refreshTracks()
             }
             MediaPlayer.Event.ESDeleted, MediaPlayer.Event.ESSelected -> refreshTracks()
             MediaPlayer.Event.Playing -> {
+                if (pictureOff) player?.setVideoTrack(TrackMapping.DisabledId)
                 dispatch(VideoEngineEvent.Playing)
                 restoreTracks()
                 refreshTracks()
@@ -109,6 +126,8 @@ internal class VlcVideoEngine(context: Context) : VideoEngine {
         if (released) return
         restore = null
         currentUri = uri
+        // Another file has its own track ids.
+        savedVideoTrack = null
         dispatch(VideoEngineEvent.Opening)
         _tracks.value = TrackSnapshot()
         val mediaPlayer = ensurePlayer() ?: return
@@ -206,6 +225,10 @@ internal class VlcVideoEngine(context: Context) : VideoEngine {
         if (released) return
         released = true
         playWhenAttached = false
+        pictureOff = false
+        latest = null
+        savedVideoTrack = null
+        restoreTrackOnAttach = false
         restore = null
         releasePlayer()
         closeDescriptor()
@@ -221,6 +244,9 @@ internal class VlcVideoEngine(context: Context) : VideoEngine {
     override fun attach(view: View) {
         if (released) return
         val layout = view as? VLCVideoLayout ?: return
+        latest = layout
+        // Locked: the picture comes back on this view when the app is in view again.
+        if (pictureOff) return
         if (attached === layout) return
         val mediaPlayer = ensurePlayer() ?: return
         if (attached != null) mediaPlayer.detachViews()
@@ -228,6 +254,7 @@ internal class VlcVideoEngine(context: Context) : VideoEngine {
         // Compose (a SurfaceView would not), and a layout switch is one re-attach path.
         mediaPlayer.attachViews(layout, null, true, true)
         attached = layout
+        restoreVideoTrack(mediaPlayer)
         // The scale belongs to the attached layout's helper, so every new view gets it again.
         mediaPlayer.applyScale()
         if (playWhenAttached) {
@@ -237,9 +264,46 @@ internal class VlcVideoEngine(context: Context) : VideoEngine {
     }
 
     override fun detach(view: View) {
+        if (latest === view) latest = null
         if (attached !== view) return
         player?.detachViews()
         attached = null
+    }
+
+    override fun setPictureEnabled(enabled: Boolean) {
+        if (released || pictureOff == !enabled) return
+        val mediaPlayer = player
+        if (!enabled) {
+            pictureOff = true
+            if (mediaPlayer != null) {
+                val track = mediaPlayer.videoTrack
+                if (track != TrackMapping.DisabledId) savedVideoTrack = track
+                mediaPlayer.setVideoTrack(TrackMapping.DisabledId)
+                if (attached != null) mediaPlayer.detachViews()
+            }
+            attached = null
+            // A play asked for before a view came no longer needs one.
+            if (playWhenAttached && mediaPlayer != null) {
+                playWhenAttached = false
+                mediaPlayer.play()
+            }
+            return
+        }
+        pictureOff = false
+        // The vout needs a surface first: the track comes back once a view is attached,
+        // now if the UI still has one, or on the next attach if its layout is being rebuilt.
+        restoreTrackOnAttach = true
+        latest?.let(::attach)
+    }
+
+    /** Re-enables the video track a lock disabled; only with a view attached. */
+    private fun restoreVideoTrack(mediaPlayer: MediaPlayer) {
+        if (!restoreTrackOnAttach) return
+        restoreTrackOnAttach = false
+        val track = savedVideoTrack
+            ?: mediaPlayer.videoTracks.orEmpty().firstOrNull { it.id != TrackMapping.DisabledId }?.id
+        savedVideoTrack = null
+        if (track != null) mediaPlayer.setVideoTrack(track)
     }
 
     /** Null only if libVLC itself cannot start; the state then says why. */
@@ -431,7 +495,8 @@ internal class VlcVideoEngine(context: Context) : VideoEngine {
     }
 
     private fun startOrDefer(mediaPlayer: MediaPlayer) {
-        if (attached != null) {
+        // Locked, there is no view to wait for: the sound plays on its own.
+        if (attached != null || pictureOff) {
             mediaPlayer.play()
         } else {
             playWhenAttached = true

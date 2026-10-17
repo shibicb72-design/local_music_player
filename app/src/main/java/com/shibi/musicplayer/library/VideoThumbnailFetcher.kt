@@ -37,36 +37,12 @@ class VideoThumbnailFetcher(
 ) : Fetcher {
     @OptIn(ExperimentalCoilApi::class)
     override suspend fun fetch(): FetchResult {
-        val context = options.context
-        val bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            context.contentResolver.loadThumbnail(data.uri, Size(THUMB_WIDTH, THUMB_HEIGHT), null)
-        } else {
-            frameFromRetriever(context, data.uri)
-        }
+        val bitmap = load(options.context, data.uri)
         return ImageFetchResult(
             image = bitmap.asImage(),
             isSampled = true,
             dataSource = DataSource.DISK,
         )
-    }
-
-    private fun frameFromRetriever(context: Context, uri: Uri): Bitmap {
-        val retriever = MediaMetadataRetriever()
-        try {
-            retriever.setDataSource(context, uri)
-            val frame = retriever.getFrameAtTime(FRAME_TIME_US, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
-                ?: throw IOException("No frame for $uri")
-            return frame.coverScaled()
-        } finally {
-            retriever.release()
-        }
-    }
-
-    /** Shrinks a full-size frame so it still covers 320×180; the row crops it. */
-    private fun Bitmap.coverScaled(): Bitmap {
-        val factor = max(THUMB_WIDTH.toFloat() / width, THUMB_HEIGHT.toFloat() / height)
-        if (factor >= 1f) return this
-        return scale((width * factor).roundToInt().coerceAtLeast(1), (height * factor).roundToInt().coerceAtLeast(1))
     }
 
     class Factory : Fetcher.Factory<VideoThumbnail> {
@@ -80,6 +56,33 @@ class VideoThumbnailFetcher(
         private const val THUMB_WIDTH = 320
         private const val THUMB_HEIGHT = 180
         private const val FRAME_TIME_US = 1_000_000L
+
+        /** The row's thumbnail, also the video notification's artwork (V8). Blocking; throws if there is none. */
+        fun load(context: Context, uri: Uri): Bitmap =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                context.contentResolver.loadThumbnail(uri, Size(THUMB_WIDTH, THUMB_HEIGHT), null)
+            } else {
+                frameFromRetriever(context, uri)
+            }
+
+        private fun frameFromRetriever(context: Context, uri: Uri): Bitmap {
+            val retriever = MediaMetadataRetriever()
+            try {
+                retriever.setDataSource(context, uri)
+                val frame = retriever.getFrameAtTime(FRAME_TIME_US, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                    ?: throw IOException("MediaMetadataRetriever returned no frame")
+                return frame.coverScaled()
+            } finally {
+                retriever.release()
+            }
+        }
+
+        /** Shrinks a full-size frame so it still covers 320×180; the row crops it. */
+        private fun Bitmap.coverScaled(): Bitmap {
+            val factor = max(THUMB_WIDTH.toFloat() / width, THUMB_HEIGHT.toFloat() / height)
+            if (factor >= 1f) return this
+            return scale((width * factor).roundToInt().coerceAtLeast(1), (height * factor).roundToInt().coerceAtLeast(1))
+        }
 
         /** `content://media/<volume>/video/...`, the only URIs MediaStore can thumbnail as video. */
         fun isMediaStoreVideo(uri: Uri): Boolean {
