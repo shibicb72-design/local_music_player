@@ -59,6 +59,12 @@ object PlaybackArbiter {
     fun showVideosAfterLayoutChange(videoActive: Boolean): Boolean = videoActive
 
     /**
+     * A tap on the video's notification (or lock-screen card) opens the app where the video
+     * is: Videos (folded, the box; unfolded, the list by the pane). Fullscreen already shows it.
+     */
+    fun showVideosOnSessionTap(videoActive: Boolean, fullscreen: Boolean): Boolean = videoActive && !fullscreen
+
+    /**
      * Turning a phone (or the folded cover screen) from portrait to landscape while the
      * compact box shows a video goes fullscreen, like YouTube. Only that edge counts: a new
      * composition ([wasLandscape] null), the unfolded inner screen ([compactDevice] false)

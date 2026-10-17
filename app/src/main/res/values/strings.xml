@@ -191,6 +191,11 @@
     <string name="video_brightness">Brightness</string>
     <string name="video_error_open">Couldn\'t open this video. It may have been moved or deleted.</string>
     <string name="video_error_playback">This video can\'t be played.</string>
+    <!-- V8: the video's notification and lock-screen controls. -->
+    <string name="video_channel_name">Video</string>
+    <string name="video_seek_back_10">Back 10 seconds</string>
+    <string name="video_seek_forward_10">Forward 10 seconds</string>
+    <string name="video_session_error">Couldn\'t keep the video playing in the background.</string>
     <string name="tracks_audio">Audio</string>
     <string name="tracks_subtitles">Subtitles</string>
     <string name="tracks_off">Off</string>

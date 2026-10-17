@@ -47,6 +47,14 @@ class PlaybackArbiterTest {
     }
 
     @Test
+    fun theVideoNotificationOpensVideosUnlessFullscreenShowsIt() {
+        assertTrue(PlaybackArbiter.showVideosOnSessionTap(videoActive = true, fullscreen = false))
+        assertFalse(PlaybackArbiter.showVideosOnSessionTap(videoActive = true, fullscreen = true))
+        // A stale tap after the video closed goes nowhere.
+        assertFalse(PlaybackArbiter.showVideosOnSessionTap(videoActive = false, fullscreen = false))
+    }
+
+    @Test
     fun musicDoesNotResumeWhenTheVideoEnds() {
         assertFalse(PlaybackArbiter.ResumeMusicAfterVideo)
         assertFalse(PlaybackArbiter.onVideoEnded(musicPausedByVideo = true).resumeMusic)

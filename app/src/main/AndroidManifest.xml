@@ -45,5 +45,14 @@
                 <action android:name="androidx.media3.session.MediaSessionService" />
             </intent-filter>
         </service>
+
+        <!-- V8: the video's own session (earbuds, notification, lock screen) while a video is
+             loaded. Only the app binds it, so it is not exported. No MediaSessionService intent
+             filter: Media3 gives a session's media-button receiver to the first service with
+             that filter, and that must stay the music service above. -->
+        <service
+            android:name=".video.VideoPlaybackService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
     </application>
 </manifest>

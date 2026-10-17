@@ -36,6 +36,7 @@ import com.shibi.musicplayer.ui.VideoPaneTag
 import com.shibi.musicplayer.video.RawTrackDescription
 import com.shibi.musicplayer.video.TrackSnapshot
 import com.shibi.musicplayer.video.VideoEngineEvent
+import com.shibi.musicplayer.video.VideoSessionLink
 import com.shibi.musicplayer.video.VideoStatus
 import com.shibi.musicplayer.video.VideoViewModel
 import org.junit.Assert.assertEquals
@@ -377,10 +378,13 @@ internal class MediaSetup(private val engines: MutableList<FakeVideoEngine>) : T
                 )
                 Robolectric.buildContentProvider(FakeMediaStore::class.java).create(MediaStore.AUTHORITY)
                 VideoViewModel.testEngineFactory = { FakeVideoEngine().also(engines::add) }
+                // Robolectric cannot bind the session service; tests that care record the link.
+                VideoViewModel.testSessionLink = { VideoSessionLink.None }
                 try {
                     base.evaluate()
                 } finally {
                     VideoViewModel.testEngineFactory = null
+                    VideoViewModel.testSessionLink = null
                 }
             }
         }

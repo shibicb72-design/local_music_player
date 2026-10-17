@@ -90,6 +90,14 @@ interface VideoEngine {
 
     /** Detaches [view] only if it is the attached one, so a newer layout keeps its picture. */
     fun detach(view: View)
+
+    /**
+     * Off while the app is out of view (screen locked): the views are detached and the video
+     * track is disabled, so nothing decodes frames for a dead surface; the sound goes on, and
+     * [play] no longer waits for a view. On: the track comes back and the latest view the UI
+     * attached (box, pane or fullscreen) gets the picture again.
+     */
+    fun setPictureEnabled(enabled: Boolean)
 }
 
 /** Engine events in our own terms, so the state mapping is pure and unit-tested. */

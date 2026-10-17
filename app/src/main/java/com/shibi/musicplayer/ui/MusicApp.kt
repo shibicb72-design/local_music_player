@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -57,11 +58,14 @@ import com.shibi.musicplayer.ui.background.AppBackgroundHost
 import com.shibi.musicplayer.ui.background.BackgroundPickerScreen
 import com.shibi.musicplayer.ui.background.backgroundTitleRes
 import com.shibi.musicplayer.ui.background.titleId
+import com.shibi.musicplayer.video.MusicControl
 import com.shibi.musicplayer.video.PlayerSurface
 import com.shibi.musicplayer.video.VideoEngine
 import com.shibi.musicplayer.video.VideoStatus
 import com.shibi.musicplayer.video.VideoUiState
 import com.shibi.musicplayer.video.VideoViewModel
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 
 private const val SongsRoute = SectionRoutes.Songs
 private const val PlaylistsRoute = SectionRoutes.Playlists
@@ -88,6 +92,8 @@ fun MusicApp(
     backgroundViewModel: BackgroundViewModel = viewModel(),
     // Activity-scoped, so a fold or unfold keeps the video playing. Creates no engine yet.
     videoViewModel: VideoViewModel = viewModel(),
+    // Taps on the video's notification or lock-screen card.
+    openVideoRequests: Flow<Unit> = emptyFlow(),
 ) {
     val playerState by playerViewModel.uiState.collectAsStateWithLifecycle()
     val videoState by videoViewModel.uiState.collectAsStateWithLifecycle()
@@ -146,7 +152,17 @@ fun MusicApp(
         videoViewModel.open(video)
     }
 
-    // Music started by any path (notification, lock screen, Now Playing) closes the video.
+    // A video played from its own notification, lock screen or earbuds keeps the music paused.
+    DisposableEffect(playerViewModel, videoViewModel) {
+        val music = object : MusicControl {
+            override val isPlaying: Boolean get() = playerViewModel.uiState.value.isPlaying
+            override fun pause() = playerViewModel.pause()
+        }
+        videoViewModel.setMusicControl(music)
+        onDispose { videoViewModel.clearMusicControl(music) }
+    }
+    // Music started by any path (notification, lock screen, Now Playing) closes the video,
+    // which also ends the video's session and stops its service.
     LaunchedEffect(playerViewModel, videoViewModel) {
         var wasPlaying = playerViewModel.uiState.value.isPlaying
         playerViewModel.uiState.collect { music ->
@@ -309,6 +325,21 @@ fun MusicApp(
                 select(NavSection.Videos)
                 if (navController.currentDestination?.route != VideosRoute) {
                     navController.openSection(VideosRoute)
+                }
+            }
+        }
+
+        // The video's notification opens the app where the video is.
+        LaunchedEffect(openVideoRequests) {
+            openVideoRequests.collect {
+                val current = navController.currentDestination?.route
+                val show = PlaybackArbiter.showVideosOnSessionTap(
+                    videoActive = videoViewModel.uiState.value.isActive,
+                    fullscreen = current == VideoFullscreenRoute,
+                )
+                if (show) {
+                    select(NavSection.Videos)
+                    if (current != VideosRoute) navController.openSection(VideosRoute)
                 }
             }
         }
@@ -576,6 +607,7 @@ fun MusicApp(
                 onTextSize = videoViewModel::setSubtitleTextSize,
                 onHardwareDecoding = videoViewModel::setHardwareDecoding,
                 onLoadFile = videoViewModel::loadExternalTrack,
+                onPickerShown = videoViewModel::setFilePickerShown,
             ),
             onDismiss = {
                 showTracks = false

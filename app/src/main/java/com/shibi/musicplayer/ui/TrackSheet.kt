@@ -1,6 +1,8 @@
 package com.shibi.musicplayer.ui
 
+import android.content.ActivityNotFoundException
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -77,6 +79,8 @@ internal class TrackSheetActions(
     val onTextSize: (SubtitleTextSize) -> Unit = {},
     val onHardwareDecoding: (Boolean) -> Unit = {},
     val onLoadFile: (ExternalTrackKind, String) -> Unit = { _, _ -> },
+    /** The system picker covers the app (true) or returned (false); the video plays on under it. */
+    val onPickerShown: (Boolean) -> Unit = {},
 )
 
 /**
@@ -92,10 +96,21 @@ internal fun TrackSheet(
     onDismiss: () -> Unit,
 ) {
     val audioPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        actions.onPickerShown(false)
         uri?.let { actions.onLoadFile(ExternalTrackKind.Audio, it.toString()) }
     }
     val subtitlePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        actions.onPickerShown(false)
         uri?.let { actions.onLoadFile(ExternalTrackKind.Subtitle, it.toString()) }
+    }
+    // Marked before the launch (the activity stops during it), unmarked if it never opened.
+    fun pick(picker: ActivityResultLauncher<Array<String>>, types: String) {
+        actions.onPickerShown(true)
+        try {
+            picker.launch(arrayOf(types))
+        } catch (missing: ActivityNotFoundException) {
+            actions.onPickerShown(false)
+        }
     }
     val sheetColor = LocalBackgroundChrome.current.sheet
     ModalBottomSheet(
@@ -110,8 +125,8 @@ internal fun TrackSheet(
             TrackSheetContent(
                 state = state,
                 actions = actions,
-                onPickAudio = { audioPicker.launch(arrayOf("audio/*")) },
-                onPickSubtitle = { subtitlePicker.launch(arrayOf("*/*")) },
+                onPickAudio = { pick(audioPicker, "audio/*") },
+                onPickSubtitle = { pick(subtitlePicker, "*/*") },
                 modifier = Modifier.navigationBarsPadding(),
             )
         }

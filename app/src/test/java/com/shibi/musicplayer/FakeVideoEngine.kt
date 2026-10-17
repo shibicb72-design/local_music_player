@@ -128,15 +128,36 @@ class FakeVideoEngine(
 
     override fun createView(context: Context): View = PlaceholderFrame(context, frameAspect)
 
+    /** False while the app is out of view, like libVLC with its video track off. */
+    var pictureEnabled = true
+        private set
+
+    /** The view the UI attached last, which gets the picture back. */
+    private var latestView: View? = null
+
     override fun attach(view: View) {
+        latestView = view
+        if (!pictureEnabled) return
         calls += "attach"
         attachedView = view
     }
 
     override fun detach(view: View) {
+        if (latestView === view) latestView = null
         if (attachedView !== view) return
         calls += "detach"
         attachedView = null
+    }
+
+    override fun setPictureEnabled(enabled: Boolean) {
+        if (pictureEnabled == enabled) return
+        calls += "picture:$enabled"
+        pictureEnabled = enabled
+        if (!enabled) {
+            attachedView = null
+        } else {
+            latestView?.let(::attach)
+        }
     }
 
     /** A dusk sky over a field, fitted inside the view like libVLC's best-fit scale. */
