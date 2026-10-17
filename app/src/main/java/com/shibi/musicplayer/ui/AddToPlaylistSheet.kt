@@ -179,7 +179,7 @@ internal fun AddToPlaylistContent(
                 Text(
                     text = stringResource(R.string.new_playlist),
                     style = MaterialTheme.typography.titleSmall,
-                    color = Color(0xFFB9A8FF),
+                    color = LocalBackgroundChrome.current.accentText,
                     fontWeight = FontWeight.SemiBold,
                 )
             }

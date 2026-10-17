@@ -203,7 +203,7 @@ internal fun BackgroundPickerContent(
                     AppBackgroundLayer(
                         background = tile,
                         colors = tile.previewColors(customColors),
-                        phase = phase,
+                        phase = { phase.value },
                         modifier = Modifier.fillMaxSize(),
                     )
                 }

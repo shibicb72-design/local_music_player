@@ -109,6 +109,8 @@ After every task, append an entry below: `- [task] what went wrong -> new rule`.
 
 - [list chrome] Overlaying frosted carousel tiles on a full-height list lets rows paint through and between the tiles -> put the list in a `ListViewport` that ends above an opaque `ChromeSlot` (`pageFill`), fade the last 32dp of the list into that fill, and never overlay the chrome. Saved animal background prefs decode to Default once those scenes leave the catalog.
 
+- [opus review] Dark-roles `BackgroundContentTheme` passed the base scheme through, so Dark theme off + Default backdrop drew `#16161C` text on `#0E0E12`; animated backdrops read `Animatable.value` in composition (host recomposed every frame); fixed lilac `#B9A8FF` text sat on pastels at ~1.4:1 -> content roles follow the backdrop (`backgroundContentScheme`), animation values are read only in draw/layer lambdas (`() -> Float`), and page accents come from `chrome.accentText`. `clean` does not wipe the root `build/`, so a baseline PNG copy there survives for `compareRoborazziDebug`.
+
 ## 6. Lessons learned
 - androidx.mediarouter's `MediaRouteChooserDialog` extends `androidx.appcompat.app.AppCompatDialog`, and mediarouter does not expose appcompat at compile time. Using mediarouter dialog classes requires `implementation(libs.androidx.appcompat)` in app/build.gradle.kts (catalog alias `androidx-appcompat`).
 - You cannot read the Gradle cache (~/.gradle/caches): OpenCode denies external directories and the run aborts. Do not try. Verify an API by compiling (gradlew.bat assembleDebug) instead.

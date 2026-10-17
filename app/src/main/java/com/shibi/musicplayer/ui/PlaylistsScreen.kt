@@ -169,6 +169,7 @@ private fun PlaylistHeader(
     onCreate: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val accent = LocalBackgroundChrome.current.accentText
     Row(
         modifier = modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -191,18 +192,18 @@ private fun PlaylistHeader(
         }
         TextButton(
             onClick = onCreate,
-            colors = ButtonDefaults.textButtonColors(contentColor = NewPlaylist),
+            colors = ButtonDefaults.textButtonColors(contentColor = accent),
         ) {
             Icon(
                 imageVector = Icons.Rounded.Add,
                 contentDescription = null,
-                tint = NewPlaylist,
+                tint = accent,
                 modifier = Modifier.size(18.dp),
             )
             Spacer(Modifier.width(4.dp))
             Text(
                 text = stringResource(R.string.new_playlist),
-                color = NewPlaylist,
+                color = accent,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -246,8 +247,6 @@ private fun PlaylistCard(
         }
     }
 }
-
-private val NewPlaylist = Color(0xFFB9A8FF)
 
 @Composable
 internal fun ArtCollage(
