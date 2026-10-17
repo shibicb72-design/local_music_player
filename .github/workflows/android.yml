@@ -41,12 +41,41 @@ jobs:
       - name: Assemble debug APK and run unit tests
         run: ./gradlew assembleDebug test --stacktrace
 
-      - name: Upload debug APK
+      # ABI splits: the arm64 APK is the one installed on the Fold 7, so it
+      # keeps the debug-apk name; x86_64 is for emulators.
+      - name: Upload debug APK (arm64-v8a)
         uses: actions/upload-artifact@v4
         with:
           name: debug-apk
-          path: app/build/outputs/apk/debug/*.apk
+          path: app/build/outputs/apk/debug/app-arm64-v8a-debug.apk
           if-no-files-found: error
+
+      - name: Upload debug APK (x86_64, emulator)
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-apk-x86_64
+          path: app/build/outputs/apk/debug/app-x86_64-debug.apk
+          if-no-files-found: error
+
+      # Reports only: an unaligned library prints a ::warning:: but does not fail
+      # the build (the Fold 7 uses 4 KB pages today).
+      - name: Check 16 KB page alignment of native libraries
+        run: |
+          ANDROID_HOME="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          {
+            echo "## Native libraries: 16 KB page alignment"
+            echo '```'
+            python3 -I scripts/check_16kb_alignment.py app/build/outputs/apk/debug/*.apk
+            echo '```'
+            echo '```'
+            for apk in app/build/outputs/apk/debug/*.apk; do
+              "$ANDROID_HOME/build-tools/36.0.0/zipalign" -c -P 16 -v 4 "$apk" | grep -E 'lib/|Verification' || true
+            done
+            echo '```'
+            for apk in app/build/outputs/apk/debug/*.apk; do
+              echo "- $(basename "$apk"): $(stat -c %s "$apk") bytes"
+            done
+          } | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Record screenshots
         run: ./gradlew recordRoborazziDebug --stacktrace

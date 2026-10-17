@@ -61,6 +61,7 @@ private const val RecentRoute = SectionRoutes.Recent
 private const val SearchRoute = SectionRoutes.Search
 private const val SettingsRoute = SectionRoutes.Settings
 private const val BackgroundsRoute = SectionRoutes.Backgrounds
+private const val LicensesRoute = SectionRoutes.Licenses
 private const val PlaylistIdArg = "playlistId"
 private val TwoPaneBreakpoint = 600.dp
 
@@ -550,6 +551,9 @@ private fun AppNavHost(
                 onOpenBackgrounds = {
                     navController.navigate(BackgroundsRoute) { launchSingleTop = true }
                 },
+                onOpenLicenses = {
+                    navController.navigate(LicensesRoute) { launchSingleTop = true }
+                },
                 contentBottomPadding = contentBottomPadding,
                 modifier = Modifier.fillMaxSize(),
             )
@@ -562,6 +566,13 @@ private fun AppNavHost(
                 onSelect = onSelectBackground,
                 onColorsChange = onBackgroundColors,
                 onResetColors = onResetBackgroundColors,
+                onBack = { navController.popBackStack() },
+                contentBottomPadding = contentBottomPadding,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+        composable(LicensesRoute) {
+            LicensesScreen(
                 onBack = { navController.popBackStack() },
                 contentBottomPadding = contentBottomPadding,
                 modifier = Modifier.fillMaxSize(),

@@ -15,6 +15,27 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
+        // The licences screen names the exact libVLC build; the catalog is the single source.
+        resValue("string", "libvlc_version", libs.versions.libvlc.get())
+    }
+
+    // libVLC ships about 23 MB of native code per ABI. One APK per ABI keeps the
+    // Fold 7 download near 50 MB; x86_64 is for emulators only.
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a", "x86_64")
+            isUniversalApk = false
+        }
+    }
+
+    // Compressed .so files: the APK is sideloaded, so download size beats the
+    // extracted size on install. The 16 KB check in CI reads the ELF LOAD alignment.
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
     }
 
     buildTypes {
@@ -34,6 +55,7 @@ android {
 
     buildFeatures {
         compose = true
+        resValues = true
     }
 
     testOptions {
@@ -70,6 +92,7 @@ dependencies {
     implementation(libs.androidx.room.runtime)
     ksp(libs.androidx.room.compiler)
     implementation(libs.androidx.datastore.preferences)
+    implementation(libs.libvlc.all)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     testImplementation(libs.junit)
