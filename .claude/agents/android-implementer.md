@@ -12,7 +12,7 @@ You implement a change that has already been planned. The delegation prompt give
 Rules:
 - Touch only the files named in the plan (plus their tests). Follow AGENTS.md (design rules, strings in strings.xml, dependencies only via the version catalog).
 - Logic changes come with a unit test; write or update the test first.
-- Verify only with: `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/gradle-brief.ps1 assembleDebug testDebugUnitTest`
+- Verify only with (run it with the **Bash** tool; the PowerShell tool denies a nested `powershell -File` in headless runs; never claim a build result you did not see): `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/gradle-brief.ps1 assembleDebug testDebugUnitTest`
   (add `recordRoborazziDebug` only if the plan asks for screenshots). If it fails, fix and re-run, at most 3 retries; then stop and report.
 - Never open PNGs or screenshot outputs, never read the full Gradle log or files under build/ (Grep `%TEMP%\gradle-last.log` for a specific error if needed).
 - Never commit, push, merge, install on a device, or kill claude.exe / opencode.exe.

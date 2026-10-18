@@ -12,5 +12,6 @@ local.properties
 *.ap_
 *.aab
 *.keystore
+!app/debug.keystore
 *.jks
 .kotlin

@@ -1,5 +1,7 @@
 package com.shibi.musicplayer.playlist
 
+import com.shibi.musicplayer.domain.HistoryType
+import com.shibi.musicplayer.domain.PlayHistoryDedupe
 import com.shibi.musicplayer.domain.PlaylistOrder
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -17,6 +19,8 @@ class PlaylistRepository(
     val recentTrackIds: Flow<List<Long>> = dao.observeRecentIds()
 
     val recentSearches: Flow<List<String>> = dao.observeRecentSearches()
+
+    val history: Flow<List<PlayHistoryEntity>> = dao.observeHistory()
 
     val darkTheme: Flow<Boolean> =
         dao.observeSettings(AppSettingsEntity.SETTINGS_ID).map { it?.darkTheme ?: true }
@@ -111,6 +115,33 @@ class PlaylistRepository(
             )
         }
     }
+
+    suspend fun recordHistory(type: HistoryType, mediaId: Long, uri: String, title: String) {
+        val now = now()
+        val last = dao.latestHistory()
+        if (last != null && PlayHistoryDedupe.isReplay(
+                HistoryType.entries.firstOrNull { it.name == last.type },
+                last.mediaId,
+                type,
+                mediaId,
+            )
+        ) {
+            dao.touchHistory(last.id, now)
+        } else {
+            dao.insertHistory(
+                PlayHistoryEntity(
+                    type = type.name,
+                    mediaId = mediaId,
+                    uri = uri,
+                    title = title,
+                    playedAt = now,
+                ),
+            )
+        }
+        dao.trimHistory(PlayHistoryDedupe.Limit)
+    }
+
+    suspend fun clearHistory() = dao.clearHistory()
 
     suspend fun setDarkTheme(dark: Boolean) {
         dao.upsertSettings(AppSettingsEntity(darkTheme = dark))

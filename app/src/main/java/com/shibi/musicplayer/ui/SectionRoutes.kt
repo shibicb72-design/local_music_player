@@ -17,6 +17,11 @@ internal object SectionRoutes {
     const val Settings = "settings"
     const val Backgrounds = "settings/backgrounds"
     const val Licenses = "settings/licenses"
+    const val ErrorLog = "settings/error-log"
+    const val Videos = "videos"
+
+    /** Reserved for the fullscreen player (V6); it stays under the Videos section. */
+    const val VideoFullscreen = "video/fullscreen"
 
     fun routeFor(section: NavSection): String = when (section) {
         NavSection.Songs -> Songs
@@ -27,11 +32,12 @@ internal object SectionRoutes {
         NavSection.Recent -> Recent
         NavSection.Search -> Search
         NavSection.Settings -> Settings
+        NavSection.Videos -> Videos
     }
 
     /**
      * Sections on the carousel. Two-pane already shows Now Playing in the right
-     * pane, so the expanded ring leaves it out; compact keeps all eight.
+     * pane, so the expanded ring leaves it out (eight); compact keeps all nine.
      */
     fun sectionsFor(expanded: Boolean): List<NavSection> =
         if (expanded) ExpandedSections else NavSection.entries
@@ -61,7 +67,8 @@ internal object SectionRoutes {
         Favorites -> NavSection.Favorites
         Recent -> NavSection.Recent
         Search -> NavSection.Search
-        Settings, Backgrounds, Licenses -> NavSection.Settings
+        Settings, Backgrounds, Licenses, ErrorLog -> NavSection.Settings
+        Videos, VideoFullscreen -> NavSection.Videos
         else -> null
     }
 }

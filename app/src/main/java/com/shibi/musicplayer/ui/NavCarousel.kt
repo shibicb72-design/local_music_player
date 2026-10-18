@@ -1,6 +1,5 @@
 package com.shibi.musicplayer.ui
 
-import android.provider.Settings
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
@@ -30,6 +29,7 @@ import androidx.compose.material.icons.rounded.PlayCircle
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Speaker
+import androidx.compose.material.icons.rounded.VideoLibrary
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -64,10 +64,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.layout.Layout
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -105,6 +103,9 @@ enum class NavSection(
     Recent(R.string.nav_recent, Icons.Rounded.History),
     Search(R.string.nav_search, Icons.Rounded.Search),
     Settings(R.string.nav_settings, Icons.Rounded.Settings),
+
+    // Last, so at rest it is the left neighbour of Songs.
+    Videos(R.string.nav_videos, Icons.Rounded.VideoLibrary),
 }
 
 /** Tile ring only. About half the old 156dp floor after the compact ring. */
@@ -690,20 +691,6 @@ private fun lensColors(chrome: BackgroundChrome): LensColors {
             spot = DarkGlow.copy(alpha = 0.60f),
             ambient = Color.Black.copy(alpha = 0.50f),
         )
-    }
-}
-
-/** True when the system "Remove animations" setting (animator scale 0) is on. */
-@Composable
-private fun rememberReduceMotion(): Boolean {
-    if (LocalInspectionMode.current) return false
-    val context = LocalContext.current
-    return remember(context) {
-        Settings.Global.getFloat(
-            context.contentResolver,
-            Settings.Global.ANIMATOR_DURATION_SCALE,
-            1f,
-        ) == 0f
     }
 }
 

@@ -1,8 +1,9 @@
 package com.shibi.musicplayer.ui
 
 import androidx.compose.foundation.BorderStroke
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -32,6 +33,7 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.DragIndicator
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.PlaylistRemove
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -46,6 +48,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -68,6 +71,7 @@ import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.shibi.musicplayer.R
 import com.shibi.musicplayer.domain.PlaylistOrder
+import com.shibi.musicplayer.domain.Selection
 import com.shibi.musicplayer.domain.Track
 import com.shibi.musicplayer.domain.TrackDisplay
 import com.shibi.musicplayer.playlist.PlaylistViewModel
@@ -205,8 +209,13 @@ internal fun PlaylistDetailContent(
     onPlayFrom: (Long) -> Unit,
     contentBottomPadding: Dp,
     modifier: Modifier = Modifier,
+    initialSelection: Selection = Selection(),
 ) {
     var menuOpen by remember { mutableStateOf(false) }
+    var selection by remember { mutableStateOf(initialSelection) }
+    val songIds = songs.map { it.trackId }
+    LaunchedEffect(songIds) { selection = selection.retain(songIds.toSet()) }
+    BackHandler(enabled = selection.active) { selection = selection.clear() }
     var localIds by remember(songs.map { it.trackId }) { mutableStateOf(songs.map { it.trackId }) }
     var draggingId by remember { mutableStateOf<Long?>(null) }
     var dragDy by remember { mutableFloatStateOf(0f) }
@@ -225,7 +234,40 @@ internal fun PlaylistDetailContent(
                 WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal),
             ),
     ) {
-        Row(
+        if (selection.active) {
+            SelectionTopBar(
+                count = selection.count,
+                onSelectAll = { selection = selection.selectAll(songIds) },
+                onCancel = { selection = selection.clear() },
+                modifier = Modifier.padding(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 4.dp),
+                actions = {
+                    TextButton(
+                        onClick = {
+                            // Files are never deleted here; only the playlist entries go.
+                            val picked = songIds.filter { it in selection.ids }
+                            selection = selection.clear()
+                            picked.forEach(onRemove)
+                        },
+                        colors = ButtonDefaults.textButtonColors(
+                            contentColor = MaterialTheme.colorScheme.onSurface,
+                        ),
+                        contentPadding = PaddingValues(horizontal = 8.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.PlaylistRemove,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            text = stringResource(R.string.remove_from_playlist),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                },
+            )
+        } else Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(start = 4.dp, end = 4.dp, top = 4.dp),
@@ -353,7 +395,19 @@ internal fun PlaylistDetailContent(
                         dragDy = if (dragging) dragDy else 0f,
                         onPlay = { onPlayFrom(song.trackId) },
                         onRemove = { onRemove(song.trackId) },
-                        handleModifier = Modifier.pointerInput(song.trackId) {
+                        selectionMode = selection.active,
+                        selected = song.trackId in selection.ids,
+                        onToggle = { selection = selection.toggle(song.trackId) },
+                        onLongPress = {
+                            selection = if (selection.active) {
+                                selection.toggle(song.trackId)
+                            } else {
+                                selection.start(song.trackId)
+                            }
+                        },
+                        handleModifier = Modifier.pointerInput(song.trackId, selection.active) {
+                            // No dragging while selecting.
+                            if (selection.active) return@pointerInput
                             detectDragGestures(
                                 onDragStart = {
                                     draggingId = song.trackId
@@ -405,6 +459,10 @@ private fun PlaylistSongLine(
     dragDy: Float,
     onPlay: () -> Unit,
     onRemove: () -> Unit,
+    selectionMode: Boolean,
+    selected: Boolean,
+    onToggle: () -> Unit,
+    onLongPress: () -> Unit,
     handleModifier: Modifier = Modifier,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
@@ -421,20 +479,35 @@ private fun PlaylistSongLine(
             .padding(start = 4.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(
-            imageVector = Icons.Rounded.DragIndicator,
-            contentDescription = stringResource(R.string.reorder),
-            tint = MaterialTheme.colorScheme.onBackground,
-            modifier = handleModifier
-                .size(48.dp)
-                .padding(13.dp),
-        )
+        if (selectionMode) {
+            Box(modifier = Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+                SelectionCheck(selected = selected)
+            }
+        } else {
+            Icon(
+                imageVector = Icons.Rounded.DragIndicator,
+                contentDescription = stringResource(R.string.reorder),
+                tint = MaterialTheme.colorScheme.onBackground,
+                modifier = handleModifier
+                    .size(48.dp)
+                    .padding(13.dp),
+            )
+        }
         Spacer(Modifier.width(4.dp))
         Row(
             modifier = Modifier
                 .weight(1f)
                 .clip(RoundedCornerShape(12.dp))
-                .clickable(enabled = !song.missing, onClick = onPlay)
+                .combinedClickable(
+                    onClick = {
+                        if (selectionMode) {
+                            onToggle()
+                        } else if (!song.missing) {
+                            onPlay()
+                        }
+                    },
+                    onLongClick = onLongPress,
+                )
                 .padding(vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -468,6 +541,10 @@ private fun PlaylistSongLine(
                     )
                 }
             }
+        }
+        if (selectionMode) {
+            Spacer(Modifier.width(12.dp))
+            return@Row
         }
         Box {
             IconButton(onClick = { menuOpen = true }) {

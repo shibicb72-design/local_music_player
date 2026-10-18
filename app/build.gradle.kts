@@ -13,7 +13,9 @@ android {
         applicationId = "com.shibi.musicplayer"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
+        // CI: every Actions run gets a higher number, so a newer CI APK always installs over an older one.
+        // Local builds use 1, so any CI build installs over them.
+        versionCode = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
         versionName = "1.0"
         // The licences screen names the exact libVLC build; the catalog is the single source.
         resValue("string", "libvlc_version", libs.versions.libvlc.get())
@@ -38,7 +40,22 @@ android {
         }
     }
 
+    // Debug-only, NOT secret, never used for release or the Play Store. Committed so every CI run
+    // and local build signs debug APKs with the same certificate; a fresh ~/.android/debug.keystore
+    // per CI runner made each APK's signature differ ("App not installed" on update).
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("debug")
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(

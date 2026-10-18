@@ -114,4 +114,58 @@ interface PlaylistDao {
             "(SELECT `query` FROM recent_searches ORDER BY searchedAt DESC LIMIT :keep)",
     )
     suspend fun trimRecentSearches(keep: Int)
+
+    @Query("SELECT * FROM play_history ORDER BY playedAt DESC, id DESC LIMIT 500")
+    fun observeHistory(): Flow<List<PlayHistoryEntity>>
+
+    @Query("SELECT * FROM play_history ORDER BY playedAt DESC, id DESC LIMIT 1")
+    suspend fun latestHistory(): PlayHistoryEntity?
+
+    @Insert
+    suspend fun insertHistory(e: PlayHistoryEntity)
+
+    @Query("UPDATE play_history SET playedAt = :playedAt WHERE id = :id")
+    suspend fun touchHistory(id: Long, playedAt: Long)
+
+    @Query(
+        "DELETE FROM play_history WHERE id NOT IN " +
+            "(SELECT id FROM play_history ORDER BY playedAt DESC, id DESC LIMIT :keep)",
+    )
+    suspend fun trimHistory(keep: Int)
+
+    @Query("DELETE FROM play_history")
+    suspend fun clearHistory()
+
+    @Query("SELECT * FROM playlist_songs WHERE trackId IN (:ids)")
+    suspend fun songsForTracks(ids: List<Long>): List<PlaylistSongEntity>
+
+    @Query("DELETE FROM playlist_songs WHERE trackId IN (:ids)")
+    suspend fun deleteSongsForTracks(ids: List<Long>)
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertSongs(rows: List<PlaylistSongEntity>)
+
+    @Query("SELECT DISTINCT trackId FROM playlist_songs")
+    suspend fun allPlaylistTrackIds(): List<Long>
+
+    @Query("SELECT * FROM recent_plays WHERE trackId IN (:ids)")
+    suspend fun recentPlaysFor(ids: List<Long>): List<RecentPlayEntity>
+
+    @Query("DELETE FROM recent_plays WHERE trackId IN (:ids)")
+    suspend fun deleteRecentForTracks(ids: List<Long>)
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertRecentPlays(rows: List<RecentPlayEntity>)
+
+    @Query("SELECT * FROM play_history WHERE type = :type AND mediaId IN (:ids)")
+    suspend fun historyFor(type: String, ids: List<Long>): List<PlayHistoryEntity>
+
+    @Query("DELETE FROM play_history WHERE type = :type AND mediaId IN (:ids)")
+    suspend fun deleteHistoryFor(type: String, ids: List<Long>)
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertHistoryRows(rows: List<PlayHistoryEntity>)
+
+    @Query("SELECT DISTINCT mediaId FROM play_history WHERE type = :type")
+    suspend fun historyMediaIds(type: String): List<Long>
 }

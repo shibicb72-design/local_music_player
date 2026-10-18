@@ -217,4 +217,56 @@ class CarouselMathTest {
         assertTrue(side > 0f && side <= 1f)
         assertTrue(math.blurFraction(3f * math.stepRadians) > side)
     }
+
+    // The compact ring with Videos: nine sections, 40° apart.
+    private val nine = CarouselMath(itemCount = 9)
+
+    @Test
+    fun nineItemRingStepsFortyDegrees() {
+        assertEquals(40f, Math.toDegrees(nine.stepRadians.toDouble()).toFloat(), 0.001f)
+    }
+
+    /** Front, ±40° and ±80° (cos 0.17) show; ±120° and ±160° sit behind BACK_COS. */
+    @Test
+    fun nineItemRingShowsFiveTilesSymmetrically() {
+        val visible = (0 until nine.itemCount).filter { index ->
+            nine.alpha(nine.offsetRadians(index, 0f)) > 0.01f
+        }
+        assertEquals(listOf(0, 1, 2, 7, 8), visible)
+        for (step in 1..2) {
+            val right = nine.offsetRadians(step, 0f)
+            val left = nine.offsetRadians(nine.itemCount - step, 0f)
+            assertEquals(nine.alpha(right), nine.alpha(left), 0.001f)
+            assertEquals(nine.scale(right), nine.scale(left), 0.001f)
+            assertEquals(-nine.translationX(right, 200f), nine.translationX(left, 200f), 0.01f)
+        }
+        assertEquals(0f, nine.alpha(nine.offsetRadians(3, 0f)), 0.001f)
+        assertEquals(0f, nine.alpha(nine.offsetRadians(6, 0f)), 0.001f)
+    }
+
+    @Test
+    fun nineItemSelectedIndexWraps() {
+        assertEquals(0, nine.selectedIndex(0f))
+        assertEquals(0, nine.selectedIndex(9f))
+        assertEquals(8, nine.selectedIndex(-1f))
+        assertEquals(8, nine.selectedIndex(-0.6f))
+        assertEquals(0, nine.selectedIndex(-0.4f))
+        assertEquals(4, nine.selectedIndex(13f))
+        assertEquals(8.5f, nine.normalize(-0.5f), 0.001f)
+    }
+
+    /** Odd ring: no halfway tie, so the shortest spin is unique both ways. */
+    @Test
+    fun nineItemRotationForIndexTakesTheShortestSpin() {
+        assertEquals(-1f, nine.rotationForIndex(0f, 8), 0.001f)
+        assertEquals(4f, nine.rotationForIndex(0f, 4), 0.001f)
+        assertEquals(-4f, nine.rotationForIndex(0f, 5), 0.001f)
+    }
+
+    @Test
+    fun nineItemFlingTargetNeverSpinsMoreThanOneTurn() {
+        assertEquals(9f, nine.flingTarget(0f, 500f), 0.001f)
+        assertEquals(-9f, nine.flingTarget(0f, -500f), 0.001f)
+        assertEquals(10f, nine.flingTarget(1f, 500f), 0.001f)
+    }
 }

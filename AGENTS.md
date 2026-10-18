@@ -4,7 +4,7 @@ Primary tool: Claude Code (config in `.claude/`). The free OpenCode models are h
 Past mistakes, API gotchas and design history: `docs/lessons.md` (moved there verbatim; read only the part your ticket touches).
 
 ## Ground rules
-- **Phone:** never `adb install`, uninstall, or clear/change app data on Shibi's phone or devices. Install only after Shibi's explicit yes for that specific install. When a build is ready, stop and report the CI APK artifact. Read-only adb (logcat, dumpsys) only when truly needed; prefer the app's Debugging / Error log.
+- **Phone:** never `adb install`, uninstall, or clear/change app data on Shibi's phone or devices. Install on Shibi's phone only after his explicit yes for that specific install; never on your own. When a build is ready, stop and report the CI APK artifact. Read-only adb (logcat, dumpsys) only when truly needed; prefer the app's Debugging / Error log.
 - **PRs:** one branch per ticket (`opus/<topic>`), based on `main` or on the branch it stacks on; say which in the PR. The PR body starts with "Do not merge without Shibi's OK." Never merge, never push to `main`, never force-push.
 - **Work in progress:** check `git status` first. If the tree is dirty or on a feature branch with local commits, use `git worktree add` instead of switching branches.
 - Never kill `claude.exe` or `opencode.exe`. Never commit secrets.
@@ -12,7 +12,7 @@ Past mistakes, API gotchas and design history: `docs/lessons.md` (moved there ve
 
 ## Project map
 - Single module `:app`, package `com.shibi.musicplayer` (minSdk 26, targetSdk 36). Kotlin, Compose Material 3, Media3, Room, Coil 3, libVLC.
-- `domain/` pure Kotlin, unit-tested, no Android imports. `library/` MediaStore repositories and view models. `playlist/` Room (`playlists.db`, migrations tested). `playback/` `PlaybackService` + `PlayerViewModel`. `ui/` `MusicApp` (routes in `SectionRoutes`), `SectionScaffold`, `NavCarousel`, screens, `theme/`.
+- `domain/` pure Kotlin, unit-tested, no Android imports. `library/` MediaStore repositories and view models. `playlist/` Room (`playlists.db`, migrations tested). `playback/` `PlaybackService` + `PlayerViewModel`. `video/` libVLC engine (`VlcVideoEngine` is the only file naming `org.videolan`), `VideoViewModel`, `VideoPlaybackService`. `diagnostics/ErrorLog.kt` error log (Playback check lines). `ui/` `MusicApp` (routes in `SectionRoutes`), `SectionScaffold`, `NavCarousel`, screens, `theme/`.
 - Tests: `app/src/test/java/com/shibi/musicplayer/` (JUnit 4; Robolectric for Room and Roborazzi). Screenshots are written to `app/build/outputs/roborazzi/` by `recordRoborazziDebug` only.
 - Dependencies only through `gradle/libs.versions.toml` (`libs.*`). User-facing text in `res/values/strings.xml`.
 - Style: 4-space indent, trailing commas, one composable per concern, private helper composables.

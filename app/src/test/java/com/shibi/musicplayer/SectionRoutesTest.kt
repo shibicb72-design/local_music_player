@@ -39,13 +39,35 @@ class SectionRoutesTest {
         assertEquals(NavSection.Playlists, SectionRoutes.sectionFor(SectionRoutes.PlaylistDetail))
         assertEquals(NavSection.Settings, SectionRoutes.sectionFor(SectionRoutes.Backgrounds))
         assertEquals(NavSection.Settings, SectionRoutes.sectionFor(SectionRoutes.Licenses))
+        // Settings > Debugging / Error log keeps the ring on Settings.
+        assertEquals(NavSection.Settings, SectionRoutes.sectionFor(SectionRoutes.ErrorLog))
+        assertTrue(SectionRoutes.ErrorLog.startsWith("settings/"))
         assertNull(SectionRoutes.sectionFor(null))
         assertNull(SectionRoutes.sectionFor("unknown"))
     }
 
     @Test
-    fun compactCarouselKeepsAllEightSections() {
+    fun compactCarouselKeepsAllNineSections() {
         assertEquals(NavSection.entries, SectionRoutes.sectionsFor(expanded = false))
+        assertEquals(9, SectionRoutes.sectionsFor(expanded = false).size)
+    }
+
+    /** Appended last, so at rest Videos is the left neighbour of Songs on both rings. */
+    @Test
+    fun videosOnBothRings() {
+        val compact = SectionRoutes.sectionsFor(expanded = false)
+        val expanded = SectionRoutes.sectionsFor(expanded = true)
+        assertEquals(NavSection.Videos, compact.last())
+        assertEquals(NavSection.Videos, expanded.last())
+        assertEquals(NavSection.Songs, compact.first())
+        assertEquals(8, expanded.size)
+        assertEquals("videos", SectionRoutes.routeFor(NavSection.Videos))
+        assertEquals(NavSection.Videos, SectionRoutes.sectionFor("videos"))
+        assertEquals(NavSection.Videos, SectionRoutes.sectionFor("video/fullscreen"))
+        assertEquals(
+            NavSection.Videos,
+            SectionRoutes.selectionFor(expanded = true, selected = NavSection.Videos, previous = NavSection.Songs),
+        )
     }
 
     /** Two-pane already shows Now Playing on the right, so the ring drops it. */
