@@ -29,4 +29,13 @@ interface VideoProgressDao {
 
     @Upsert
     suspend fun upsert(entry: VideoProgressEntity)
+
+    @Query("SELECT * FROM video_progress WHERE uri IN (:uris)")
+    suspend fun findAll(uris: List<String>): List<VideoProgressEntity>
+
+    @Query("DELETE FROM video_progress WHERE uri IN (:uris)")
+    suspend fun deleteAll(uris: List<String>)
+
+    @Upsert
+    suspend fun upsertAll(rows: List<VideoProgressEntity>)
 }

@@ -142,6 +142,9 @@ class VideoProgressRepositoryTest {
         override suspend fun getAll(): List<VideoProgressEntity> = throw SQLiteFullException("database or disk is full")
         override suspend fun find(uri: String): VideoProgressEntity? = throw SQLiteFullException("database or disk is full")
         override suspend fun upsert(entry: VideoProgressEntity) = throw SQLiteFullException("database or disk is full")
+        override suspend fun findAll(uris: List<String>): List<VideoProgressEntity> = throw SQLiteFullException("database or disk is full")
+        override suspend fun deleteAll(uris: List<String>) = throw SQLiteFullException("database or disk is full")
+        override suspend fun upsertAll(rows: List<VideoProgressEntity>) = throw SQLiteFullException("database or disk is full")
     }
 
     private companion object {

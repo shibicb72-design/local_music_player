@@ -10,6 +10,8 @@ import com.shibi.musicplayer.domain.VideoProgress
 import com.shibi.musicplayer.playlist.PlaylistDatabase
 import com.shibi.musicplayer.playlist.VideoProgressDao
 import com.shibi.musicplayer.playlist.VideoProgressEntity
+import com.shibi.musicplayer.playlist.VideoProgressStore
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -37,7 +39,7 @@ class VideoProgressRepository internal constructor(
     private val errorLogger: ErrorLogger,
     io: CoroutineDispatcher = Dispatchers.IO,
     private val clock: () -> Long = System::currentTimeMillis,
-) : VideoProgressHooks {
+) : VideoProgressHooks, VideoProgressStore {
 
     // limitedParallelism(1) runs the writes one at a time in the order they were made.
     private val scope = CoroutineScope(SupervisorJob() + io.limitedParallelism(1))
@@ -76,6 +78,43 @@ class VideoProgressRepository internal constructor(
         lastWrite?.join()
     }
 
+    override suspend fun removeFor(uris: Collection<String>): List<VideoProgressEntity> {
+        if (uris.isEmpty()) return emptyList()
+        val list = uris.toList()
+        val done = CompletableDeferred<List<VideoProgressEntity>>()
+        enqueue {
+            var removed = emptyList<VideoProgressEntity>()
+            try {
+                removed = list.chunked(SQL_CHUNK).flatMap { dao.findAll(it) }
+                list.chunked(SQL_CHUNK).forEach { dao.deleteAll(it) }
+            } catch (error: Exception) {
+                logOnce("Remove video positions", error, media = null)
+            }
+            _progress.update { current -> current - list.toSet() }
+            done.complete(removed)
+        }
+        return done.await()
+    }
+
+    override suspend fun restore(rows: List<VideoProgressEntity>) {
+        if (rows.isEmpty()) return
+        val done = CompletableDeferred<Unit>()
+        enqueue {
+            try {
+                rows.chunked(SQL_CHUNK).forEach { dao.upsertAll(it) }
+            } catch (error: Exception) {
+                logOnce("Restore video positions", error, media = null)
+            }
+            _progress.update { current ->
+                current + rows.associate { it.uri to VideoProgress(it.positionMs, it.durationMs) }
+            }
+            done.complete(Unit)
+        }
+        done.await()
+    }
+
+    override fun savedUris(): Set<String> = _progress.value.keys.toSet()
+
     private fun clearPosition(video: Video, durationMs: Long) {
         val keptDuration = durationMs.takeIf { it > 0L } ?: saved(video)?.durationMs ?: 0L
         store(video, VideoProgress(positionMs = 0L, durationMs = keptDuration))
@@ -108,6 +147,8 @@ class VideoProgressRepository internal constructor(
     }
 
     companion object {
+        private const val SQL_CHUNK = 500
+
         @Volatile
         private var instance: VideoProgressRepository? = null
 
