@@ -12,6 +12,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -52,6 +53,8 @@ internal fun VideoPane(
     ) {
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
             val layout = VideoPaneLayout.of(maxWidth.value, maxHeight.value, state.aspect)
+            val targetHeightPx = with(LocalDensity.current) { layout.videoHeight.dp.toPx() }
+            val height = rememberGlide(targetHeightPx)
             Column(
                 modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.Center,
@@ -69,7 +72,7 @@ internal fun VideoPane(
                     onStartOver = onStartOver,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(layout.videoHeight.dp),
+                        .animatedHeight { height.value },
                 )
                 if (layout.showDetails) {
                     VideoDetails(

@@ -1,7 +1,7 @@
 package com.shibi.musicplayer.video
 
 import android.content.Context
-import android.graphics.Color
+import android.graphics.SurfaceTexture
 import android.media.AudioAttributes
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
@@ -10,9 +10,11 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.ParcelFileDescriptor
+import android.view.Surface
 import android.view.View
 import com.shibi.musicplayer.domain.AspectMode
 import com.shibi.musicplayer.domain.InlineVideoBox
+import com.shibi.musicplayer.domain.VideoFit
 import java.io.Closeable
 import java.io.FileNotFoundException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -24,7 +26,6 @@ import org.videolan.libvlc.MediaPlayer
 import org.videolan.libvlc.interfaces.IMedia
 import org.videolan.libvlc.interfaces.IVLCVout
 import org.videolan.libvlc.util.HWDecoderUtil
-import org.videolan.libvlc.util.VLCVideoLayout
 
 /**
  * libVLC 3.7 behind [VideoEngine]. [LibVLC] (and so the native libraries) is created lazily,
@@ -37,9 +38,10 @@ import org.videolan.libvlc.util.VLCVideoLayout
  *
  * Events arrive on the main thread (the player is created there).
  *
- * Switching views (inline box, two-pane, fullscreen, picture-in-picture) turns the video track off
- * first and back on once libVLC reports the new surface, as decided by [SurfaceHandoff], because
- * the hardware decoder renders into the old view's surface and fails when that surface goes away.
+ * libVLC renders into one engine-owned video SurfaceTexture and one subtitle SurfaceTexture
+ * for the player's whole life; hosts (box, pane, fullscreen, PiP) only display them through
+ * [VideoTextureFrame], so moving the picture never rebuilds libVLC's output; aspect modes
+ * are a TextureView transform ([VideoFit]).
  */
 internal class VlcVideoEngine(context: Context) : VideoEngine {
 
@@ -52,7 +54,7 @@ internal class VlcVideoEngine(context: Context) : VideoEngine {
     private var libVlc: LibVLC? = null
     private var player: MediaPlayer? = null
     private var descriptor: ParcelFileDescriptor? = null
-    private var attached: VLCVideoLayout? = null
+    private var attached: VideoTextureFrame? = null
     private var released = false
     private var aspectMode = AspectMode.Default
 
@@ -91,7 +93,22 @@ internal class VlcVideoEngine(context: Context) : VideoEngine {
     private var pictureOff = false
 
     /** The view the UI attached last; it gets the picture back when [pictureOff] ends. */
-    private var latest: VLCVideoLayout? = null
+    private var latest: VideoTextureFrame? = null
+
+    /** Hosts that are on screen, oldest first; the newest one shows the picture. */
+    private val hosts = ArrayList<VideoTextureFrame>()
+
+    /** The engine-owned pair libVLC renders into (and [Surface]s around it), for the player's life. */
+    private var videoTexture: SurfaceTexture? = null
+    private var subtitleTexture: SurfaceTexture? = null
+    private var videoOut: Surface? = null
+    private var subtitleOut: Surface? = null
+
+    /** What libVLC last reported about the picture (OnNewVideoLayoutListener); 0 until known. */
+    private var layoutWidth = 0
+    private var layoutHeight = 0
+    private var layoutSarNum = 1
+    private var layoutSarDen = 1
 
     /** The video track to bring back, as libVLC numbered it before it was disabled. */
     private var savedVideoTrack: Int? = null
@@ -104,6 +121,14 @@ internal class VlcVideoEngine(context: Context) : VideoEngine {
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private val fallbackRestore = Runnable { restorePendingTrack() }
+
+    private val newLayoutListener = IVLCVout.OnNewVideoLayoutListener { _, width, height, visibleWidth, visibleHeight, sarNum, sarDen ->
+        layoutWidth = if (visibleWidth > 0) visibleWidth else width
+        layoutHeight = if (visibleHeight > 0) visibleHeight else height
+        layoutSarNum = sarNum
+        layoutSarDen = sarDen
+        applyFit()
+    }
 
     /** libVLC reports when a view's surface is created or destroyed; a destroyed surface under a running decoder is the failure guarded against. */
     private val voutCallback = object : IVLCVout.Callback {
@@ -254,7 +279,7 @@ internal class VlcVideoEngine(context: Context) : VideoEngine {
 
     override fun setAspectMode(mode: AspectMode) {
         aspectMode = mode
-        if (attached != null) player?.applyScale()
+        applyFit()
     }
 
     override fun configure(options: EngineOptions) {
@@ -311,6 +336,7 @@ internal class VlcVideoEngine(context: Context) : VideoEngine {
         playWhenAttached = false
         pictureOff = false
         latest = null
+        hosts.clear()
         savedVideoTrack = null
         trackPending = false
         mainHandler.removeCallbacks(fallbackRestore)
@@ -323,51 +349,50 @@ internal class VlcVideoEngine(context: Context) : VideoEngine {
         _tracks.value = TrackSnapshot()
     }
 
-    override fun createView(context: Context): View =
-        VLCVideoLayout(context).apply { setBackgroundColor(Color.BLACK) }
+    override fun createView(context: Context): View = VideoTextureFrame(context)
 
     override fun attach(view: View) {
         if (released) return
-        val layout = view as? VLCVideoLayout ?: return
-        latest = layout
+        val frame = view as? VideoTextureFrame ?: return
+        hosts.remove(frame)
+        hosts.add(frame)
+        latest = frame
         // Locked: the picture comes back on this view when the app is in view again.
         if (pictureOff) return
-        if (attached === layout) return
+        if (attached === frame) return
         val mediaPlayer = ensurePlayer() ?: return
-        val currentTrack = mediaPlayer.videoTrack
-        if (
-            SurfaceHandoff.disableBeforeSwitch(
-                hadView = attached != null,
-                mediaLoaded = currentUri != null,
-                currentTrack = currentTrack,
-                pictureOff = pictureOff,
-            )
-        ) {
-            savedVideoTrack = SurfaceHandoff.trackToSave(currentTrack, savedVideoTrack)
-            if (currentTrack != SurfaceHandoff.NoTrack) mediaPlayer.setVideoTrack(SurfaceHandoff.NoTrack)
-            trackPending = true
-        }
-        if (attached != null) mediaPlayer.detachViews()
-        // Texture view in every layout (box, pane, fullscreen): it clips and z-orders with
-        // Compose (a SurfaceView would not), and a layout switch is one re-attach path.
-        mediaPlayer.attachViews(layout, null, true, true)
-        attached = layout
-        if (trackPending) scheduleFallbackRestore()
-        // The scale belongs to the attached layout's helper, so every new view gets it again.
-        mediaPlayer.applyScale()
+        val video = videoTexture ?: return
+        val subtitles = subtitleTexture ?: return
+        // The old host lets go first: a SurfaceTexture is shown by one view at a time.
+        attached?.release()
+        frame.onSizeChanged = { width, height -> if (attached === frame) onFrameSized(width, height) }
+        frame.show(video, subtitles)
+        attached = frame
+        if (frame.width > 0 && frame.height > 0) onFrameSized(frame.width, frame.height)
+        applyFit()
+        restorePendingTrack()   // a lock may have switched the track off; the surface is always valid now
         if (playWhenAttached) {
             playWhenAttached = false
             mediaPlayer.play()
+        } else if (!mediaPlayer.isPlaying && _state.value.status == VideoStatus.Paused) {
+            // Paused: the new view has no frame yet; a seek in place draws the current one.
+            mediaPlayer.setTime(mediaPlayer.time)
         }
     }
 
+    /** The picture goes back to the newest host still on screen (fullscreen closing returns it to the box or pane). */
     override fun detach(view: View) {
         if (latest === view) latest = null
-        if (attached !== view) return
-        player?.detachViews()
+        val frame = view as? VideoTextureFrame ?: return
+        hosts.remove(frame)
+        if (attached !== frame) return
+        frame.release()
         attached = null
+        if (!released) hosts.lastOrNull()?.let { next ->
+            latest = next
+            attach(next)
+        }
     }
-
     override fun setPictureEnabled(enabled: Boolean) {
         if (released || pictureOff == !enabled) return
         val mediaPlayer = player
@@ -378,8 +403,8 @@ internal class VlcVideoEngine(context: Context) : VideoEngine {
                 val track = mediaPlayer.videoTrack
                 if (track != TrackMapping.DisabledId) savedVideoTrack = track
                 mediaPlayer.setVideoTrack(TrackMapping.DisabledId)
-                if (attached != null) mediaPlayer.detachViews()
             }
+            attached?.release()
             attached = null
             // A play asked for before a view came no longer needs one.
             if (playWhenAttached && mediaPlayer != null) {
@@ -472,6 +497,14 @@ internal class VlcVideoEngine(context: Context) : VideoEngine {
         return MediaPlayer(vlc).also { created ->
             created.setEventListener(listener)
             created.vlcVout.addCallback(voutCallback)
+            // One engine-owned output for this player's whole life: views only display it.
+            val video = SurfaceTexture(false).also { videoTexture = it }
+            val subtitles = SurfaceTexture(false).also { subtitleTexture = it; it.setDefaultBufferSize(1920, 1080) }
+            val vout = created.vlcVout
+            vout.setVideoSurface(Surface(video).also { videoOut = it }, null)
+            vout.setSubtitlesSurface(Surface(subtitles).also { subtitleOut = it }, null)
+            vout.setWindowSize(1920, 1080)
+            vout.attachViews(newLayoutListener)
             player = created
         }
     }
@@ -646,11 +679,22 @@ internal class VlcVideoEngine(context: Context) : VideoEngine {
         player?.let { mediaPlayer ->
             mediaPlayer.vlcVout.removeCallback(voutCallback)
             mediaPlayer.setEventListener(null)
-            if (attached != null) mediaPlayer.detachViews()
+            mediaPlayer.vlcVout.detachViews()
             mediaPlayer.stop()
             mediaPlayer.release()
         }
+        attached?.release()
         attached = null
+        runCatching { videoOut?.release() }
+        runCatching { subtitleOut?.release() }
+        runCatching { videoTexture?.release() }
+        runCatching { subtitleTexture?.release() }
+        videoOut = null
+        subtitleOut = null
+        videoTexture = null
+        subtitleTexture = null
+        layoutWidth = 0
+        layoutHeight = 0
         player = null
         libVlc?.release()
         libVlc = null
@@ -658,8 +702,16 @@ internal class VlcVideoEngine(context: Context) : VideoEngine {
         mainHandler.removeCallbacks(fallbackRestore)
     }
 
-    private fun MediaPlayer.applyScale() {
-        setVideoScale(MediaPlayer.ScaleType.valueOf(aspectMode.vlcScale))
+    private fun onFrameSized(width: Int, height: Int) {
+        player?.vlcVout?.setWindowSize(width, height)
+        subtitleTexture?.setDefaultBufferSize(width, height)
+        applyFit()
+    }
+
+    private fun applyFit() {
+        val frame = attached ?: return
+        val fit = VideoFit.scale(aspectMode, frame.width, frame.height, layoutWidth, layoutHeight, layoutSarNum, layoutSarDen)
+        frame.setFit(fit.scaleX, fit.scaleY)
     }
 
     private fun startOrDefer(mediaPlayer: MediaPlayer) {

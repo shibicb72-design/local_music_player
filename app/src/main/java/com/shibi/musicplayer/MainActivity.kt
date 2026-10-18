@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.res.Configuration
+import android.graphics.Rect
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -33,6 +34,7 @@ import com.shibi.musicplayer.video.VideoViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -98,10 +100,13 @@ class MainActivity : ComponentActivity() {
             ContextCompat.RECEIVER_NOT_EXPORTED,
         )
         lifecycleScope.launch {
-            videoViewModel.uiState
-                .map { Triple(it.isActive, it.isPlaying, it.aspect) }
-                .distinctUntilChanged()
-                .collect { (active, playing, aspect) -> updatePipParams(active && playing, aspect) }
+            combine(
+                videoViewModel.uiState
+                    .map { Triple(it.isActive, it.isPlaying, it.aspect) }
+                    .distinctUntilChanged(),
+                videoViewModel.playerBounds,
+            ) { t, rect -> t to rect }
+                .collect { (t, rect) -> updatePipParams(t.first && t.second, t.third, rect) }
         }
     }
 
@@ -147,7 +152,12 @@ class MainActivity : ComponentActivity() {
         ) {
             try {
                 enterPictureInPictureMode(
-                    PipParamsFactory.build(this, true, videoViewModel.uiState.value.aspect),
+                    PipParamsFactory.build(
+                        this,
+                        true,
+                        videoViewModel.uiState.value.aspect,
+                        videoViewModel.playerBounds.value,
+                    ),
                 )
             } catch (e: IllegalArgumentException) {
                 logPipError("Enter picture-in-picture", e)
@@ -167,10 +177,10 @@ class MainActivity : ComponentActivity() {
     }
 
     /** The video pane's aspect ratio and controls, kept current while a video is playing. */
-    private fun updatePipParams(playing: Boolean, aspect: Float?) {
+    private fun updatePipParams(playing: Boolean, aspect: Float?, sourceRect: Rect?) {
         if (!PipParamsFactory.supported(this)) return
         try {
-            setPictureInPictureParams(PipParamsFactory.build(this, playing, aspect))
+            setPictureInPictureParams(PipParamsFactory.build(this, playing, aspect, sourceRect))
         } catch (e: IllegalArgumentException) {
             logPipError("Update picture-in-picture", e)
         } catch (e: IllegalStateException) {

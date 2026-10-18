@@ -11,6 +11,7 @@ import androidx.activity.compose.LocalActivity
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -26,6 +27,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.VolumeOff
@@ -51,6 +53,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -58,20 +61,25 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.shibi.musicplayer.R
 import com.shibi.musicplayer.domain.AspectMode
+import com.shibi.musicplayer.domain.Bounds
+import com.shibi.musicplayer.domain.BoundsLerp
 import com.shibi.musicplayer.domain.BrightnessMath
 import com.shibi.musicplayer.domain.FullscreenGestures
 import com.shibi.musicplayer.domain.FullscreenOrientation
@@ -82,7 +90,9 @@ import com.shibi.musicplayer.domain.VideoFormat
 import com.shibi.musicplayer.ui.background.ContrastSurface
 import com.shibi.musicplayer.video.VideoStatus
 import com.shibi.musicplayer.video.VideoUiState
+import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /** Test tag of the fullscreen player. */
 internal const val FullscreenVideoTag = "video_fullscreen"
@@ -119,7 +129,9 @@ internal interface ScreenBrightness {
  * The `video/fullscreen` route: the picture on black over the whole window, with no carousel
  * or chrome. It hides the system bars (a swipe shows them for a moment), turns wide videos
  * sideways and keeps portrait clips as the phone is held. Back or the exit button leaves;
- * leaving restores the bars, the orientation and the system brightness.
+ * leaving restores the bars, the orientation and the system brightness. It grows out of the
+ * player box (LocalVideoBounds) with a ~300 ms spring and shrinks back into it on exit; with
+ * Remove animations on it simply appears.
  */
 @Composable
 internal fun FullscreenVideo(
@@ -135,6 +147,21 @@ internal fun FullscreenVideo(
     holdControls: Boolean = false,
     onStartOver: () -> Unit = {},
 ) {
+    val bounds = LocalVideoBounds.current
+    val reduceMotion = rememberReduceMotion()
+    val progress = remember { Animatable(if (reduceMotion) 1f else 0f) }
+    var exiting by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    LaunchedEffect(Unit) { if (!reduceMotion) progress.animateTo(1f, VideoMotionSpec) }
+    val animatedExit: () -> Unit = {
+        if (!exiting) {
+            exiting = true
+            scope.launch {
+                if (!reduceMotion) progress.animateTo(0f, VideoMotionSpec)
+                onExit()
+            }
+        }
+    }
     val activity = LocalActivity.current
     val context = LocalContext.current
     FullscreenWindow(
@@ -143,24 +170,44 @@ internal fun FullscreenVideo(
         keepScreenOn = state.isPlaying,
     )
     // Composed last in MusicApp, so this callback is the newest and wins over the others.
-    BackHandler(onBack = onExit)
+    BackHandler(onBack = animatedExit)
     val volume = remember(context) { MusicStreamVolume(context) }
     val brightness = remember(activity) { activity?.let(::WindowBrightness) }
-    FullscreenVideoContent(
-        state = state,
-        brightnessSwipe = brightnessSwipe,
-        onTogglePlayPause = onTogglePlayPause,
-        onSeek = onSeek,
-        onCycleAspect = onCycleAspect,
-        onExit = onExit,
-        surface = surface,
-        volume = volume,
-        brightness = brightness,
-        modifier = modifier,
-        onOpenTracks = onOpenTracks,
-        holdControls = holdControls,
-        onStartOver = onStartOver,
-    )
+    Box(Modifier.fillMaxSize()) {
+        Box(Modifier.fillMaxSize().graphicsLayer { alpha = progress.value.coerceIn(0f, 1f) }.background(Color.Black))
+        FullscreenVideoContent(
+            state = state,
+            brightnessSwipe = brightnessSwipe,
+            onTogglePlayPause = onTogglePlayPause,
+            onSeek = onSeek,
+            onCycleAspect = onCycleAspect,
+            onExit = animatedExit,
+            surface = surface,
+            volume = volume,
+            brightness = brightness,
+            modifier = modifier.growFrom(bounds) { progress.value },
+            onOpenTracks = onOpenTracks,
+            holdControls = holdControls,
+            onStartOver = onStartOver,
+        )
+    }
+}
+
+/** Grows the content from the player box's rect into the full window as [progress] goes 0 to 1. */
+private fun Modifier.growFrom(bounds: VideoBounds, progress: () -> Float): Modifier = layout { measurable, constraints ->
+    val full = Bounds(0f, 0f, constraints.maxWidth.toFloat(), constraints.maxHeight.toFloat())
+    val start = BoundsLerp.startFor(bounds.rect, full.width, full.height)
+    val b = BoundsLerp.lerp(start, full, progress().coerceIn(0f, 1f))
+    val w = b.width.roundToInt().coerceAtLeast(1)
+    val h = b.height.roundToInt().coerceAtLeast(1)
+    val placeable = measurable.measure(Constraints.fixed(w, h))
+    layout(constraints.maxWidth, constraints.maxHeight) {
+        placeable.place(b.left.roundToInt(), b.top.roundToInt())
+    }
+}.graphicsLayer {
+    val t = progress().coerceIn(0f, 1f)
+    shape = RoundedCornerShape((28f * (1f - t)).dp)
+    clip = t < 1f
 }
 
 /** Immersive bars, orientation, music-stream volume keys and screen-on while fullscreen. */
@@ -362,8 +409,8 @@ internal fun FullscreenVideoContent(
             AnimatedVisibility(
                 // Paused, ended or failed: the controls stay until something plays.
                 visible = controlsVisible || !playing,
-                enter = fadeIn(),
-                exit = fadeOut(),
+                enter = controlsEnter(),
+                exit = controlsExit(),
                 modifier = Modifier.matchParentSize(),
             ) {
                 FullscreenControls(

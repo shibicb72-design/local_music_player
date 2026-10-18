@@ -2,8 +2,9 @@ package com.shibi.musicplayer.ui
 
 import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -46,6 +47,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -55,9 +60,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import coil3.compose.AsyncImage
 import com.shibi.musicplayer.R
 import com.shibi.musicplayer.domain.InlineVideoBox
 import com.shibi.musicplayer.domain.VideoFormat
+import com.shibi.musicplayer.library.videoThumbnailRequest
 import com.shibi.musicplayer.ui.background.ContrastSurface
 import com.shibi.musicplayer.video.VideoEngine
 import com.shibi.musicplayer.video.VideoError
@@ -78,7 +85,9 @@ private val VideoScrim = Color.Black.copy(alpha = 0.55f)
 /**
  * The compact player box above the Videos list. Height is `min(width / aspect, half of
  * [maxHeight])`, 16:9 until the size is known; the picture is letterboxed on black.
- * A tap shows or hides the controls; they hide after 3 s while playing.
+ * Switching videos glides the box to the new aspect and keeps the new video's poster
+ * visible until its first frame; a tap shows or hides the controls, which hide after 3 s
+ * while playing.
  */
 @Composable
 internal fun InlineVideoPlayer(
@@ -96,7 +105,10 @@ internal fun InlineVideoPlayer(
     onStartOver: () -> Unit = {},
 ) {
     BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
-        val boxHeight = InlineVideoBox.height(maxWidth.value, maxHeight.value, state.aspect).dp
+        val targetHeightPx = with(LocalDensity.current) {
+            InlineVideoBox.height(maxWidth.value, maxHeight.value, state.aspect).dp.toPx()
+        }
+        val height = rememberGlide(targetHeightPx)
         VideoPlayerBox(
             state = state,
             onTogglePlayPause = onTogglePlayPause,
@@ -110,7 +122,7 @@ internal fun InlineVideoPlayer(
             onStartOver = onStartOver,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(boxHeight)
+                .animatedHeight { height.value }
                 .testTag(InlineVideoTag),
         )
     }
@@ -139,7 +151,7 @@ internal fun VideoPlayerBox(
 ) {
     ContrastSurface(
         color = Color.Black,
-        modifier = modifier,
+        modifier = modifier.reportVideoBounds(LocalVideoBounds.current),
     ) {
         var controlsVisible by rememberSaveable { mutableStateOf(initialControlsVisible) }
         var touches by remember { mutableIntStateOf(0) }
@@ -152,6 +164,7 @@ internal fun VideoPlayerBox(
         }
         Box(modifier = Modifier.fillMaxSize()) {
             surface()
+            PosterLayer(state)
             // Above the picture, so the video view never takes the tap.
             Box(
                 modifier = Modifier
@@ -172,8 +185,8 @@ internal fun VideoPlayerBox(
             AnimatedVisibility(
                 // Paused, ended or failed: the controls stay until something plays.
                 visible = controlsVisible || !playing,
-                enter = fadeIn(),
-                exit = fadeOut(),
+                enter = controlsEnter(),
+                exit = controlsExit(),
                 modifier = Modifier.matchParentSize(),
             ) {
                 InlineControls(
@@ -220,6 +233,38 @@ internal fun VideoSurface(engine: VideoEngine, modifier: Modifier = Modifier) {
             factory = { context -> engine.createView(context).also(engine::attach) },
             modifier = modifier.fillMaxSize(),
             onRelease = { view -> engine.detach(view) },
+        )
+    }
+}
+
+/**
+ * The new video's thumbnail covering the picture until a frame can be on screen: playing
+ * past 0, or paused or ended with a position. When the video switches, the key restarts
+ * the poster and it is opaque again, because the state is buffering at 0. It fades away
+ * once real pixels are on screen.
+ */
+@Composable
+private fun PosterLayer(state: VideoUiState) {
+    val video = state.video ?: return
+    val showPoster = when (state.status) {
+        VideoStatus.Idle, VideoStatus.Buffering -> true
+        VideoStatus.Playing -> state.positionMs <= 0L
+        else -> false
+    }
+    val alpha = animateFloatAsState(
+        targetValue = if (showPoster) 1f else 0f,
+        animationSpec = if (rememberReduceMotion()) snap() else tween(200),
+        label = "poster",
+    )
+    val context = LocalContext.current
+    key(video.contentUri) {
+        AsyncImage(
+            model = remember(video.contentUri) { videoThumbnailRequest(context, video.contentUri) },
+            contentDescription = null,
+            contentScale = ContentScale.Fit,
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer { this.alpha = alpha.value },
         )
     }
 }

@@ -199,7 +199,10 @@ class TwoPaneNavigationTest {
         assertShown("Playlists", "No playlists yet")
     }
 
-    /** Unfolded, a tapped video replaces Now Playing in the right pane; a song tap brings it back. */
+    /**
+     * Unfolded, a tapped video replaces Now Playing in the right pane; leaving Videos pauses
+     * the video (the pane follows the tab), and a song tap closes it.
+     */
     @Test
     @WithMedia
     fun videoPlaysInTheRightPaneUntilASongIsTapped() {
@@ -211,11 +214,13 @@ class TwoPaneNavigationTest {
         val engine = engines.single()
         assertNotNull("the pane attaches the picture", engine.attachedView)
 
-        // The left pane browses while the video keeps playing.
+        // Leaving Videos pauses the video; the right pane shows Now Playing again.
         select("Songs")
         tab("Songs").assertIsSelected()
-        assertPane(video = true)
-        assertFalse("browsing paused the video", "pause" in engine.calls)
+        assertPane(video = false)
+        assertTrue("leaving Videos paused the video", "pause" in engine.calls)
+        assertFalse("nothing released the video", engine.released)
+        assertShown("Now Playing pane", NothingPlaying)
 
         tapText("Aria")
         assertPane(video = false)
@@ -224,7 +229,10 @@ class TwoPaneNavigationTest {
         assertFalse(videoViewModel().uiState.value.isActive)
     }
 
-    /** The engine lives in the activity-scoped view model, so a fold and an unfold keep playing. */
+    /**
+     * The engine lives in the activity-scoped view model, so a fold and an unfold re-attach the
+     * picture without reloading; leaving Videos beforehand left the video paused.
+     */
     @Test
     @WithMedia
     fun foldAndUnfoldMidVideoKeepPlaying() {
@@ -234,7 +242,9 @@ class TwoPaneNavigationTest {
         engine.emit(VideoEngineEvent.Playing)
         engine.emit(VideoEngineEvent.Time(42_000L))
         select("Settings")
-        assertPane(video = true)
+        assertPane(video = false)
+        assertTrue("leaving Videos paused the video", "pause" in engine.calls)
+        engine.emit(VideoEngineEvent.Paused)
 
         // Folded: the compact box on the Videos route.
         fold(Compact)
@@ -242,7 +252,7 @@ class TwoPaneNavigationTest {
         assertTagShown(InlineVideoTag)
         assertTagGone(VideoPaneTag)
         assertNotNull("the box re-attached the picture", engine.attachedView)
-        assertStillPlaying(engine)
+        assertStillPaused(engine)
 
         // Unfolded: the right pane, with the list on the left.
         fold(Expanded)
@@ -250,7 +260,7 @@ class TwoPaneNavigationTest {
         assertPane(video = true)
         assertTagGone(InlineVideoTag)
         assertNotNull("the pane re-attached the picture", engine.attachedView)
-        assertStillPlaying(engine)
+        assertStillPaused(engine)
         assertEquals("one engine for the whole session", 1, engines.size)
     }
 
@@ -308,12 +318,12 @@ class TwoPaneNavigationTest {
         return checkNotNull(viewModel)
     }
 
-    private fun assertStillPlaying(engine: FakeVideoEngine) {
+    private fun assertStillPaused(engine: FakeVideoEngine) {
         val state = videoViewModel().uiState.value
         assertEquals("Beach day", state.video?.title)
-        assertEquals(VideoStatus.Playing, state.status)
+        assertEquals(VideoStatus.Paused, state.status)
         assertEquals(42_000L, state.positionMs)
-        assertFalse("the fold paused or released the video", "pause" in engine.calls || engine.released)
+        assertFalse("nothing released the video", engine.released)
         assertEquals(1, engine.calls.count { it.startsWith("load:") })
     }
 

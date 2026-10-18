@@ -1,6 +1,7 @@
 package com.shibi.musicplayer.ui
 
 import android.content.res.Configuration
+import android.graphics.Rect
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -18,13 +19,16 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalConfiguration
@@ -66,6 +70,7 @@ import com.shibi.musicplayer.video.VideoUiState
 import com.shibi.musicplayer.video.VideoViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
+import kotlin.math.roundToInt
 
 private const val SongsRoute = SectionRoutes.Songs
 private const val PlaylistsRoute = SectionRoutes.Playlists
@@ -103,6 +108,7 @@ fun MusicApp(
     val inPip by videoViewModel.inPip.collectAsStateWithLifecycle()
     val brightnessSwipe by videoViewModel.brightnessSwipe.collectAsStateWithLifecycle()
     val trackSheet by videoViewModel.trackSheet.collectAsStateWithLifecycle()
+    val videoBounds = remember { VideoBounds() }
     // The tracks sheet, over the box, the pane or fullscreen; closing the video closes it.
     var showTracks by rememberSaveable { mutableStateOf(false) }
     val tracksOpen = showTracks && videoState.isActive
@@ -185,6 +191,23 @@ fun MusicApp(
     // Fullscreen covers the whole window, over either layout; the carousel and chrome hide.
     val fullscreen = route == VideoFullscreenRoute && videoState.isActive
     LaunchedEffect(fullscreen) { videoViewModel.setFullscreen(fullscreen) }
+    // The box's place in the window, as the PiP source hint; null while fullscreen covers all.
+    val fullscreenState = rememberUpdatedState(fullscreen)
+    LaunchedEffect(videoBounds) {
+        snapshotFlow { if (fullscreenState.value) null else videoBounds.rect }
+            .collect { b ->
+                videoViewModel.setPlayerBounds(
+                    b?.let {
+                        Rect(
+                            it.left.roundToInt(),
+                            it.top.roundToInt(),
+                            (it.left + it.width).roundToInt(),
+                            (it.top + it.height).roundToInt(),
+                        )
+                    },
+                )
+            }
+    }
     // The video closed under fullscreen (music started, or a cold start restored the route).
     LaunchedEffect(route, videoState.isActive) {
         if (route == VideoFullscreenRoute && !videoState.isActive) navController.popBackStack()
@@ -197,6 +220,7 @@ fun MusicApp(
     val previousLandscape = remember { mutableStateOf<Boolean?>(null) }
 
     // Dark theme paints the dark default over the chosen backdrop without rewriting it.
+    CompositionLocalProvider(LocalVideoBounds provides videoBounds) {
     AppBackgroundHost(
         background = appBackground.shownWith(darkTheme),
         customColors = backgroundColors,
@@ -227,8 +251,7 @@ fun MusicApp(
                 if (decision.closeVideo) closeVideo()
             }
         }
-        // Folded, the box lives on the Videos route, so leaving it pauses the video.
-        // Unfolded, the right pane keeps playing while the left pane browses.
+        // Leaving Videos pauses the video in both layouts (the right pane follows the tab when unfolded).
         LaunchedEffect(route) {
             val from = previousRoute.value
             if (route != null) previousRoute.value = route
@@ -236,7 +259,6 @@ fun MusicApp(
             val decision = PlaybackArbiter.onRouteChanged(
                 fromVideos = SectionRoutes.sectionFor(from) == NavSection.Videos,
                 toVideos = SectionRoutes.sectionFor(route) == NavSection.Videos,
-                twoPane = wide,
             )
             if (decision.pauseVideo) videoViewModel.pause()
         }
@@ -419,38 +441,45 @@ fun MusicApp(
                 .padding(start = 8.dp, top = 16.dp, end = 16.dp, bottom = extraBottom)
                 .clip(RoundedCornerShape(28.dp))
             val engine = videoEngine
-            if (videoState.isActive) {
-                // Loaded, playing or paused: the video takes Now Playing's place until it closes.
-                VideoPane(
-                    state = videoState,
-                    onTogglePlayPause = videoViewModel::togglePlayPause,
-                    onSeek = videoViewModel::seekTo,
-                    onClose = ::closeVideo,
-                    // Fullscreen owns the picture while it is open; one view is attached at a time.
-                    surface = { if (!fullscreen) engine?.let { VideoSurface(it) } },
-                    onFullscreen = ::openFullscreen,
-                    onOpenTracks = openTracks,
-                    holdControls = tracksOpen,
-                    onStartOver = videoViewModel::startOver,
-                    modifier = paneModifier,
-                )
-            } else {
-                PlayerScreen(
-                    state = playerState,
-                    onBack = {},
-                    onTogglePlayPause = playerViewModel::togglePlayPause,
-                    onNext = playerViewModel::skipNext,
-                    onPrevious = playerViewModel::skipPrevious,
-                    onSeek = playerViewModel::seekTo,
-                    selectedOutputId = activeOutputId,
-                    onSelectOutput = playerViewModel::setOutputDevice,
-                    onToggleShuffle = playerViewModel::toggleShuffle,
-                    onCycleRepeat = playerViewModel::cycleRepeat,
-                    showBack = false,
-                    includeNavigationBars = false,
-                    modifier = paneModifier,
-                )
-            }
+            // Loaded, playing or paused: the video pane on the Videos tab, Now Playing elsewhere.
+            RightPane(
+                showVideo = PlaybackArbiter.showVideoPane(
+                    videoState.isActive,
+                    onVideos = SectionRoutes.sectionFor(route) == NavSection.Videos,
+                ),
+                video = {
+                    VideoPane(
+                        state = videoState,
+                        onTogglePlayPause = videoViewModel::togglePlayPause,
+                        onSeek = videoViewModel::seekTo,
+                        onClose = ::closeVideo,
+                        // Fullscreen owns the picture while it is open; one view is attached at a time.
+                        surface = { if (!fullscreen) engine?.let { VideoSurface(it) } },
+                        onFullscreen = ::openFullscreen,
+                        onOpenTracks = openTracks,
+                        holdControls = tracksOpen,
+                        onStartOver = videoViewModel::startOver,
+                        modifier = paneModifier,
+                    )
+                },
+                nowPlaying = {
+                    PlayerScreen(
+                        state = playerState,
+                        onBack = {},
+                        onTogglePlayPause = playerViewModel::togglePlayPause,
+                        onNext = playerViewModel::skipNext,
+                        onPrevious = playerViewModel::skipPrevious,
+                        onSeek = playerViewModel::seekTo,
+                        selectedOutputId = activeOutputId,
+                        onSelectOutput = playerViewModel::setOutputDevice,
+                        onToggleShuffle = playerViewModel::toggleShuffle,
+                        onCycleRepeat = playerViewModel::cycleRepeat,
+                        showBack = false,
+                        includeNavigationBars = false,
+                        modifier = paneModifier,
+                    )
+                },
+            )
         }
 
         // While in picture-in-picture only the video is drawn, so a single VideoSurface exists.
@@ -677,6 +706,7 @@ fun MusicApp(
         )
     }
     }
+}
 }
 
 @Composable

@@ -46,11 +46,14 @@ object PlaybackArbiter {
         Decision(closeVideo = videoActive && twoPane)
 
     /**
-     * The compact box lives on the Videos route, so leaving it pauses the video (there are no
-     * controls elsewhere). Two-pane keeps playing in the right pane while the left pane browses.
+     * Leaving Videos pauses the video in both layouts: folded the box lives on the Videos
+     * route, unfolded the right pane follows the tab.
      */
-    fun onRouteChanged(fromVideos: Boolean, toVideos: Boolean, twoPane: Boolean): Decision =
-        Decision(pauseVideo = fromVideos && !toVideos && !twoPane)
+    fun onRouteChanged(fromVideos: Boolean, toVideos: Boolean): Decision =
+        Decision(pauseVideo = fromVideos && !toVideos)
+
+    /** Unfolded, the right pane shows the video only on the Videos tab (fullscreen counts as Videos); otherwise Now Playing. */
+    fun showVideoPane(videoActive: Boolean, onVideos: Boolean): Boolean = videoActive && onVideos
 
     /**
      * A fold or unfold with a video loaded lands on Videos: folded, that is where the box is;

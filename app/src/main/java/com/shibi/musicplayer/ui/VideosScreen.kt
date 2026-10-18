@@ -1,5 +1,6 @@
 package com.shibi.musicplayer.ui
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -313,7 +314,7 @@ internal fun VideoRow(
     saved: VideoProgress? = null,
 ) {
     val chrome = LocalBackgroundChrome.current
-    val fill = if (isPlaying) chrome.playingRowFill else chrome.rowFill
+    val fill by animateColorAsState(if (isPlaying) chrome.playingRowFill else chrome.rowFill, highlightSpec(), label = "videoRowFill")
     val roles = rememberSurfaceRoles(fill)
     val watched = ResumePolicy.watchedFraction(saved, video.durationMs)
     val watchedText = watched?.let { stringResource(R.string.video_watched, (it * 100).roundToInt()) }

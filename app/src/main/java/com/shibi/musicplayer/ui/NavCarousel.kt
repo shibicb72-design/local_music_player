@@ -1,6 +1,5 @@
 package com.shibi.musicplayer.ui
 
-import android.provider.Settings
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
@@ -65,10 +64,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.layout.Layout
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -694,20 +691,6 @@ private fun lensColors(chrome: BackgroundChrome): LensColors {
             spot = DarkGlow.copy(alpha = 0.60f),
             ambient = Color.Black.copy(alpha = 0.50f),
         )
-    }
-}
-
-/** True when the system "Remove animations" setting (animator scale 0) is on. */
-@Composable
-private fun rememberReduceMotion(): Boolean {
-    if (LocalInspectionMode.current) return false
-    val context = LocalContext.current
-    return remember(context) {
-        Settings.Global.getFloat(
-            context.contentResolver,
-            Settings.Global.ANIMATOR_DURATION_SCALE,
-            1f,
-        ) == 0f
     }
 }
 

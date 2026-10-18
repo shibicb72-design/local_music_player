@@ -20,13 +20,19 @@ import coil3.compose.LocalAsyncImagePreviewHandler
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.shibi.musicplayer.domain.AppBackground
 import com.shibi.musicplayer.domain.InlineVideoBox
+import com.shibi.musicplayer.domain.PlaybackArbiter
+import com.shibi.musicplayer.domain.Track
 import com.shibi.musicplayer.domain.Video
 import com.shibi.musicplayer.domain.VideoAccess
 import com.shibi.musicplayer.library.VideoLibraryUiState
+import com.shibi.musicplayer.playback.PlayerUiState
 import com.shibi.musicplayer.ui.ChromeSlot
+import com.shibi.musicplayer.ui.LibraryContent
 import com.shibi.musicplayer.ui.ListViewport
 import com.shibi.musicplayer.ui.NavCarousel
 import com.shibi.musicplayer.ui.NavSection
+import com.shibi.musicplayer.ui.PlayerScreen
+import com.shibi.musicplayer.ui.RightPane
 import com.shibi.musicplayer.ui.SectionRoutes
 import com.shibi.musicplayer.ui.SongListBottomPadding
 import com.shibi.musicplayer.ui.TwoPaneCarouselPadding
@@ -67,6 +73,85 @@ class TwoPaneVideoScreenshotTest {
         "cv5_two_pane_video_controls.png",
         controls = true,
     )
+
+    /** V15: unfolded, the right pane follows the tab - on Songs, the active video hands the pane back to Now Playing. */
+    @Test
+    fun twoPaneSongsAfterVideo() {
+        val video = playing(concert)
+        val engine = FakeVideoEngine(frameAspect = video.aspect ?: InlineVideoBox.DefaultAspect)
+        captureRoboImage("build/outputs/roborazzi/cv15_two_pane_songs_after_video.png") {
+            MusicPlayerTheme {
+                AppBackgroundHost(AppBackground.Default, emptyMap(), forceStatic = true) {
+                    // MusicApp's two-pane tree with the mini player hidden.
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        Row(modifier = Modifier.weight(1f).fillMaxSize()) {
+                            Column(modifier = Modifier.weight(0.42f).fillMaxHeight()) {
+                                ListViewport(modifier = Modifier.weight(1f).fillMaxSize()) {
+                                    Songs()
+                                }
+                                ChromeSlot {
+                                    NavCarousel(
+                                        selected = NavSection.Songs,
+                                        onSelect = {},
+                                        sections = SectionRoutes.sectionsFor(expanded = true),
+                                        modifier = Modifier.padding(
+                                            top = TwoPaneCarouselPadding,
+                                            bottom = TwoPaneCarouselPadding,
+                                        ),
+                                    )
+                                }
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .weight(0.58f)
+                                    .fillMaxHeight()
+                                    .navigationBarsPadding(),
+                            ) {
+                                RightPane(
+                                    showVideo = PlaybackArbiter.showVideoPane(
+                                        videoActive = true,
+                                        onVideos = false,
+                                    ),
+                                    video = {
+                                        VideoPane(
+                                            state = video,
+                                            onTogglePlayPause = {},
+                                            onSeek = {},
+                                            onClose = {},
+                                            surface = { VideoSurface(engine) },
+                                            onOpenTracks = {},
+                                            modifier = Modifier
+                                                .fillMaxHeight()
+                                                .padding(start = 8.dp, top = 16.dp, end = 16.dp, bottom = TwoPanePlayerBottomPadding)
+                                                .clip(RoundedCornerShape(28.dp)),
+                                        )
+                                    },
+                                    nowPlaying = {
+                                        PlayerScreen(
+                                            state = trackState,
+                                            onBack = {},
+                                            onTogglePlayPause = {},
+                                            onNext = {},
+                                            onPrevious = {},
+                                            onSeek = {},
+                                            selectedOutputId = null,
+                                            onSelectOutput = {},
+                                            showBack = false,
+                                            includeNavigationBars = false,
+                                            modifier = Modifier
+                                                .fillMaxHeight()
+                                                .padding(start = 8.dp, top = 16.dp, end = 16.dp, bottom = TwoPanePlayerBottomPadding)
+                                                .clip(RoundedCornerShape(28.dp)),
+                                        )
+                                    },
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     private fun capture(
         background: AppBackground,
@@ -145,6 +230,22 @@ class TwoPaneVideoScreenshotTest {
         }
     }
 
+    /** The Songs list as the Songs screenshots build it: ScreenshotTest.kt's LibraryContent fixture. */
+    @Composable
+    private fun Songs() {
+        LibraryContent(
+            tracks = tracks,
+            nowPlaying = trackState,
+            showMiniPlayer = false,
+            onTrackSelected = { _, _ -> },
+            onOpenPlayer = {},
+            onTogglePlayPause = {},
+            favoriteIds = setOf(8L),
+            contentBottomPadding = SongListBottomPadding,
+            modifier = Modifier.fillMaxSize(),
+        )
+    }
+
     private companion object {
         val list = VideoLibraryUiState(access = VideoAccess.Full, videos = VideosScreenshotTest.videos)
         val concert: Video = VideosScreenshotTest.videos.first { it.id == 2L }
@@ -155,6 +256,31 @@ class TwoPaneVideoScreenshotTest {
             positionMs = 192_000L,
             durationMs = video.durationMs ?: 0L,
             aspect = InlineVideoBox.displayAspect(video.width ?: 0, video.height ?: 0),
+        )
+
+        val tamilTitle = "\u0B8E\u0BA9\u0BCD\u0BA9\u0BC8 \u0B95\u0BCA\u0B9E\u0BCD\u0B9A\u0BAE\u0BCD.mp3"
+
+        val tracks = listOf(
+            Track(1L, "Midnight Drive", "Neon Cascade", "Night Highway", 215_000L, "content://tracks/1", null),
+            Track(2L, "Paper Planes", "Ella Voss", "Paper Planes", 198_000L, "content://tracks/2", null),
+            Track(8L, tamilTitle, "<unknown>", "Unknown album", 215_000L, "content://tracks/8", null),
+            Track(3L, "Golden Hour", "Marina Cole", "Golden Hour", 224_000L, "content://tracks/3", null),
+            Track(4L, "Saltwater", "Northbound", "Tidal", 187_000L, "content://tracks/4", null),
+            Track(5L, "Ember", "Rilo Ash", "Ember", 245_000L, "content://tracks/5", null),
+            Track(6L, "Static Bloom", "Hollow Coast", "Static Bloom", 202_000L, "content://tracks/6", null),
+            Track(7L, "Slow Tide", "June & The Current", "Slow Tide", 176_000L, "content://tracks/7", null),
+        )
+
+        val trackState = PlayerUiState(
+            currentMediaId = "2",
+            title = "Paper Planes",
+            artist = "Ella Voss",
+            isPlaying = true,
+            positionMs = 62_000L,
+            durationMs = 198_000L,
+            hasMedia = true,
+            hasNext = true,
+            hasPrevious = true,
         )
     }
 }

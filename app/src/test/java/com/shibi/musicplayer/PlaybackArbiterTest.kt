@@ -80,13 +80,19 @@ class PlaybackArbiterTest {
     }
 
     @Test
-    fun leavingVideosPausesOnlyInCompact() {
-        assertTrue(PlaybackArbiter.onRouteChanged(fromVideos = true, toVideos = false, twoPane = false).pauseVideo)
-        // Two-pane: the right pane keeps playing while the left pane browses.
-        assertFalse(PlaybackArbiter.onRouteChanged(fromVideos = true, toVideos = false, twoPane = true).pauseVideo)
-        assertFalse(PlaybackArbiter.onRouteChanged(fromVideos = false, toVideos = true, twoPane = false).pauseVideo)
-        assertFalse(PlaybackArbiter.onRouteChanged(fromVideos = false, toVideos = false, twoPane = false).pauseVideo)
-        assertFalse(PlaybackArbiter.onRouteChanged(fromVideos = true, toVideos = true, twoPane = false).pauseVideo)
+    fun leavingVideosPausesInBothLayouts() {
+        assertTrue(PlaybackArbiter.onRouteChanged(fromVideos = true, toVideos = false).pauseVideo)
+        assertFalse(PlaybackArbiter.onRouteChanged(fromVideos = false, toVideos = true).pauseVideo)
+        assertFalse(PlaybackArbiter.onRouteChanged(fromVideos = false, toVideos = false).pauseVideo)
+        assertFalse(PlaybackArbiter.onRouteChanged(fromVideos = true, toVideos = true).pauseVideo)
+    }
+
+    @Test
+    fun rightPaneFollowsTheTab() {
+        assertTrue(PlaybackArbiter.showVideoPane(videoActive = true, onVideos = true))
+        assertFalse(PlaybackArbiter.showVideoPane(videoActive = true, onVideos = false))
+        assertFalse(PlaybackArbiter.showVideoPane(videoActive = false, onVideos = true))
+        assertFalse(PlaybackArbiter.showVideoPane(videoActive = false, onVideos = false))
     }
 
     @Test

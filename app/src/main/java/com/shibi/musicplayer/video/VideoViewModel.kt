@@ -1,6 +1,7 @@
 package com.shibi.musicplayer.video
 
 import android.app.Application
+import android.graphics.Rect
 import android.os.SystemClock
 import androidx.annotation.VisibleForTesting
 import androidx.lifecycle.AndroidViewModel
@@ -174,6 +175,11 @@ class VideoViewModel internal constructor(
 
     /** The activity is in picture-in-picture: the UI shows only the video. */
     val inPip: StateFlow<Boolean> = _inPip.asStateFlow()
+
+    private val _playerBounds = MutableStateFlow<Rect?>(null)
+
+    /** Where the player box is in the window; the PiP source hint. */
+    val playerBounds: StateFlow<Rect?> = _playerBounds.asStateFlow()
 
     private var stateJob: Job? = null
     private var pausedForTransientLoss = false
@@ -395,6 +401,11 @@ class VideoViewModel internal constructor(
     /** The activity entered or left picture-in-picture; the UI shows only the video while in it. */
     fun setInPip(on: Boolean) {
         _inPip.value = on
+    }
+
+    /** Where the player box is in the window; the PiP source hint. */
+    fun setPlayerBounds(rect: Rect?) {
+        _playerBounds.value = rect
     }
 
     fun seekTo(positionMs: Long) {
