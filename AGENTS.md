@@ -180,3 +180,10 @@ After every task, append an entry below: `- [task] what went wrong -> new rule`.
 - Day labels (Today, Yesterday, weekday, "Oct 3", plus the year when it differs) are computed from calendar days in the device zone, not 24-hour windows; unit tests pin the zone and cover midnight.
 - Once recording works, UI tests that expect an empty Recent screen after something played are wrong. Mark the screen by its title instead.
 - When a free model starts adding println debugging to production code instead of reading the failing assertion, stop it and diagnose by hand.
+
+## Lesson (fix-debug-signing): CI debug APKs must share one signing key
+- Without a signingConfig, AGP signs debug builds with ~/.android/debug.keystore. Every GitHub Actions runner is fresh, so each run made a new key: two CI APKs had different cert SHA-256s, and Android refused the update with "App not installed" (after Play Protect passed). versionCode was also fixed at 1.
+- app/debug.keystore is committed on purpose. It is a DEBUG-ONLY, NON-SECRET key (standard debug credentials: android / androiddebugkey). It is not for release or the Play Store; never point a release signingConfig at it.
+- versionCode = GITHUB_RUN_NUMBER in CI (1 locally), so each newer CI APK is an upgrade.
+- After this change, uninstall the app once on every phone (old installs carry a different key); after that, CI APKs update in place.
+- Check with: apksigner verify --print-certs <apk> on two runs; the SHA-256 must match.
