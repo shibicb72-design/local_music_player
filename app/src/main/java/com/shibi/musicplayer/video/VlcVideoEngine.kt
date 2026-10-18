@@ -552,17 +552,26 @@ internal class VlcVideoEngine(context: Context) : VideoEngine {
         val subtitleDelayUs: Long,
     )
 
-    private companion object {
+    internal companion object {
         /** Local files: a short read-ahead starts fast and still covers slow SD cards. */
-        const val FileCachingMs = 300
-        const val UsPerMs = 1_000L
+        private const val FileCachingMs = 300
+        private const val UsPerMs = 1_000L
 
-        fun libVlcOptions(textSize: SubtitleTextSize): List<String> = buildList {
-            add("--file-caching=$FileCachingMs")
-            textSize.relativeFontSize?.let { add("--freetype-rel-fontsize=$it") }
+        /**
+         * Options for libVLC's Java constructor.
+         *
+         * That constructor appends its own options (for example the audio output and the
+         * Android display chroma) to the list it is handed, so this must return a fresh
+         * mutable ArrayList. A read-only list (listOf, buildList) makes the constructor
+         * throw UnsupportedOperationException and no video can play.
+         */
+        fun libVlcOptions(textSize: SubtitleTextSize): ArrayList<String> {
+            val options = arrayListOf("--file-caching=$FileCachingMs")
+            textSize.relativeFontSize?.let { options.add("--freetype-rel-fontsize=$it") }
+            return options
         }
 
-        fun ExternalTrackKind.slaveType(): Int = when (this) {
+        private fun ExternalTrackKind.slaveType(): Int = when (this) {
             ExternalTrackKind.Audio -> IMedia.Slave.Type.Audio
             ExternalTrackKind.Subtitle -> IMedia.Slave.Type.Subtitle
         }
