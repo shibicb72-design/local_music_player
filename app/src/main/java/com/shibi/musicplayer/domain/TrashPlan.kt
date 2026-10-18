@@ -12,9 +12,6 @@ object TrashPlan {
     fun needsGroupWarning(count: Int, wholeList: Boolean): Boolean =
         wholeList && count >= GROUP_WARNING_MIN
 
-    fun failed(requested: List<TrashItem>, stillVisibleUris: Set<String>): List<TrashItem> =
-        requested.filter { it.uri in stillVisibleUris }
-
     fun queueIndicesToRemove(queueMediaIds: List<String>, trashedSongIds: Set<Long>): List<Int> =
         queueMediaIds.indices
             .filter { i -> queueMediaIds[i].toLongOrNull()?.let { it in trashedSongIds } == true }

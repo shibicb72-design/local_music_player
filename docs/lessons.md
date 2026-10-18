@@ -188,3 +188,4 @@ After every task, append an entry below: `- [task] what went wrong -> new rule`.
 - [V19 d05_trash_flow] kotlinx-coroutines-test is not a dependency, so controller tests use CoroutineScope(Dispatchers.Unconfined) with non-suspending fakes; VideoProgressStore had no read-only fetch, added rowsFor -> check the store interface can express a read before promising a read-only snapshot.
 
 - [V19 d06_trash_wiring] TrashUiState.unsupported had no reset, so the snackbar would fire once only; added unsupportedShown to controller and view model -> every one-shot UI flag in a state machine needs a matching consumed-callback.
+- [V20 e01_trash_result_check] stillVisible treated any returned row as not trashed, but MediaProvider returns trashed rows for an item-id query, so every success looked failed -> verify trash with IS_TRASHED plus QUERY_ARG_MATCH_TRASHED, classify failures per reason, and retry the check before reporting failure.

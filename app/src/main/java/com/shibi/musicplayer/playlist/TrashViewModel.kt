@@ -25,7 +25,7 @@ class TrashViewModel internal constructor(
         TrashController(
             scope = scope,
             supported = MediaTrash::isSupported,
-            stillVisible = { uris -> withContext(Dispatchers.IO) { MediaTrash.stillVisible(application, uris) } },
+            check = { uris -> withContext(Dispatchers.IO) { MediaTrash.check(application, uris) } },
             capture = { items -> withContext(Dispatchers.IO) { cleanup.snapshot(items) } },
             cleanup = { items -> withContext(Dispatchers.IO) { cleanup.remove(items) } },
             restore = { snapshot -> withContext(Dispatchers.IO) { cleanup.restore(snapshot) } },

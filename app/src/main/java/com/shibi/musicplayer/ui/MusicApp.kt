@@ -172,7 +172,7 @@ fun MusicApp(
     }
     val snackbarHostState = remember { SnackbarHostState() }
     val trashNotice = trashState.notice
-    val movedMessage = trashNotice?.let { pluralStringResource(R.plurals.trash_moved, it.movedCount, it.movedCount) }
+    val movedMessage = trashNotice?.let { pluralStringResource(R.plurals.trash_moved, it.count, it.count) }
     val undoLabel = stringResource(R.string.trash_undo)
     LaunchedEffect(trashNotice) {
         if (trashNotice != null && movedMessage != null) {
@@ -212,8 +212,11 @@ fun MusicApp(
             onDismiss = trashViewModel::dismiss,
         )
     }
-    if (trashState.failed.isNotEmpty()) {
-        TrashFailedDialog(items = trashState.failed, onDismiss = trashViewModel::failedShown)
+    if (trashState.failures.isNotEmpty()) {
+        TrashFailedDialog(
+            items = trashState.failures.flatMap { it.items },
+            onDismiss = trashViewModel::failedShown,
+        )
     }
     // Songs deleted outside the app leave playlists and history once the library has loaded.
     LaunchedEffect(libraryState.tracks, libraryState.loaded) {

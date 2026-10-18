@@ -3,8 +3,12 @@ package com.shibi.musicplayer.playlist
 import com.shibi.musicplayer.domain.HistoryType
 import com.shibi.musicplayer.domain.MediaKind
 import com.shibi.musicplayer.domain.TrashItem
+import com.shibi.musicplayer.domain.ItemCheck
+import com.shibi.musicplayer.domain.TrashFailure
 import com.shibi.musicplayer.domain.TrashPlan
+import com.shibi.musicplayer.domain.TrashResult
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -22,13 +26,22 @@ sealed interface TrashStep {
     data class AwaitSystem(val items: List<TrashItem>, val trash: Boolean) : TrashStep
 }
 
-/** The snackbar after a move: "Moved N to trash" with an optional Undo. */
-data class TrashNotice(val movedCount: Int, val canUndo: Boolean)
+enum class TrashNoticeKind { Songs, Videos, Items }
+
+/** The snackbar after a move or an undo: [count] of [total] items, with an optional Undo. */
+data class TrashNotice(
+    val count: Int,
+    val total: Int,
+    val kind: TrashNoticeKind,
+    val restored: Boolean = false,
+    val canUndo: Boolean,
+)
 
 data class TrashUiState(
     val step: TrashStep = TrashStep.Idle,
     val notice: TrashNotice? = null,
-    val failed: List<TrashItem> = emptyList(),
+    val failures: List<TrashFailure> = emptyList(),
+    val requestedCount: Int = 0,
     val unsupported: Boolean = false,
 )
 
@@ -40,11 +53,13 @@ data class TrashUiState(
 class TrashController(
     private val scope: CoroutineScope,
     private val supported: () -> Boolean,
-    private val stillVisible: suspend (List<String>) -> Set<String>,
+    private val check: suspend (List<String>) -> Map<String, ItemCheck>,
     private val capture: suspend (List<TrashItem>) -> CleanupSnapshot,
     private val cleanup: suspend (List<TrashItem>) -> CleanupSnapshot,
     private val restore: suspend (CleanupSnapshot) -> Unit,
     private val onTrashed: (List<TrashItem>) -> Unit,
+    private val retryDelayMs: Long = 300L,
+    private val maxChecks: Int = 6,
 ) {
     private val _state = MutableStateFlow(TrashUiState())
     val state: StateFlow<TrashUiState> = _state.asStateFlow()
@@ -87,7 +102,23 @@ class TrashController(
             val snapshot = undoSnapshot
             undoSnapshot = null
             _state.update { it.copy(notice = null) }
-            if (ok && snapshot != null) scope.launch { restore(snapshot) }
+            if (ok && snapshot != null) {
+                val restoredItems = lastTrashed
+                scope.launch {
+                    restore(snapshot)
+                    _state.update {
+                        it.copy(
+                            notice = TrashNotice(
+                                count = restoredItems.size,
+                                total = restoredItems.size,
+                                kind = kindOf(restoredItems),
+                                restored = true,
+                                canUndo = false,
+                            ),
+                        )
+                    }
+                }
+            }
         }
     }
 
@@ -105,7 +136,7 @@ class TrashController(
     }
 
     fun failedShown() {
-        _state.update { it.copy(failed = emptyList()) }
+        _state.update { it.copy(failures = emptyList()) }
     }
 
     private fun beginSystem(items: List<TrashItem>) {
@@ -124,9 +155,17 @@ class TrashController(
 
     private fun finishTrash(items: List<TrashItem>) {
         scope.launch {
-            val visible = stillVisible(items.map { it.uri })
-            val failed = TrashPlan.failed(items, visible)
-            val trashed = items - failed.toSet()
+            val checks = check(items.map { it.uri }).toMutableMap()
+            var made = 1
+            while (made < maxChecks) {
+                val pending = items.map { it.uri }.filter { !TrashResult.isSettled(checks[it]) }
+                if (pending.isEmpty()) break
+                delay(retryDelayMs)
+                checks += check(pending)
+                made++
+            }
+            val outcome = TrashResult.classify(items, checks)
+            val trashed = outcome.trashed
             if (trashed.isNotEmpty()) {
                 onTrashed(trashed)
                 val taken = cleanup(trashed)
@@ -136,11 +175,27 @@ class TrashController(
             captured = CleanupSnapshot()
             _state.update {
                 it.copy(
-                    notice = if (trashed.isEmpty()) it.notice else TrashNotice(trashed.size, canUndo = true),
-                    failed = failed,
+                    notice = if (trashed.isEmpty()) {
+                        it.notice
+                    } else {
+                        TrashNotice(
+                            count = trashed.size,
+                            total = items.size,
+                            kind = kindOf(trashed),
+                            canUndo = true,
+                        )
+                    },
+                    failures = outcome.failures,
+                    requestedCount = items.size,
                 )
             }
         }
+    }
+
+    private fun kindOf(items: List<TrashItem>): TrashNoticeKind = when {
+        items.all { it.kind == MediaKind.Song } -> TrashNoticeKind.Songs
+        items.all { it.kind == MediaKind.Video } -> TrashNoticeKind.Videos
+        else -> TrashNoticeKind.Items
     }
 
     private fun CleanupSnapshot.only(items: List<TrashItem>): CleanupSnapshot {

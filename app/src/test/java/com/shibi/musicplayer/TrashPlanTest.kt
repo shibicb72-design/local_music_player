@@ -20,14 +20,6 @@ class TrashPlanTest {
     }
 
     @Test
-    fun failedKeepsRequestOrder() {
-        val req = listOf(song(3), song(1), song(2))
-        val out = TrashPlan.failed(req, setOf("content://s/2", "content://s/3"))
-        assertEquals(listOf(song(3), song(2)), out)
-        assertTrue(TrashPlan.failed(req, emptySet()).isEmpty())
-    }
-
-    @Test
     fun queueIndicesDescendingWithDuplicates() {
         val q = listOf("1", "2", "1", "x", "3", "1")
         assertEquals(listOf(5, 2, 0), TrashPlan.queueIndicesToRemove(q, setOf(1L)))

@@ -43,24 +43,16 @@ class MediaTrashTest {
     }
 
     @Test
-    fun stillVisibleReturnsOnlyUrisThatAreStillPresent() {
+    fun checkIsEmptyOnApi29() {
         provider.present += "1"
-        provider.present += "3"
-        val uris = listOf(1L, 2L, 3L).map { "content://media/external/audio/media/$it" }
+        val uris = listOf("content://media/external/audio/media/1")
 
-        val visible = MediaTrash.stillVisible(application, uris)
-
-        assertEquals(setOf(uris[0], uris[2]), visible)
-    }
-
-    @Test
-    fun stillVisibleTreatsAFailingQueryAsNotVisible() {
-        provider.failure = IllegalStateException("boom")
-        val uri = "content://media/external/audio/media/1"
-
-        assertTrue(MediaTrash.stillVisible(application, listOf(uri)).isEmpty())
+        assertTrue(MediaTrash.check(application, uris).isEmpty())
     }
 }
+
+// The sdk 30+ Bundle query (IS_TRASHED, SecurityException mapping) is not covered here: this class
+// runs on sdk 29 only, and the real MediaProvider behaviour needs a device.
 
 class IdProvider : ContentProvider() {
     val present = mutableSetOf<String>()
