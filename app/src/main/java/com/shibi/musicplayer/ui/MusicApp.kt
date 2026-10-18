@@ -17,6 +17,7 @@ import com.shibi.musicplayer.domain.MediaKind
 import com.shibi.musicplayer.domain.TrashItem
 import com.shibi.musicplayer.domain.TrashPlan
 import com.shibi.musicplayer.library.MediaTrash
+import com.shibi.musicplayer.playlist.TrashNoticeKind
 import com.shibi.musicplayer.playlist.TrashStep
 import com.shibi.musicplayer.playlist.TrashViewModel
 import androidx.compose.foundation.layout.Box
@@ -172,7 +173,25 @@ fun MusicApp(
     }
     val snackbarHostState = remember { SnackbarHostState() }
     val trashNotice = trashState.notice
-    val movedMessage = trashNotice?.let { pluralStringResource(R.plurals.trash_moved, it.count, it.count) }
+    val movedMessage = trashNotice?.let { notice ->
+        val plural = when {
+            notice.restored -> when (notice.kind) {
+                TrashNoticeKind.Songs -> R.plurals.trash_restored_songs
+                TrashNoticeKind.Videos -> R.plurals.trash_restored_videos
+                TrashNoticeKind.Items -> R.plurals.trash_restored_items
+            }
+            else -> when (notice.kind) {
+                TrashNoticeKind.Songs -> R.plurals.trash_moved_songs
+                TrashNoticeKind.Videos -> R.plurals.trash_moved_videos
+                TrashNoticeKind.Items -> R.plurals.trash_moved_items
+            }
+        }
+        if (!notice.restored && notice.count < notice.total) {
+            stringResource(R.string.trash_moved_partial, notice.count, notice.total)
+        } else {
+            pluralStringResource(plural, notice.count, notice.count)
+        }
+    }
     val undoLabel = stringResource(R.string.trash_undo)
     LaunchedEffect(trashNotice) {
         if (trashNotice != null && movedMessage != null) {
@@ -214,7 +233,9 @@ fun MusicApp(
     }
     if (trashState.failures.isNotEmpty()) {
         TrashFailedDialog(
-            items = trashState.failures.flatMap { it.items },
+            moved = trashNotice?.takeUnless { it.restored }?.count ?: 0,
+            requested = trashState.requestedCount,
+            failures = trashState.failures,
             onDismiss = trashViewModel::failedShown,
         )
     }

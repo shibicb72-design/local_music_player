@@ -1,6 +1,8 @@
 package com.shibi.musicplayer.ui
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -10,9 +12,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import com.shibi.musicplayer.R
 import com.shibi.musicplayer.domain.MediaKind
-import com.shibi.musicplayer.domain.TrashItem
+import com.shibi.musicplayer.domain.TrashFailReason
+import com.shibi.musicplayer.domain.TrashFailure
 import com.shibi.musicplayer.ui.background.LocalBackgroundChrome
 import com.shibi.musicplayer.ui.background.contentColorForContainer
 
@@ -52,25 +56,40 @@ internal fun GroupTrashWarning(
     )
 }
 
-/** Lists what the system would not move. */
+/** Says how many items moved and, per reason, which ones did not. */
 @Composable
 internal fun TrashFailedDialog(
-    items: List<TrashItem>,
+    moved: Int,
+    requested: Int,
+    failures: List<TrashFailure>,
     onDismiss: () -> Unit,
 ) {
     val dialogColor = LocalBackgroundChrome.current.dialog
     val onDialog = contentColorForContainer(dialogColor)
+    val failedCount = failures.sumOf { it.items.size }
+    val title = if (moved > 0) {
+        stringResource(R.string.trash_partial_title, moved, requested)
+    } else {
+        pluralStringResource(R.plurals.trash_none_title, failedCount, failedCount)
+    }
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = dialogColor,
         titleContentColor = onDialog,
         textContentColor = onDialog,
-        title = { Text(pluralStringResource(R.plurals.trash_failed_title, items.size, items.size)) },
+        title = { Text(title) },
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                Text(stringResource(R.string.trash_failed_body))
-                items.take(MAX_LISTED_TITLES).forEach { Text(it.title) }
-                val more = items.size - MAX_LISTED_TITLES
+                var budget = MAX_LISTED_TITLES
+                failures.forEach { failure ->
+                    val count = failure.items.size
+                    Text(pluralStringResource(reasonPlural(failure.reason), count, count))
+                    val shown = failure.items.take(budget)
+                    budget -= shown.size
+                    shown.forEach { Text(it.title) }
+                    Spacer(Modifier.height(8.dp))
+                }
+                val more = failedCount - MAX_LISTED_TITLES
                 if (more > 0) Text(stringResource(R.string.trash_failed_more, more))
             }
         },
@@ -80,4 +99,10 @@ internal fun TrashFailedDialog(
             }
         },
     )
+}
+
+private fun reasonPlural(reason: TrashFailReason): Int = when (reason) {
+    TrashFailReason.Removable -> R.plurals.trash_reason_removable
+    TrashFailReason.NoPermission -> R.plurals.trash_reason_permission
+    TrashFailReason.NotTrashed -> R.plurals.trash_reason_not_trashed
 }

@@ -262,17 +262,50 @@
         <item quantity="one">This moves %d video to trash</item>
         <item quantity="other">This moves %d videos to trash</item>
     </plurals>
-    <plurals name="trash_failed_title">
-        <item quantity="one">Couldn\'t move %d item</item>
-        <item quantity="other">Couldn\'t move %d items</item>
+    <plurals name="trash_moved_songs">
+        <item quantity="one">Moved %d song to trash</item>
+        <item quantity="other">Moved %d songs to trash</item>
     </plurals>
-    <plurals name="trash_moved">
-        <item quantity="one">Moved %d to trash</item>
-        <item quantity="other">Moved %d to trash</item>
+    <plurals name="trash_moved_videos">
+        <item quantity="one">Moved %d video to trash</item>
+        <item quantity="other">Moved %d videos to trash</item>
+    </plurals>
+    <plurals name="trash_moved_items">
+        <item quantity="one">Moved %d item to trash</item>
+        <item quantity="other">Moved %d items to trash</item>
+    </plurals>
+    <string name="trash_moved_partial">Moved %1$d of %2$d to trash</string>
+    <plurals name="trash_restored_songs">
+        <item quantity="one">Restored %d song</item>
+        <item quantity="other">Restored %d songs</item>
+    </plurals>
+    <plurals name="trash_restored_videos">
+        <item quantity="one">Restored %d video</item>
+        <item quantity="other">Restored %d videos</item>
+    </plurals>
+    <plurals name="trash_restored_items">
+        <item quantity="one">Restored %d item</item>
+        <item quantity="other">Restored %d items</item>
+    </plurals>
+    <string name="trash_partial_title">Moved %1$d of %2$d to trash</string>
+    <plurals name="trash_none_title">
+        <item quantity="one">Couldn\'t move %d file to trash</item>
+        <item quantity="other">Couldn\'t move %d files to trash</item>
+    </plurals>
+    <plurals name="trash_reason_removable">
+        <item quantity="one">%d file couldn\'t be moved to trash because it\'s on your SD card or USB storage.</item>
+        <item quantity="other">%d files couldn\'t be moved to trash because they\'re on your SD card or USB storage.</item>
+    </plurals>
+    <plurals name="trash_reason_permission">
+        <item quantity="one">%d file couldn\'t be moved to trash because another app owns it or Theatrum isn\'t allowed to change it.</item>
+        <item quantity="other">%d files couldn\'t be moved to trash because another app owns them or Theatrum isn\'t allowed to change them.</item>
+    </plurals>
+    <plurals name="trash_reason_not_trashed">
+        <item quantity="one">%d file couldn\'t be moved to trash. Try again from the Files app.</item>
+        <item quantity="other">%d files couldn\'t be moved to trash. Try again from the Files app.</item>
     </plurals>
     <string name="trash_undo">Undo</string>
     <string name="trash_unsupported">Moving to trash needs Android 11 or later</string>
-    <string name="trash_failed_body">These may be on an SD card or USB storage, or another app owns them:</string>
     <string name="trash_failed_more">and %d more</string>
     <string name="ok">OK</string>
     <string name="selected">Selected</string>
