@@ -637,7 +637,11 @@ class VideoViewModel internal constructor(
                 step = PlaybackCheck.summary(
                     PlaybackCheck.fps(before.displayedPictures, after.displayedPictures, PlaybackCheck.WindowMs),
                     after.lostPictures - before.lostPictures,
-                    engineOptions.value.hardwareDecoding,
+                    after.decodedVideo - before.decodedVideo,
+                    after.playedAudioBuffers - before.playedAudioBuffers,
+                    after.lostAudioBuffers - before.lostAudioBuffers,
+                    after.decoder,
+                    after.audioOutput,
                 ) + " (${surface.label})",
                 error = null,
                 shown = null,

@@ -2,7 +2,6 @@ package com.shibi.musicplayer
 
 import com.shibi.musicplayer.domain.PlaybackCheck
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PlaybackCheckTest {
@@ -18,17 +17,39 @@ class PlaybackCheckTest {
     }
 
     @Test
-    fun summaryNamesFramesLostAndHardwareDecodingOn() {
+    fun summaryNamesHardwareDecoderAndSpeakerAudio() {
         assertEquals(
-            "Playback check: 29.8 fps shown, 0 frames lost, hardware decoding on",
-            PlaybackCheck.summary(29.84, 0, true),
+            "Playback check: 29.8 fps shown, 150 frames decoded, 0 frames lost; " +
+                "audio 230 buffers played, 0 lost; " +
+                "decoder MediaCodec (mediacodec_ndk, software fallback allowed); " +
+                "audio out android_audiotrack to speaker",
+            PlaybackCheck.summary(
+                fps = 29.84,
+                lostPictures = 0,
+                decodedVideo = 150,
+                playedAudioBuffers = 230,
+                lostAudioBuffers = 0,
+                decoder = "MediaCodec (mediacodec_ndk, software fallback allowed)",
+                audioOutput = "android_audiotrack to speaker",
+            ),
         )
     }
 
     @Test
-    fun summaryNamesFramesLostAndHardwareDecodingOff() {
-        val line = PlaybackCheck.summary(12.0, 7, false)
-        assertTrue(line.contains("7 frames lost"))
-        assertTrue(line.contains("hardware decoding off"))
+    fun summaryNamesSoftwareDecoderAndBluetoothAudioWithLostBuffers() {
+        assertEquals(
+            "Playback check: 12.0 fps shown, 90 frames decoded, 7 frames lost; " +
+                "audio 120 buffers played, 3 lost; " +
+                "decoder software (avcodec); audio out opensles to bluetooth",
+            PlaybackCheck.summary(
+                fps = 12.0,
+                lostPictures = 7,
+                decodedVideo = 90,
+                playedAudioBuffers = 120,
+                lostAudioBuffers = 3,
+                decoder = "software (avcodec)",
+                audioOutput = "opensles to bluetooth",
+            ),
+        )
     }
 }

@@ -2,7 +2,11 @@ package com.shibi.musicplayer.video
 
 import android.content.Context
 import android.graphics.Color
+import android.media.AudioAttributes
+import android.media.AudioDeviceInfo
+import android.media.AudioManager
 import android.net.Uri
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.ParcelFileDescriptor
@@ -19,6 +23,7 @@ import org.videolan.libvlc.Media
 import org.videolan.libvlc.MediaPlayer
 import org.videolan.libvlc.interfaces.IMedia
 import org.videolan.libvlc.interfaces.IVLCVout
+import org.videolan.libvlc.util.HWDecoderUtil
 import org.videolan.libvlc.util.VLCVideoLayout
 
 /**
@@ -52,6 +57,18 @@ internal class VlcVideoEngine(context: Context) : VideoEngine {
     private var aspectMode = AspectMode.Default
 
     private var options = EngineOptions()
+
+    /** What [openMedia] asked libVLC to decode with, for the playback check log. */
+    private var decoderLabel = "MediaCodec (mediacodec_ndk, software fallback allowed)"
+
+    /** The audio output the LibVLC constructor picks (opensles or android_audiotrack). */
+    private val audioOutputLabel: String by lazy {
+        if (HWDecoderUtil.getAudioOutputFromDevice() == HWDecoderUtil.AudioOutput.OPENSLES) {
+            "opensles"
+        } else {
+            "android_audiotrack"
+        }
+    }
 
     /** The text size [libVlc] was created with: it is a LibVLC-wide option. */
     private var libVlcTextSize: SubtitleTextSize? = null
@@ -381,10 +398,44 @@ internal class VlcVideoEngine(context: Context) : VideoEngine {
     override fun playbackStats(): PlaybackStats? {
         val media = player?.media ?: return null
         return try {
-            media.stats?.let { PlaybackStats(it.decodedVideo, it.displayedPictures, it.lostPictures) }
+            media.stats?.let {
+                PlaybackStats(
+                    decodedVideo = it.decodedVideo,
+                    displayedPictures = it.displayedPictures,
+                    lostPictures = it.lostPictures,
+                    decodedAudio = it.decodedAudio,
+                    playedAudioBuffers = it.playedAbuffers,
+                    lostAudioBuffers = it.lostAbuffers,
+                    decoder = decoderLabel,
+                    audioOutput = "$audioOutputLabel to ${audioRouteLabel()}",
+                )
+            }
         } finally {
             media.release()
         }
+    }
+
+    /** Where the sound goes right now; read at [playbackStats] time because it can change. */
+    private fun audioRouteLabel(): String {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return "unknown"
+        val manager = appContext.getSystemService(AudioManager::class.java) ?: return "unknown"
+        val attributes = AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).build()
+        return audioRouteType(manager.getAudioDevicesForAttributes(attributes).firstOrNull()?.type)
+    }
+
+    /** One word for the playback check log, from the audio device type. */
+    private fun audioRouteType(type: Int?): String = when (type) {
+        AudioDeviceInfo.TYPE_BUILTIN_SPEAKER -> "speaker"
+        AudioDeviceInfo.TYPE_WIRED_HEADPHONES,
+        AudioDeviceInfo.TYPE_WIRED_HEADSET,
+        AudioDeviceInfo.TYPE_USB_HEADSET,
+        AudioDeviceInfo.TYPE_USB_DEVICE,
+        -> "wired"
+        AudioDeviceInfo.TYPE_BLUETOOTH_A2DP,
+        AudioDeviceInfo.TYPE_BLE_HEADSET,
+        AudioDeviceInfo.TYPE_BLE_SPEAKER,
+        -> "bluetooth"
+        else -> "other"
     }
 
     /** Turns the saved video track back on; only with a view attached and the picture on. */
@@ -458,7 +509,15 @@ internal class VlcVideoEngine(context: Context) : VideoEngine {
             return
         }
         // Hardware decoding first (libVLC falls back to software itself), or software only.
+        // setHWDecoderEnabled(false, false) alone still tries MediaCodec first (":codec=all");
+        // the later ":codec=avcodec,all" wins and keeps the decoders to avcodec, i.e. software.
         media.setHWDecoderEnabled(options.hardwareDecoding, false)
+        if (!options.hardwareDecoding) media.addOption(":codec=avcodec,all")
+        decoderLabel = if (options.hardwareDecoding) {
+            "MediaCodec (mediacodec_ndk, software fallback allowed)"
+        } else {
+            "software (avcodec)"
+        }
         media.addOption(":file-caching=$FileCachingMs")
         if (resume != null) {
             // libVLC starts at the saved position itself, and paused if it was paused.

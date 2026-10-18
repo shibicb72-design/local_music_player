@@ -40,7 +40,21 @@ data class EngineOptions(
 )
 
 /** libVLC's counters for the open video since it started; null when unknown. */
-data class PlaybackStats(val decodedVideo: Int, val displayedPictures: Int, val lostPictures: Int)
+data class PlaybackStats(
+    val decodedVideo: Int,
+    val displayedPictures: Int,
+    val lostPictures: Int,
+    /** Audio frames decoded since the video opened. */
+    val decodedAudio: Int = 0,
+    /** Audio buffers handed to the output since the video opened. */
+    val playedAudioBuffers: Int = 0,
+    /** Audio buffers dropped since the video opened. */
+    val lostAudioBuffers: Int = 0,
+    /** The decoder in use, e.g. "MediaCodec (mediacodec_ndk, software fallback allowed)". */
+    val decoder: String = "",
+    /** The audio output and its current route, e.g. "android_audiotrack to bluetooth". */
+    val audioOutput: String = "",
+)
 
 /**
  * The video player behind the UI. The app uses [VlcVideoEngine]; tests use a fake that draws

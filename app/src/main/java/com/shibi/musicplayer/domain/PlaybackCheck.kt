@@ -12,10 +12,24 @@ object PlaybackCheck {
         return (displayedAfter - displayedBefore) * 1000.0 / windowMs
     }
 
-    /** One line for the log, e.g. "Playback check: 29.8 fps shown, 0 frames lost, hardware decoding on". One decimal. */
-    fun summary(fps: Double, lostDelta: Int, hardwareDecoding: Boolean): String {
+    /**
+     * One line for the log, with the deltas over the window and the decoder and audio output
+     * labels, e.g. "Playback check: 29.8 fps shown, 150 frames decoded, 0 frames lost;
+     * audio 230 buffers played, 0 lost; decoder MediaCodec (mediacodec_ndk, software
+     * fallback allowed); audio out android_audiotrack to speaker". One decimal for the fps.
+     */
+    fun summary(
+        fps: Double,
+        lostPictures: Int,
+        decodedVideo: Int,
+        playedAudioBuffers: Int,
+        lostAudioBuffers: Int,
+        decoder: String,
+        audioOutput: String,
+    ): String {
         val shown = String.format(Locale.US, "%.1f", fps)
-        val decoding = if (hardwareDecoding) "on" else "off"
-        return "Playback check: $shown fps shown, $lostDelta frames lost, hardware decoding $decoding"
+        return "Playback check: $shown fps shown, $decodedVideo frames decoded, $lostPictures frames lost; " +
+            "audio $playedAudioBuffers buffers played, $lostAudioBuffers lost; " +
+            "decoder $decoder; audio out $audioOutput"
     }
 }

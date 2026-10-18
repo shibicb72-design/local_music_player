@@ -200,6 +200,8 @@ fun MusicApp(
     AppBackgroundHost(
         background = appBackground.shownWith(darkTheme),
         customColors = backgroundColors,
+        // A still backdrop while a video is open: an animated one redraws every frame behind the picture.
+        forceStatic = videoState.isActive,
     ) {
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val wide = maxWidth >= TwoPaneBreakpoint

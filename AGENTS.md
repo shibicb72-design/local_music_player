@@ -161,3 +161,8 @@ After every task, append an entry below: `- [task] what went wrong -> new rule`.
 - Publish the UI clock at about 4 Hz (domain/PositionThrottle, 250 ms) and publish immediately when any other field changes.
 - Anything that saves or reports a position (resume checkpoint, media session) must read the engine's exact position, never the throttled UI copy. Do not bend a test tick to fit a throttled value.
 - One "Playback check" info entry per play (Media.Stats displayed/lost over 5 s plus HW/SW decoding) tells us on-device fps without a profiler.
+
+## Lesson (V14, A/V sync review): measure the pipeline before guessing
+- Second opinion (GLM 5.3 Flash, max) agreed TextureView + UI-thread work is the frame-pacing risk and found two more things: the animated app background kept redrawing every frame behind the video (now static while a video is open), and setHWDecoderEnabled(false, false) only adds ":codec=all", so "hardware decoding off" still used MediaCodec. Off now adds ":codec=avcodec,all".
+- libVLC 3.7.7 picks --aout=android_audiotrack on modern phones (opensles only on a few old SoCs), has no aaudio module, and appends "--android-display-chroma RV16" when none is given. It has no decoder-name getter and no log callback, so the log names the decoder we asked for.
+- With audio as the master clock, a slow video path drops pictures (lostPictures); it does not delay audio. Audio "behind" the picture points at audio latency (often Bluetooth) or at late TextureView latching. The playback check now logs frames decoded/shown/lost, audio buffers played/lost and the audio route, so one log line tells which.
