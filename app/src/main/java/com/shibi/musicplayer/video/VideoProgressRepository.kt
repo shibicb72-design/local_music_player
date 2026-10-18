@@ -96,6 +96,22 @@ class VideoProgressRepository internal constructor(
         return done.await()
     }
 
+    override suspend fun rowsFor(uris: Collection<String>): List<VideoProgressEntity> {
+        if (uris.isEmpty()) return emptyList()
+        val list = uris.toList()
+        val done = CompletableDeferred<List<VideoProgressEntity>>()
+        enqueue {
+            val rows = try {
+                list.chunked(SQL_CHUNK).flatMap { dao.findAll(it) }
+            } catch (error: Exception) {
+                logOnce("Read video positions", error, media = null)
+                emptyList()
+            }
+            done.complete(rows)
+        }
+        return done.await()
+    }
+
     override suspend fun restore(rows: List<VideoProgressEntity>) {
         if (rows.isEmpty()) return
         val done = CompletableDeferred<Unit>()

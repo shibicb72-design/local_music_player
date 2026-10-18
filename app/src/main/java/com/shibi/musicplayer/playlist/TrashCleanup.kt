@@ -10,6 +10,9 @@ interface VideoProgressStore {
     /** Snapshots the rows for [uris], deletes them and drops them from memory; ordered after pending writes. */
     suspend fun removeFor(uris: Collection<String>): List<VideoProgressEntity>
 
+    /** The saved rows for [uris] as they are now, ordered after pending writes; changes nothing. */
+    suspend fun rowsFor(uris: Collection<String>): List<VideoProgressEntity>
+
     /** Writes [rows] back and returns them to memory. */
     suspend fun restore(rows: List<VideoProgressEntity>)
 
@@ -24,6 +27,14 @@ data class CleanupSnapshot(
     val history: List<PlayHistoryEntity> = emptyList(),
     val videoProgress: List<VideoProgressEntity> = emptyList(),
 ) {
+    /** Distinct union per list, so a capture and a later cleanup can be merged. */
+    operator fun plus(other: CleanupSnapshot): CleanupSnapshot = CleanupSnapshot(
+        playlistSongs = (playlistSongs + other.playlistSongs).distinct(),
+        recentPlays = (recentPlays + other.recentPlays).distinct(),
+        history = (history + other.history).distinct(),
+        videoProgress = (videoProgress + other.videoProgress).distinct(),
+    )
+
     val isEmpty: Boolean
         get() = playlistSongs.isEmpty() && recentPlays.isEmpty() && history.isEmpty() && videoProgress.isEmpty()
 }
@@ -36,7 +47,8 @@ class TrashCleanup(
     private val dao: PlaylistDao,
     private val progress: VideoProgressStore,
 ) {
-    suspend fun remove(items: List<TrashItem>): CleanupSnapshot {
+    /** What [remove] would take out, without changing anything. */
+    suspend fun snapshot(items: List<TrashItem>): CleanupSnapshot {
         val songIds = items.filter { it.kind == MediaKind.Song }.map { it.id }.distinct()
         val videoIds = items.filter { it.kind == MediaKind.Video }.map { it.id }.distinct()
         val videoUris = items.filter { it.kind == MediaKind.Video }.map { it.uri }.distinct()
@@ -45,6 +57,20 @@ class TrashCleanup(
         val recent = songIds.chunked(CHUNK).flatMap { dao.recentPlaysFor(it) }
         val songHistory = songIds.chunked(CHUNK).flatMap { dao.historyFor(HistoryType.Song.name, it) }
         val videoHistory = videoIds.chunked(CHUNK).flatMap { dao.historyFor(HistoryType.Video.name, it) }
+        return CleanupSnapshot(
+            playlistSongs = playlistSongs,
+            recentPlays = recent,
+            history = songHistory + videoHistory,
+            videoProgress = progress.rowsFor(videoUris),
+        )
+    }
+
+    suspend fun remove(items: List<TrashItem>): CleanupSnapshot {
+        val songIds = items.filter { it.kind == MediaKind.Song }.map { it.id }.distinct()
+        val videoIds = items.filter { it.kind == MediaKind.Video }.map { it.id }.distinct()
+        val videoUris = items.filter { it.kind == MediaKind.Video }.map { it.uri }.distinct()
+
+        val taken = snapshot(items)
 
         songIds.chunked(CHUNK).forEach {
             dao.deleteSongsForTracks(it)
@@ -54,12 +80,7 @@ class TrashCleanup(
         videoIds.chunked(CHUNK).forEach { dao.deleteHistoryFor(HistoryType.Video.name, it) }
         val removedProgress = progress.removeFor(videoUris)
 
-        return CleanupSnapshot(
-            playlistSongs = playlistSongs,
-            recentPlays = recent,
-            history = songHistory + videoHistory,
-            videoProgress = removedProgress,
-        )
+        return taken.copy(videoProgress = removedProgress)
     }
 
     suspend fun restore(snapshot: CleanupSnapshot) {

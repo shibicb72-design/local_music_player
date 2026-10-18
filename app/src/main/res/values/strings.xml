@@ -253,6 +253,22 @@
     <string name="select_all">Select all</string>
     <string name="cancel_selection">Cancel selection</string>
     <string name="move_to_trash">Move to trash</string>
+    <string name="trash_group_title">Move to trash?</string>
+    <plurals name="trash_group_songs">
+        <item quantity="one">This moves %d song to trash</item>
+        <item quantity="other">This moves %d songs to trash</item>
+    </plurals>
+    <plurals name="trash_group_videos">
+        <item quantity="one">This moves %d video to trash</item>
+        <item quantity="other">This moves %d videos to trash</item>
+    </plurals>
+    <plurals name="trash_failed_title">
+        <item quantity="one">Couldn\'t move %d item</item>
+        <item quantity="other">Couldn\'t move %d items</item>
+    </plurals>
+    <string name="trash_failed_body">These may be on an SD card or USB storage, or another app owns them:</string>
+    <string name="trash_failed_more">and %d more</string>
+    <string name="ok">OK</string>
     <string name="selected">Selected</string>
     <string name="not_selected">Not selected</string>
     <plurals name="song_count">

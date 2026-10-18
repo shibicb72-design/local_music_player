@@ -122,6 +122,24 @@ class TrashCleanupTest {
     }
 
     @Test
+    fun snapshotReadsWhatRemoveWouldTakeAndChangesNothing() = runBlocking {
+        seed()
+        val items = listOf(song(2), video(7, videoUri))
+        val before = playlistRows()
+
+        val snap = cleanup.snapshot(items)
+
+        assertEquals(before, playlistRows())
+        assertEquals(setOf(videoUri, otherVideoUri), progress.savedUris())
+        assertEquals(2, snap.playlistSongs.size)
+        assertEquals(listOf(2L), snap.recentPlays.map { it.trackId })
+        assertEquals(2, snap.history.size)
+        assertEquals(listOf(videoUri), snap.videoProgress.map { it.uri })
+        assertEquals(snap, cleanup.remove(items))
+        assertEquals(snap, snap + snap)
+    }
+
+    @Test
     fun aSongInTwoPlaylistsIsRemovedFromBothAndKeepsItsPositions() = runBlocking {
         seed()
         val snapshot = cleanup.remove(listOf(song(2)))
