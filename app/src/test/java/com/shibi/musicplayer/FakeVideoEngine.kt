@@ -16,6 +16,9 @@ import java.io.Closeable
 import com.shibi.musicplayer.video.VideoEngineEvent
 import com.shibi.musicplayer.video.VideoEngineState
 import com.shibi.musicplayer.video.VideoStateReducer
+import com.shibi.musicplayer.video.PlaybackStats
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -52,7 +55,16 @@ class FakeVideoEngine(
     var attachedView: View? = null
         private set
 
+    private val firstFrameFlow = MutableSharedFlow<VideoEngineEvent.FirstFrame>(extraBufferCapacity = 8)
+    override val firstFrames: Flow<VideoEngineEvent.FirstFrame> = firstFrameFlow
+
+    /** What [playbackStats] returns; null (unknown) by default, so no Playback check line is logged. */
+    var stats: PlaybackStats? = null
+
+    override fun playbackStats(): PlaybackStats? = stats
+
     fun emit(event: VideoEngineEvent) {
+        if (event is VideoEngineEvent.FirstFrame) firstFrameFlow.tryEmit(event)
         _state.value = VideoStateReducer.reduce(_state.value, event)
     }
 

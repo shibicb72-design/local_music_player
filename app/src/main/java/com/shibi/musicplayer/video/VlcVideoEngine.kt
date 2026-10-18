@@ -17,6 +17,9 @@ import com.shibi.musicplayer.domain.InlineVideoBox
 import com.shibi.musicplayer.domain.VideoFit
 import java.io.Closeable
 import java.io.FileNotFoundException
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -55,6 +58,11 @@ internal class VlcVideoEngine(context: Context) : VideoEngine {
     private var player: MediaPlayer? = null
     private var descriptor: ParcelFileDescriptor? = null
     private var attached: VideoTextureFrame? = null
+
+    /** True once a picture was drawn since the last load; load() clears it. */
+    private var firstFrameSeen = true
+    private val _firstFrames = MutableSharedFlow<VideoEngineEvent.FirstFrame>(extraBufferCapacity = 1)
+    override val firstFrames: Flow<VideoEngineEvent.FirstFrame> = _firstFrames
     private var released = false
     private var aspectMode = AspectMode.Default
 
@@ -235,6 +243,7 @@ internal class VlcVideoEngine(context: Context) : VideoEngine {
         savedVideoTrack = null
         trackPending = false
         retriedAfterError = false
+        firstFrameSeen = false
         mainHandler.removeCallbacks(fallbackRestore)
         dispatch(VideoEngineEvent.Opening)
         if (startMs > 0L) dispatch(VideoEngineEvent.Time(startMs))
@@ -366,6 +375,12 @@ internal class VlcVideoEngine(context: Context) : VideoEngine {
         // The old host lets go first: a SurfaceTexture is shown by one view at a time.
         attached?.release()
         frame.onSizeChanged = { width, height -> if (attached === frame) onFrameSized(width, height) }
+        frame.onFrameShown = {
+            if (attached === frame && !firstFrameSeen) {
+                firstFrameSeen = true
+                _firstFrames.tryEmit(VideoEngineEvent.FirstFrame(firstInProcess = markFirstFrameInProcess()))
+            }
+        }
         frame.show(video, subtitles)
         attached = frame
         if (frame.width > 0 && frame.height > 0) onFrameSized(frame.width, frame.height)
@@ -772,6 +787,10 @@ internal class VlcVideoEngine(context: Context) : VideoEngine {
     )
 
     internal companion object {
+        private val anyFrameYet = AtomicBoolean(false)
+
+        private fun markFirstFrameInProcess(): Boolean = anyFrameYet.compareAndSet(false, true)
+
         /** Local files: a short read-ahead starts fast and still covers slow SD cards. */
         private const val FileCachingMs = 300
         private const val UsPerMs = 1_000L

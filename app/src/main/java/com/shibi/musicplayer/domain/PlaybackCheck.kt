@@ -17,6 +17,9 @@ object PlaybackCheck {
      * labels, e.g. "Playback check: 29.8 fps shown, 150 frames decoded, 0 frames lost;
      * audio 230 buffers played, 0 lost; decoder MediaCodec (mediacodec_ndk, software
      * fallback allowed); audio out android_audiotrack to speaker". One decimal for the fps.
+     * It starts with the tap-to-picture time: "Playback check: first frame 412 ms (first video
+     * since the app started); 29.8 fps shown, ..." (the parenthesis only when [firstInProcess]),
+     * or "first frame not seen" when [firstFrameMs] is null.
      */
     fun summary(
         fps: Double,
@@ -26,9 +29,16 @@ object PlaybackCheck {
         lostAudioBuffers: Int,
         decoder: String,
         audioOutput: String,
+        firstFrameMs: Long? = null,
+        firstInProcess: Boolean = false,
     ): String {
         val shown = String.format(Locale.US, "%.1f", fps)
-        return "Playback check: $shown fps shown, $decodedVideo frames decoded, $lostPictures frames lost; " +
+        val first = when {
+            firstFrameMs == null -> "first frame not seen"
+            firstInProcess -> "first frame $firstFrameMs ms (first video since the app started)"
+            else -> "first frame $firstFrameMs ms"
+        }
+        return "Playback check: $first; $shown fps shown, $decodedVideo frames decoded, $lostPictures frames lost; " +
             "audio $playedAudioBuffers buffers played, $lostAudioBuffers lost; " +
             "decoder $decoder; audio out $audioOutput"
     }

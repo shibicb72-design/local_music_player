@@ -3,6 +3,7 @@ package com.shibi.musicplayer.video
 import android.app.Application
 import android.graphics.Rect
 import android.os.SystemClock
+import android.util.Log
 import androidx.annotation.VisibleForTesting
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -25,6 +26,7 @@ import com.shibi.musicplayer.domain.VideoFocusPolicy
 import com.shibi.musicplayer.domain.VideoProgress
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -162,6 +164,11 @@ class VideoViewModel internal constructor(
         @Volatile
         var testProgress: (() -> VideoProgressHooks)? = null
     }
+
+    private var openedAtMs = 0L
+    private var firstFrameMs: Long? = null
+    private var firstFrameFirstInProcess = false
+    private var firstFrameJob: Job? = null
 
     private val _engine = MutableStateFlow<VideoEngine?>(null)
 
@@ -369,6 +376,18 @@ class VideoViewModel internal constructor(
         )
         pausedForTransientLoss = false
         audioFocus.acquire(::onAudioEvent)
+        openedAtMs = clock()
+        firstFrameMs = null
+        firstFrameJob?.cancel()
+        firstFrameJob = viewModelScope.launch(start = CoroutineStart.UNDISPATCHED) {
+            engine.firstFrames.collect { event ->
+                if (firstFrameMs == null) {
+                    firstFrameMs = clock() - openedAtMs
+                    firstFrameFirstInProcess = event.firstInProcess
+                    Log.i("Theatrum", "first frame $firstFrameMs ms (first in process: $firstFrameFirstInProcess)")
+                }
+            }
+        }
         engine.load(video.contentUri, startMs)
         stateJob = viewModelScope.launch {
             engine.state.collect { engineState -> merge(video, engineState) }
@@ -653,6 +672,8 @@ class VideoViewModel internal constructor(
                     after.lostAudioBuffers - before.lostAudioBuffers,
                     after.decoder,
                     after.audioOutput,
+                    firstFrameMs,
+                    firstFrameFirstInProcess,
                 ) + " (${surface.label})",
                 error = null,
                 shown = null,

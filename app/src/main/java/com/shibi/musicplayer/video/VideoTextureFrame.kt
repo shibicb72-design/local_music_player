@@ -27,12 +27,17 @@ class VideoTextureFrame(context: Context) : FrameLayout(context) {
     /** Called after the frame's size changes to a non-zero size. */
     var onSizeChanged: ((width: Int, height: Int) -> Unit)? = null
 
+    /** Called each time the video view draws a new frame (not the subtitles view). */
+    var onFrameShown: (() -> Unit)? = null
+
     private val keepTexture = object : TextureView.SurfaceTextureListener {
         override fun onSurfaceTextureAvailable(surface: SurfaceTexture, width: Int, height: Int) = Unit
 
         override fun onSurfaceTextureSizeChanged(surface: SurfaceTexture, width: Int, height: Int) = Unit
 
-        override fun onSurfaceTextureUpdated(surface: SurfaceTexture) = Unit
+        override fun onSurfaceTextureUpdated(surface: SurfaceTexture) {
+            if (surface === videoView?.surfaceTexture) onFrameShown?.invoke()
+        }
 
         override fun onSurfaceTextureDestroyed(surface: SurfaceTexture): Boolean {
             // The engine owns the texture and hands it to the next view.

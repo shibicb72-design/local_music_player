@@ -4,7 +4,9 @@ import android.content.Context
 import android.view.View
 import com.shibi.musicplayer.domain.AspectMode
 import java.io.Closeable
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.emptyFlow
 
 enum class VideoStatus { Idle, Buffering, Playing, Paused, Ended, Error }
 
@@ -121,6 +123,9 @@ interface VideoEngine {
 
     /** libVLC's counters for the open video since it started; null when unknown. */
     fun playbackStats(): PlaybackStats? = null
+
+    /** One item per load, when the view first draws a picture; the state does not change. */
+    val firstFrames: Flow<VideoEngineEvent.FirstFrame> get() = emptyFlow()
 }
 
 /** Engine events in our own terms, so the state mapping is pure and unit-tested. */
@@ -135,6 +140,9 @@ sealed interface VideoEngineEvent {
     data class Time(val positionMs: Long) : VideoEngineEvent
     data class Length(val durationMs: Long) : VideoEngineEvent
     data class Size(val width: Int, val height: Int, val aspect: Float?) : VideoEngineEvent
+
+    /** The first picture after a load was drawn; [firstInProcess] is true for the first one since the app started. */
+    data class FirstFrame(val firstInProcess: Boolean) : VideoEngineEvent
 }
 
 object VideoStateReducer {
@@ -177,5 +185,6 @@ object VideoStateReducer {
             videoHeight = event.height,
             aspect = event.aspect ?: state.aspect,
         )
+        is VideoEngineEvent.FirstFrame -> state
     }
 }
