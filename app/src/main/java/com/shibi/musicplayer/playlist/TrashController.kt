@@ -100,6 +100,10 @@ class TrashController(
         _state.update { it.copy(notice = null) }
     }
 
+    fun unsupportedShown() {
+        _state.update { it.copy(unsupported = false) }
+    }
+
     fun failedShown() {
         _state.update { it.copy(failed = emptyList()) }
     }

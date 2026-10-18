@@ -1,8 +1,24 @@
 package com.shibi.musicplayer.ui
 
+import android.app.Activity
 import android.content.res.Configuration
 import android.graphics.Rect
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
+import com.shibi.musicplayer.domain.MediaKind
+import com.shibi.musicplayer.domain.TrashItem
+import com.shibi.musicplayer.domain.TrashPlan
+import com.shibi.musicplayer.library.MediaTrash
+import com.shibi.musicplayer.playlist.TrashStep
+import com.shibi.musicplayer.playlist.TrashViewModel
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -22,6 +38,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -98,6 +115,7 @@ fun MusicApp(
     backgroundViewModel: BackgroundViewModel = viewModel(),
     // Activity-scoped, so a fold or unfold keeps the video playing. Creates no engine yet.
     videoViewModel: VideoViewModel = viewModel(),
+    trashViewModel: TrashViewModel = viewModel(),
     // Taps on the video's notification or lock-screen card.
     openVideoRequests: Flow<Unit> = emptyFlow(),
     // Videos opened from another app (Files, Gallery) through "Open with Theatrum".
@@ -130,6 +148,72 @@ fun MusicApp(
     val libraryState by libraryViewModel.uiState.collectAsStateWithLifecycle()
     val tracksById = remember(libraryState.tracks) {
         libraryState.tracks.associateBy { it.id }
+    }
+    val trashState by trashViewModel.state.collectAsStateWithLifecycle()
+    val trashContext = LocalContext.current
+    val currentVideoUri by rememberUpdatedState(videoState.video?.contentUri)
+    SideEffect {
+        trashViewModel.onTrashed = { items ->
+            playerViewModel.removeFromQueue(
+                items.filter { it.kind == MediaKind.Song }.mapTo(mutableSetOf()) { it.id },
+            )
+            if (TrashPlan.trashesCurrentVideo(currentVideoUri, items)) videoViewModel.close()
+        }
+    }
+    val trashLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartIntentSenderForResult(),
+    ) { result -> trashViewModel.onSystemResult(result.resultCode == Activity.RESULT_OK) }
+    val trashStep = trashState.step
+    LaunchedEffect(trashStep) {
+        if (trashStep is TrashStep.AwaitSystem) {
+            val request = MediaTrash.request(trashContext, trashStep.items.map { it.uri }, trashStep.trash)
+            if (request == null) trashViewModel.onSystemResult(false) else trashLauncher.launch(request)
+        }
+    }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val trashNotice = trashState.notice
+    val movedMessage = trashNotice?.let { pluralStringResource(R.plurals.trash_moved, it.movedCount, it.movedCount) }
+    val undoLabel = stringResource(R.string.trash_undo)
+    LaunchedEffect(trashNotice) {
+        if (trashNotice != null && movedMessage != null) {
+            val result = snackbarHostState.showSnackbar(
+                message = movedMessage,
+                actionLabel = if (trashNotice.canUndo) undoLabel else null,
+                duration = SnackbarDuration.Long,
+            )
+            if (result == SnackbarResult.ActionPerformed) trashViewModel.undo()
+            trashViewModel.noticeShown()
+        }
+    }
+    val unsupportedMessage = stringResource(R.string.trash_unsupported)
+    LaunchedEffect(trashState.unsupported) {
+        if (trashState.unsupported) {
+            snackbarHostState.showSnackbar(unsupportedMessage, duration = SnackbarDuration.Short)
+            trashViewModel.unsupportedShown()
+        }
+    }
+    val onTrashSongs: (List<Track>, Boolean) -> Unit = { tracks, whole ->
+        trashViewModel.request(
+            tracks.map { TrashItem(MediaKind.Song, it.id, it.contentUri, it.title) },
+            whole,
+        )
+    }
+    val onTrashVideos: (List<Video>, Boolean) -> Unit = { videos, whole ->
+        trashViewModel.request(
+            videos.map { TrashItem(MediaKind.Video, it.id, it.contentUri, it.title) },
+            whole,
+        )
+    }
+    (trashStep as? TrashStep.ConfirmGroup)?.let { confirm ->
+        GroupTrashWarning(
+            count = confirm.items.size,
+            kind = confirm.items.first().kind,
+            onConfirm = trashViewModel::confirmGroup,
+            onDismiss = trashViewModel::dismiss,
+        )
+    }
+    if (trashState.failed.isNotEmpty()) {
+        TrashFailedDialog(items = trashState.failed, onDismiss = trashViewModel::failedShown)
     }
     // Songs deleted outside the app leave playlists and history once the library has loaded.
     LaunchedEffect(libraryState.tracks, libraryState.loaded) {
@@ -580,6 +664,8 @@ fun MusicApp(
                     onOpenTracks = openTracks,
                     holdControls = tracksOpen,
                     brightnessSwipe = brightnessSwipe,
+                    onTrashSongs = onTrashSongs,
+                    onTrashVideos = onTrashVideos,
                     modifier = Modifier.fillMaxSize(),
                 )
             }
@@ -636,6 +722,8 @@ fun MusicApp(
                             onOpenTracks = openTracks,
                             holdControls = tracksOpen,
                             brightnessSwipe = brightnessSwipe,
+                            onTrashSongs = onTrashSongs,
+                            onTrashVideos = onTrashVideos,
                             modifier = Modifier.fillMaxSize(),
                         )
                         }
@@ -670,6 +758,13 @@ fun MusicApp(
             }
         }
 
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .padding(bottom = SongListBottomPadding),
+        )
         }
 
         // Composed after the NavHost, so its callback is newer and wins: Back closes the
@@ -787,6 +882,8 @@ private fun AppNavHost(
     onOpenTracks: () -> Unit,
     holdControls: Boolean,
     brightnessSwipe: Boolean,
+    onTrashSongs: (List<Track>, Boolean) -> Unit,
+    onTrashVideos: (List<Video>, Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     NavHost(
@@ -808,6 +905,7 @@ private fun AppNavHost(
                 onToggleFavorite = { playlistViewModel.toggleFavorite(it.id) },
                 showMiniPlayer = false,
                 contentBottomPadding = contentBottomPadding,
+                onTrashSongs = onTrashSongs,
                 modifier = Modifier.fillMaxSize(),
             )
         }
@@ -983,6 +1081,7 @@ private fun AppNavHost(
                 onOpenTracks = onOpenTracks,
                 holdControls = holdControls,
                 showInlinePlayer = !wide,
+                onTrashVideos = onTrashVideos,
                 modifier = Modifier.fillMaxSize(),
                 onLibraryLoaded = { playlistViewModel.pruneMissingVideos(it, true) },
             )

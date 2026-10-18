@@ -53,4 +53,6 @@ class TrashViewModel internal constructor(
     fun noticeShown() = controller.noticeShown()
 
     fun failedShown() = controller.failedShown()
+
+    fun unsupportedShown() = controller.unsupportedShown()
 }

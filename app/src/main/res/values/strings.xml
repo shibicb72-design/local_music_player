@@ -266,6 +266,12 @@
         <item quantity="one">Couldn\'t move %d item</item>
         <item quantity="other">Couldn\'t move %d items</item>
     </plurals>
+    <plurals name="trash_moved">
+        <item quantity="one">Moved %d to trash</item>
+        <item quantity="other">Moved %d to trash</item>
+    </plurals>
+    <string name="trash_undo">Undo</string>
+    <string name="trash_unsupported">Moving to trash needs Android 11 or later</string>
     <string name="trash_failed_body">These may be on an SD card or USB storage, or another app owns them:</string>
     <string name="trash_failed_more">and %d more</string>
     <string name="ok">OK</string>

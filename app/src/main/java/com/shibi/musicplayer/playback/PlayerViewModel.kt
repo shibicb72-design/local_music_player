@@ -18,6 +18,7 @@ import com.shibi.musicplayer.domain.RepeatMode
 import com.shibi.musicplayer.domain.RepeatState
 import com.shibi.musicplayer.domain.ShuffleContext
 import com.shibi.musicplayer.domain.Track
+import com.shibi.musicplayer.domain.TrashPlan
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -191,6 +192,20 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     player.seekTo(move.index, 0L)
                 }
             }
+        }
+        publish(player)
+    }
+
+    /** Drops trashed songs from the queue; media3 moves past a removed current item itself. */
+    fun removeFromQueue(trackIds: Set<Long>) {
+        val player = controller ?: return
+        val mediaIds = List(player.mediaItemCount) { player.getMediaItemAt(it).mediaId }
+        val indices = TrashPlan.queueIndicesToRemove(mediaIds, trackIds)
+        if (indices.isEmpty()) return
+        indices.sortedDescending().forEach { player.removeMediaItem(it) }
+        if (player.mediaItemCount == 0) {
+            player.stop()
+            player.clearMediaItems()
         }
         publish(player)
     }

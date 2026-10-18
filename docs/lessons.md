@@ -186,3 +186,5 @@ After every task, append an entry below: `- [task] what went wrong -> new rule`.
 - [V19 d03_mediastore_trash_watch] nothing failed; no LibraryViewModel seam added (MusicRepository is final, so a reload test needs a real provider) -> add a seam only when a test needs it.
 - [V19 d04_selection_ui] nothing failed (assertExists/assertDoesNotExist are SemanticsNodeInteraction members, not imports); screenshots need an initialSelection param since captureRoboImage cannot gesture -> give stateful composables an initial-state param for Roborazzi.
 - [V19 d05_trash_flow] kotlinx-coroutines-test is not a dependency, so controller tests use CoroutineScope(Dispatchers.Unconfined) with non-suspending fakes; VideoProgressStore had no read-only fetch, added rowsFor -> check the store interface can express a read before promising a read-only snapshot.
+
+- [V19 d06_trash_wiring] TrashUiState.unsupported had no reset, so the snackbar would fire once only; added unsupportedShown to controller and view model -> every one-shot UI flag in a state machine needs a matching consumed-callback.
