@@ -64,6 +64,14 @@
     <string name="favorites_empty">No favorites yet. Heart a song to keep it here.</string>
     <string name="recent_title">Recently played</string>
     <string name="recent_empty">Songs you play show up here.</string>
+    <string name="history_clear">Clear history</string>
+    <string name="history_clear_title">Clear Recently Played?</string>
+    <string name="history_clear_body">This removes every song and video from the list.</string>
+    <string name="history_clear_confirm">Clear</string>
+    <string name="history_today">Today</string>
+    <string name="history_yesterday">Yesterday</string>
+    <string name="history_badge_song">Song</string>
+    <string name="history_badge_video">Video</string>
     <string name="search_title">Search</string>
     <string name="search_hint">Search songs</string>
     <string name="search_prompt">Search songs by title or artist.</string>
@@ -251,6 +259,10 @@
     <plurals name="playlist_count">
         <item quantity="one">%d playlist</item>
         <item quantity="other">%d playlists</item>
+    </plurals>
+    <plurals name="history_count">
+        <item quantity="one">%d item</item>
+        <item quantity="other">%d items</item>
     </plurals>
     <string name="pip_back_10">Back 10 seconds</string>
     <string name="pip_forward_10">Forward 10 seconds</string>

@@ -64,6 +64,7 @@ class PlaylistMigrationTest {
                 PlaylistDatabase.MIGRATION_2_3,
                 PlaylistDatabase.MIGRATION_3_4,
                 PlaylistDatabase.MIGRATION_4_5,
+                PlaylistDatabase.MIGRATION_5_6,
             )
             .allowMainThreadQueries()
             .build()
@@ -110,9 +111,9 @@ class PlaylistMigrationTest {
         }
         helper.close()
 
-        // Only 4 -> 5 is given: Room must not need the older steps or a destructive fallback.
+        // Only the newer steps are given: Room must not need the older ones or a destructive fallback.
         val opened = Room.databaseBuilder(context, PlaylistDatabase::class.java, name)
-            .addMigrations(PlaylistDatabase.MIGRATION_4_5)
+            .addMigrations(PlaylistDatabase.MIGRATION_4_5, PlaylistDatabase.MIGRATION_5_6)
             .allowMainThreadQueries()
             .build()
         database = opened
@@ -131,6 +132,48 @@ class PlaylistMigrationTest {
         progress.upsert(entry)
         progress.upsert(entry.copy(positionMs = 760_000L, updatedAt = 10L))
         assertEquals(listOf(entry.copy(positionMs = 760_000L, updatedAt = 10L)), progress.getAll())
+    }
+
+    @Test
+    fun migrationFrom5AddsPlayHistoryAndCopiesRecentPlays() = runBlocking {
+        val context = RuntimeEnvironment.getApplication()
+        context.deleteDatabase(name)
+        val helper = FrameworkSQLiteOpenHelperFactory().create(
+            SupportSQLiteOpenHelper.Configuration.builder(context)
+                .name(name)
+                .callback(object : SupportSQLiteOpenHelper.Callback(5) {
+                    override fun onCreate(db: SupportSQLiteDatabase) {
+                        createVersion3(db)
+                        PlaylistDatabase.MIGRATION_3_4.migrate(db)
+                        PlaylistDatabase.MIGRATION_4_5.migrate(db)
+                    }
+
+                    override fun onUpgrade(
+                        db: SupportSQLiteDatabase,
+                        oldVersion: Int,
+                        newVersion: Int,
+                    ) = Unit
+                })
+                .build(),
+        )
+        helper.writableDatabase.apply {
+            execSQL("INSERT INTO recent_plays (trackId, playedAt) VALUES (8, 100)")
+            execSQL("INSERT INTO recent_plays (trackId, playedAt) VALUES (3, 200)")
+        }
+        helper.close()
+
+        // Only 5 -> 6 is given: Room must not need the older steps or a destructive fallback.
+        val opened = Room.databaseBuilder(context, PlaylistDatabase::class.java, name)
+            .addMigrations(PlaylistDatabase.MIGRATION_5_6)
+            .allowMainThreadQueries()
+            .build()
+        database = opened
+
+        val history = opened.playlistDao().observeHistory().first()
+        assertEquals(listOf(3L, 8L), history.map { it.mediaId })
+        assertEquals(listOf("Song", "Song"), history.map { it.type })
+        assertEquals(listOf(200L, 100L), history.map { it.playedAt })
+        assertTrue(history.all { it.uri.isEmpty() && it.title.isEmpty() })
     }
 
     private fun createVersion3(db: SupportSQLiteDatabase) {

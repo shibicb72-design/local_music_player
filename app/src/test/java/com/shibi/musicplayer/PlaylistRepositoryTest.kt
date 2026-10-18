@@ -2,6 +2,7 @@ package com.shibi.musicplayer
 
 import androidx.room.Room
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.shibi.musicplayer.domain.HistoryType
 import com.shibi.musicplayer.playlist.PlaylistDatabase
 import com.shibi.musicplayer.playlist.PlaylistRepository
 import kotlinx.coroutines.flow.first
@@ -221,6 +222,52 @@ class PlaylistRepositoryTest {
         assertEquals(8, bumped.size)
         assertEquals("q4", bumped.first())
         assertEquals(1, bumped.count { it == "q4" })
+    }
+
+    @Test
+    fun recordHistoryMergesConsecutiveReplaysIntoOneRowWithTheNewerTime() = runBlocking {
+        repository.recordHistory(HistoryType.Song, 8L, "uri8", "One")
+        now += 10
+        repository.recordHistory(HistoryType.Song, 8L, "uri8", "One")
+
+        val rows = repository.history.first()
+        assertEquals(1, rows.size)
+        assertEquals(8L, rows.single().mediaId)
+        assertEquals(1_010L, rows.single().playedAt)
+    }
+
+    @Test
+    fun recordHistoryKeepsAlternatingSongsAsThreeRows() = runBlocking {
+        repository.recordHistory(HistoryType.Song, 1L, "uri1", "A")
+        now += 10
+        repository.recordHistory(HistoryType.Video, 2L, "content://video/2", "B")
+        now += 10
+        repository.recordHistory(HistoryType.Song, 1L, "uri1", "A")
+
+        val rows = repository.history.first()
+        assertEquals(3, rows.size)
+        assertEquals(listOf(1L, 2L, 1L), rows.map { it.mediaId })
+        assertEquals(listOf("Song", "Video", "Song"), rows.map { it.type })
+        assertEquals(listOf(1_020L, 1_010L, 1_000L), rows.map { it.playedAt })
+    }
+
+    @Test
+    fun recordHistoryTrimsToTheLimit() = runBlocking {
+        repeat(505) { index ->
+            now = 1_000L + index
+            repository.recordHistory(HistoryType.Song, index.toLong(), "uri$index", "T$index")
+        }
+        val rows = repository.history.first()
+        assertEquals(500, rows.size)
+        assertEquals(504L, rows.first().mediaId)
+        assertEquals(5L, rows.last().mediaId)
+    }
+
+    @Test
+    fun clearHistoryEmptiesTheHistory() = runBlocking {
+        repository.recordHistory(HistoryType.Song, 8L, "uri8", "One")
+        repository.clearHistory()
+        assertTrue(repository.history.first().isEmpty())
     }
 
     @Test

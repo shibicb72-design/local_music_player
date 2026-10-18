@@ -16,8 +16,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         RecentSearchEntity::class,
         AppSettingsEntity::class,
         VideoProgressEntity::class,
+        PlayHistoryEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = false,
 )
 abstract class PlaylistDatabase : RoomDatabase() {
@@ -86,13 +87,42 @@ abstract class PlaylistDatabase : RoomDatabase() {
             }
         }
 
+        /** V16: play history; the old recent_plays rows are copied over as songs. */
+        internal val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `play_history` (" +
+                        "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`type` TEXT NOT NULL, " +
+                        "`mediaId` INTEGER NOT NULL, " +
+                        "`uri` TEXT NOT NULL, " +
+                        "`title` TEXT NOT NULL, " +
+                        "`playedAt` INTEGER NOT NULL)",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_play_history_playedAt` " +
+                        "ON `play_history` (`playedAt`)",
+                )
+                db.execSQL(
+                    "INSERT INTO play_history (type, mediaId, uri, title, playedAt) " +
+                        "SELECT 'Song', trackId, '', '', playedAt FROM recent_plays",
+                )
+            }
+        }
+
         fun get(context: Context): PlaylistDatabase {
             return instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
                     context.applicationContext,
                     PlaylistDatabase::class.java,
                     "playlists.db",
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                ).addMigrations(
+                    MIGRATION_1_2,
+                    MIGRATION_2_3,
+                    MIGRATION_3_4,
+                    MIGRATION_4_5,
+                    MIGRATION_5_6,
+                )
                     .build()
                     .also { instance = it }
             }

@@ -51,6 +51,7 @@ import com.shibi.musicplayer.domain.AudioOutput
 import com.shibi.musicplayer.domain.LikeShufflePicker
 import com.shibi.musicplayer.domain.PlaybackArbiter
 import com.shibi.musicplayer.domain.ShuffleContext
+import com.shibi.musicplayer.domain.HistoryType
 import com.shibi.musicplayer.domain.Track
 import com.shibi.musicplayer.domain.Video
 import com.shibi.musicplayer.domain.shownWith
@@ -121,8 +122,8 @@ fun MusicApp(
     val playbackRoute by rememberPlaybackRoute(selectedOutputId)
     val playingTrackId = playerState.currentMediaId?.toLongOrNull()
     val playingIsFavorite = playingTrackId != null && playingTrackId in favoriteIds
-    val recentIds by playlistViewModel.recentTrackIds.collectAsStateWithLifecycle()
     val recentSearches by playlistViewModel.recentSearches.collectAsStateWithLifecycle()
+    val history by playlistViewModel.history.collectAsStateWithLifecycle()
     val darkTheme by playlistViewModel.darkTheme.collectAsStateWithLifecycle()
     val appBackground by backgroundViewModel.selection.collectAsStateWithLifecycle()
     val backgroundColors by backgroundViewModel.customColors.collectAsStateWithLifecycle()
@@ -130,8 +131,40 @@ fun MusicApp(
     val tracksById = remember(libraryState.tracks) {
         libraryState.tracks.associateBy { it.id }
     }
-    val recentTracks = remember(recentIds, tracksById) {
-        recentIds.mapNotNull { tracksById[it] }
+    // Newest first; songs resolve against the library, videos carry their stored uri (V16).
+    val historyRows = remember(history, tracksById) {
+        history.mapNotNull { entry ->
+            val track = tracksById[entry.mediaId]
+            when (entry.type) {
+                HistoryType.Song.name -> {
+                    val title = track?.title ?: entry.title
+                    if (title.isBlank()) {
+                        null
+                    } else {
+                        HistoryRow(
+                            key = entry.id,
+                            type = HistoryType.Song,
+                            mediaId = entry.mediaId,
+                            title = title,
+                            subtitle = track?.artist.orEmpty(),
+                            artUri = track?.albumArtUri,
+                            videoUri = null,
+                            playedAt = entry.playedAt,
+                        )
+                    }
+                }
+                else -> HistoryRow(
+                    key = entry.id,
+                    type = HistoryType.Video,
+                    mediaId = entry.mediaId,
+                    title = entry.title,
+                    subtitle = "",
+                    artUri = null,
+                    videoUri = entry.uri,
+                    playedAt = entry.playedAt,
+                )
+            }
+        }
     }
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
@@ -185,6 +218,10 @@ fun MusicApp(
             wasPlaying = music.isPlaying
             if (decision.closeVideo) closeVideo()
         }
+    }
+    // Songs and videos go into Recently Played once they have played 5 s (V16).
+    LaunchedEffect(Unit) {
+        playlistViewModel.trackHistory(playerViewModel.uiState, videoViewModel.uiState)
     }
     // The last route seen, so a fold (a new composition) never counts as leaving Videos.
     val previousRoute = remember { mutableStateOf<String?>(null) }
@@ -511,7 +548,7 @@ fun MusicApp(
                     favoriteIds = favoriteIds,
                     libraryTracks = libraryState.tracks,
                     tracksById = tracksById,
-                    recentTracks = recentTracks,
+                    historyRows = historyRows,
                     recentSearches = recentSearches,
                     darkTheme = darkTheme,
                     appBackground = appBackground,
@@ -532,6 +569,7 @@ fun MusicApp(
                     videoState = videoState,
                     videoEngine = videoEngine,
                     onPlayVideo = ::playVideo,
+                    onOpenVideos = { onSection(NavSection.Videos) },
                     videoViewModel = videoViewModel,
                     onCloseVideo = ::closeVideo,
                     onFullscreen = ::openFullscreen,
@@ -569,7 +607,7 @@ fun MusicApp(
                             favoriteIds = favoriteIds,
                             libraryTracks = libraryState.tracks,
                             tracksById = tracksById,
-                            recentTracks = recentTracks,
+                            historyRows = historyRows,
                             recentSearches = recentSearches,
                             darkTheme = darkTheme,
                             appBackground = appBackground,
@@ -587,6 +625,7 @@ fun MusicApp(
                             videoState = videoState,
                             videoEngine = videoEngine,
                             onPlayVideo = ::playVideo,
+                            onOpenVideos = { onSection(NavSection.Videos) },
                             videoViewModel = videoViewModel,
                             onCloseVideo = ::closeVideo,
                             onFullscreen = ::openFullscreen,
@@ -719,7 +758,7 @@ private fun AppNavHost(
     favoriteIds: Set<Long>,
     libraryTracks: List<Track>,
     tracksById: Map<Long, Track>,
-    recentTracks: List<Track>,
+    historyRows: List<HistoryRow>,
     recentSearches: List<String>,
     darkTheme: Boolean,
     appBackground: AppBackground,
@@ -737,6 +776,7 @@ private fun AppNavHost(
     videoState: VideoUiState,
     videoEngine: VideoEngine?,
     onPlayVideo: (Video) -> Unit,
+    onOpenVideos: () -> Unit,
     videoViewModel: VideoViewModel,
     onCloseVideo: () -> Unit,
     onFullscreen: () -> Unit,
@@ -826,15 +866,34 @@ private fun AppNavHost(
             )
         }
         composable(RecentRoute) {
-            RecentScreen(
-                tracks = recentTracks,
-                favoriteIds = favoriteIds,
-                nowPlaying = playerState,
-                onTrackSelected = { tracks, startId ->
-                    onPlayQueue(tracks, startId, ShuffleContext.ALL_SONGS)
+            RecentHistoryScreen(
+                rows = historyRows,
+                onPlay = { row ->
+                    when (row.type) {
+                        HistoryType.Song -> tracksById[row.mediaId]?.let {
+                            onPlayQueue(libraryTracks, it.id, ShuffleContext.ALL_SONGS)
+                        }
+                        HistoryType.Video -> {
+                            onPlayVideo(
+                                Video(
+                                    id = row.mediaId,
+                                    title = row.title,
+                                    displayName = row.title,
+                                    durationMs = null,
+                                    sizeBytes = null,
+                                    width = null,
+                                    height = null,
+                                    mimeType = null,
+                                    dateAddedSeconds = 0L,
+                                    folder = null,
+                                    contentUri = row.videoUri.orEmpty(),
+                                ),
+                            )
+                            onOpenVideos()
+                        }
+                    }
                 },
-                onToggleFavorite = { playlistViewModel.toggleFavorite(it.id) },
-                onAddToPlaylist = onAddToPlaylist,
+                onClearHistory = playlistViewModel::clearHistory,
                 contentBottomPadding = contentBottomPadding,
                 modifier = Modifier.fillMaxSize(),
             )

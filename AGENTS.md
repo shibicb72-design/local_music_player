@@ -173,3 +173,10 @@ After every task, append an entry below: `- [task] what went wrong -> new rule`.
 - Fullscreen grows out of the box: the box reports its window bounds (LocalVideoBounds), and a layout modifier lerps from those bounds to the full window with one spring (dampingRatio 1, stiffness 380, about 300 ms). Read progress and bounds only in layout or graphicsLayer lambdas, never in composition. Reduce motion snaps every animation.
 - The same box bounds feed the PiP sourceRectHint (null while fullscreen), with seamless resize on, so PiP opens from the box.
 - The right pane follows the tab in both layouts: leaving Videos pauses the video (pause also saves the resume position) and the pane crossfades back to Now Playing. Tests that encoded "browsing keeps the video playing" were changed on purpose.
+
+## Lesson (V16): Recently Played records from playback, not from the list that started it
+- Recently Played was empty because only playQueue (a tap in a song list) wrote recent_plays. Next, auto-advance, the notification and every video were never recorded. Now PlaylistViewModel.trackHistory watches the song and video states and records an item once it has played 5 s or reached its end (PlayHistoryTracker), into Room table play_history (v6; MIGRATION_5_6 copies old recent_plays as songs).
+- A consecutive replay of the same item updates the time instead of adding a row; history is trimmed to 500.
+- Day labels (Today, Yesterday, weekday, "Oct 3", plus the year when it differs) are computed from calendar days in the device zone, not 24-hour windows; unit tests pin the zone and cover midnight.
+- Once recording works, UI tests that expect an empty Recent screen after something played are wrong. Mark the screen by its title instead.
+- When a free model starts adding println debugging to production code instead of reading the failing assertion, stop it and diagnose by hand.

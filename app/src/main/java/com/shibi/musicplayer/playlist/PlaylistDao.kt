@@ -114,4 +114,25 @@ interface PlaylistDao {
             "(SELECT `query` FROM recent_searches ORDER BY searchedAt DESC LIMIT :keep)",
     )
     suspend fun trimRecentSearches(keep: Int)
+
+    @Query("SELECT * FROM play_history ORDER BY playedAt DESC, id DESC LIMIT 500")
+    fun observeHistory(): Flow<List<PlayHistoryEntity>>
+
+    @Query("SELECT * FROM play_history ORDER BY playedAt DESC, id DESC LIMIT 1")
+    suspend fun latestHistory(): PlayHistoryEntity?
+
+    @Insert
+    suspend fun insertHistory(e: PlayHistoryEntity)
+
+    @Query("UPDATE play_history SET playedAt = :playedAt WHERE id = :id")
+    suspend fun touchHistory(id: Long, playedAt: Long)
+
+    @Query(
+        "DELETE FROM play_history WHERE id NOT IN " +
+            "(SELECT id FROM play_history ORDER BY playedAt DESC, id DESC LIMIT :keep)",
+    )
+    suspend fun trimHistory(keep: Int)
+
+    @Query("DELETE FROM play_history")
+    suspend fun clearHistory()
 }

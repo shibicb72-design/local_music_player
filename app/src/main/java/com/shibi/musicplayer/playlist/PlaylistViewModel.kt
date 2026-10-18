@@ -3,6 +3,10 @@ package com.shibi.musicplayer.playlist
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.shibi.musicplayer.domain.HistoryType
+import com.shibi.musicplayer.domain.PlayHistoryTracker
+import com.shibi.musicplayer.playback.PlayerUiState
+import com.shibi.musicplayer.video.VideoUiState
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -34,6 +38,50 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
 
     val darkTheme: StateFlow<Boolean> = repository.darkTheme
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
+
+    val history: StateFlow<List<PlayHistoryEntity>> = repository.history
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    private var trackingHistory = false
+
+    /**
+     * Records songs and videos into Recently Played once each item has played 5 s,
+     * or reached its end if shorter.
+     *
+     * Root cause this fixes: Recently Played was written only by MusicApp.playQueue when a queue
+     * was started from a list; songs reached by next, auto-advance or the notification, and every
+     * video, were never recorded.
+     */
+    fun trackHistory(player: StateFlow<PlayerUiState>, video: StateFlow<VideoUiState>) {
+        if (trackingHistory) return
+        trackingHistory = true
+        viewModelScope.launch {
+            val tracker = PlayHistoryTracker()
+            player.collect { state ->
+                val id = state.currentMediaId?.toLongOrNull()
+                val key = id?.let { "song:" + it }
+                if (tracker.feed(key, state.positionMs, state.durationMs) != null && id != null) {
+                    repository.recordHistory(HistoryType.Song, id, "", state.title)
+                }
+            }
+        }
+        viewModelScope.launch {
+            val tracker = PlayHistoryTracker()
+            video.collect { state ->
+                val v = state.video
+                val key = v?.let { "video:" + it.id }
+                if (tracker.feed(key, state.positionMs, state.durationMs) != null && v != null) {
+                    repository.recordHistory(HistoryType.Video, v.id, v.contentUri, v.title)
+                }
+            }
+        }
+    }
+
+    fun clearHistory() {
+        viewModelScope.launch {
+            repository.clearHistory()
+        }
+    }
 
     fun playlist(id: Long): Flow<PlaylistDetail?> = repository.playlist(id)
 

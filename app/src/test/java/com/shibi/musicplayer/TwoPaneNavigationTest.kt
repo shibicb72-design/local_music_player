@@ -414,7 +414,7 @@ class TwoPaneNavigationTest {
             "Playlists" to "No playlists yet",
             "Devices" to "Choose where your music plays",
             "Favorites" to "No favorites yet",
-            "Recent" to "Songs you play show up here.",
+            "Recent" to "Recently played",
             "Search" to "Search songs by title or artist.",
             "Settings" to "Dark theme",
             "Videos" to "Video access needed",
