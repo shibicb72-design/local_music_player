@@ -3,10 +3,14 @@ package com.shibi.musicplayer.playlist
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.shibi.musicplayer.diagnostics.ErrorLog
 import com.shibi.musicplayer.domain.HistoryType
 import com.shibi.musicplayer.domain.PlayHistoryTracker
+import com.shibi.musicplayer.domain.Video
 import com.shibi.musicplayer.playback.PlayerUiState
+import com.shibi.musicplayer.video.VideoProgressRepository
 import com.shibi.musicplayer.video.VideoUiState
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -75,6 +79,40 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
                 }
             }
         }
+    }
+
+    private val trashCleanup by lazy {
+        TrashCleanup(
+            PlaylistDatabase.get(getApplication()).playlistDao(),
+            VideoProgressRepository.get(getApplication()),
+        )
+    }
+
+    /** Drops stored songs the library no longer has (deleted outside the app). Never throws. */
+    fun pruneMissingSongs(ids: Set<Long>, loaded: Boolean) {
+        if (!loaded) return
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching { trashCleanup.pruneMissingSongs(ids, loaded) }
+                .onFailure { logPruneFailure("Prune missing songs", it) }
+        }
+    }
+
+    /** Drops stored video history and positions for videos the library no longer has. Never throws. */
+    fun pruneMissingVideos(videos: List<Video>, loaded: Boolean) {
+        if (!loaded) return
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                trashCleanup.pruneMissingVideos(
+                    videos.mapTo(mutableSetOf()) { it.id },
+                    videos.mapTo(mutableSetOf()) { it.contentUri },
+                    loaded,
+                )
+            }.onFailure { logPruneFailure("Prune missing videos", it) }
+        }
+    }
+
+    private fun logPruneFailure(step: String, error: Throwable) {
+        ErrorLog.get(getApplication()).log(step = step, error = error, shown = null, media = null)
     }
 
     fun clearHistory() {

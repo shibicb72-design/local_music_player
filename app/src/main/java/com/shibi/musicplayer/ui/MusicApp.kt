@@ -131,6 +131,10 @@ fun MusicApp(
     val tracksById = remember(libraryState.tracks) {
         libraryState.tracks.associateBy { it.id }
     }
+    // Songs deleted outside the app leave playlists and history once the library has loaded.
+    LaunchedEffect(libraryState.tracks, libraryState.loaded) {
+        playlistViewModel.pruneMissingSongs(libraryState.tracks.mapTo(mutableSetOf()) { it.id }, libraryState.loaded)
+    }
     // Newest first; songs resolve against the library, videos carry their stored uri (V16).
     val historyRows = remember(history, tracksById) {
         history.mapNotNull { entry ->
@@ -980,6 +984,7 @@ private fun AppNavHost(
                 holdControls = holdControls,
                 showInlinePlayer = !wide,
                 modifier = Modifier.fillMaxSize(),
+                onLibraryLoaded = { playlistViewModel.pruneMissingVideos(it, true) },
             )
         }
         composable(VideoFullscreenRoute) {

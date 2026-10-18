@@ -120,9 +120,16 @@ fun VideosScreen(
     // False in two-pane: the video plays in the right pane and the list only marks its row.
     showInlinePlayer: Boolean = true,
     viewModel: VideoLibraryViewModel = viewModel(),
+    // Called with the loaded list so stale history and saved positions can be pruned.
+    onLibraryLoaded: (List<Video>) -> Unit = {},
 ) {
     val context = LocalContext.current
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    LaunchedEffect(state.videos) {
+        if (!state.hasError && !state.isLoading && state.access != VideoAccess.Denied) {
+            onLibraryLoaded(state.videos)
+        }
+    }
     var checked by remember { mutableStateOf(false) }
     var asked by rememberSaveable { mutableStateOf(false) }
     val requestAccess = rememberVideoAccessRequest(onResult = viewModel::refresh)

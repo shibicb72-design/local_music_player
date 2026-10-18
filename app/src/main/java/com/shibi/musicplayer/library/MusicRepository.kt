@@ -2,19 +2,36 @@ package com.shibi.musicplayer.library
 
 import android.content.ContentUris
 import android.content.Context
+import android.database.ContentObserver
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
 import com.shibi.musicplayer.R
 import com.shibi.musicplayer.domain.Track
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.conflate
 
 class MusicRepository(private val context: Context) {
-    fun loadTracks(): List<Track> {
-        val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
-        } else {
-            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+    private val collection: Uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
+    } else {
+        MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+    }
+
+    /** Emits whenever the audio collection changes (a delete, a download). Bursts are conflated. */
+    fun changes(): Flow<Unit> = callbackFlow {
+        val observer = object : ContentObserver(null) {
+            override fun onChange(selfChange: Boolean) {
+                trySend(Unit)
+            }
         }
+        context.contentResolver.registerContentObserver(collection, true, observer)
+        awaitClose { context.contentResolver.unregisterContentObserver(observer) }
+    }.conflate()
+
+    fun loadTracks(): List<Track> {
         val projection = arrayOf(
             MediaStore.Audio.Media._ID,
             MediaStore.Audio.Media.TITLE,
