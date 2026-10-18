@@ -3,6 +3,8 @@ package com.shibi.musicplayer.video
 import android.content.Context
 import android.graphics.Color
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import android.os.ParcelFileDescriptor
 import android.view.View
 import com.shibi.musicplayer.domain.AspectMode
@@ -16,6 +18,7 @@ import org.videolan.libvlc.LibVLC
 import org.videolan.libvlc.Media
 import org.videolan.libvlc.MediaPlayer
 import org.videolan.libvlc.interfaces.IMedia
+import org.videolan.libvlc.interfaces.IVLCVout
 import org.videolan.libvlc.util.VLCVideoLayout
 
 /**
@@ -28,6 +31,10 @@ import org.videolan.libvlc.util.VLCVideoLayout
  * Files loaded from the tracks sheet arrive already as `file://` or `fd://` locations.
  *
  * Events arrive on the main thread (the player is created there).
+ *
+ * Switching views (inline box, two-pane, fullscreen, picture-in-picture) turns the video track off
+ * first and back on once libVLC reports the new surface, as decided by [SurfaceHandoff], because
+ * the hardware decoder renders into the old view's surface and fails when that surface goes away.
  */
 internal class VlcVideoEngine(context: Context) : VideoEngine {
 
@@ -72,8 +79,37 @@ internal class VlcVideoEngine(context: Context) : VideoEngine {
     /** The video track to bring back, as libVLC numbered it before it was disabled. */
     private var savedVideoTrack: Int? = null
 
-    /** The lock is over; the next attached view gets the video track back. */
-    private var restoreTrackOnAttach = false
+    /** The track was switched off for a surface change or a lock and comes back once the attached view's surface is ready. */
+    private var trackPending = false
+
+    /** This load already reopened once after an EncounteredError. */
+    private var retriedAfterError = false
+
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val fallbackRestore = Runnable { restorePendingTrack() }
+
+    /** libVLC reports when a view's surface is created or destroyed; a destroyed surface under a running decoder is the failure guarded against. */
+    private val voutCallback = object : IVLCVout.Callback {
+        override fun onSurfacesCreated(vlcVout: IVLCVout) {
+            if (SurfaceHandoff.restoreOnSurfaceReady(trackPending, pictureOff, attached != null)) {
+                restorePendingTrack()
+            }
+        }
+
+        override fun onSurfacesDestroyed(vlcVout: IVLCVout) {
+            // The surface went away under a running decoder: turn the track off now so it comes
+            // back on the next ready surface, instead of letting the decoder fail.
+            if (!pictureOff) {
+                val mediaPlayer = player ?: return
+                val track = mediaPlayer.videoTrack
+                if (track != SurfaceHandoff.NoTrack) {
+                    savedVideoTrack = SurfaceHandoff.trackToSave(track, savedVideoTrack)
+                    mediaPlayer.setVideoTrack(SurfaceHandoff.NoTrack)
+                    trackPending = true
+                }
+            }
+        }
+    }
 
     private val listener = MediaPlayer.EventListener { event ->
         when (event.type) {
@@ -98,13 +134,40 @@ internal class VlcVideoEngine(context: Context) : VideoEngine {
                 restoreTracks()
             }
             MediaPlayer.Event.EncounteredError -> {
-                refreshTracks()
-                dispatch(
-                    VideoEngineEvent.Failed(
-                        VideoError.Playback,
-                        VideoPlaybackException("libVLC reported EncounteredError while playing"),
-                    ),
-                )
+                val mediaPlayer = player
+                val uri = currentUri
+                if (
+                    mediaPlayer != null &&
+                    uri != null &&
+                    SurfaceHandoff.reopenAfterError(_state.value.positionMs, retriedAfterError, released)
+                ) {
+                    // Usually a decoder that lost its surface: open the same video again where it was, once.
+                    retriedAfterError = true
+                    val wasPlaying = _state.value.status == VideoStatus.Playing ||
+                        _state.value.status == VideoStatus.Buffering
+                    if (restore == null) {
+                        restore = Restore(
+                            positionMs = _state.value.positionMs,
+                            play = wasPlaying,
+                            audioId = TrackMapping.DisabledId,
+                            subtitleId = mediaPlayer.spuTrack,
+                            audioDelayUs = mediaPlayer.audioDelay,
+                            subtitleDelayUs = mediaPlayer.spuDelay,
+                        )
+                    }
+                    trackPending = false
+                    savedVideoTrack = null
+                    mainHandler.removeCallbacks(fallbackRestore)
+                    reopen(mediaPlayer, uri)
+                } else {
+                    refreshTracks()
+                    dispatch(
+                        VideoEngineEvent.Failed(
+                            VideoError.Playback,
+                            VideoPlaybackException("libVLC reported EncounteredError while playing"),
+                        ),
+                    )
+                }
             }
             else -> {
                 val mapped = when (event.type) {
@@ -128,6 +191,9 @@ internal class VlcVideoEngine(context: Context) : VideoEngine {
         currentUri = uri
         // Another file has its own track ids.
         savedVideoTrack = null
+        trackPending = false
+        retriedAfterError = false
+        mainHandler.removeCallbacks(fallbackRestore)
         dispatch(VideoEngineEvent.Opening)
         if (startMs > 0L) dispatch(VideoEngineEvent.Time(startMs))
         _tracks.value = TrackSnapshot()
@@ -229,7 +295,8 @@ internal class VlcVideoEngine(context: Context) : VideoEngine {
         pictureOff = false
         latest = null
         savedVideoTrack = null
-        restoreTrackOnAttach = false
+        trackPending = false
+        mainHandler.removeCallbacks(fallbackRestore)
         restore = null
         releasePlayer()
         closeDescriptor()
@@ -250,12 +317,25 @@ internal class VlcVideoEngine(context: Context) : VideoEngine {
         if (pictureOff) return
         if (attached === layout) return
         val mediaPlayer = ensurePlayer() ?: return
+        val currentTrack = mediaPlayer.videoTrack
+        if (
+            SurfaceHandoff.disableBeforeSwitch(
+                hadView = attached != null,
+                mediaLoaded = currentUri != null,
+                currentTrack = currentTrack,
+                pictureOff = pictureOff,
+            )
+        ) {
+            savedVideoTrack = SurfaceHandoff.trackToSave(currentTrack, savedVideoTrack)
+            if (currentTrack != SurfaceHandoff.NoTrack) mediaPlayer.setVideoTrack(SurfaceHandoff.NoTrack)
+            trackPending = true
+        }
         if (attached != null) mediaPlayer.detachViews()
         // Texture view in every layout (box, pane, fullscreen): it clips and z-orders with
         // Compose (a SurfaceView would not), and a layout switch is one re-attach path.
         mediaPlayer.attachViews(layout, null, true, true)
         attached = layout
-        restoreVideoTrack(mediaPlayer)
+        if (trackPending) scheduleFallbackRestore()
         // The scale belongs to the attached layout's helper, so every new view gets it again.
         mediaPlayer.applyScale()
         if (playWhenAttached) {
@@ -276,6 +356,7 @@ internal class VlcVideoEngine(context: Context) : VideoEngine {
         val mediaPlayer = player
         if (!enabled) {
             pictureOff = true
+            mainHandler.removeCallbacks(fallbackRestore)
             if (mediaPlayer != null) {
                 val track = mediaPlayer.videoTrack
                 if (track != TrackMapping.DisabledId) savedVideoTrack = track
@@ -291,20 +372,32 @@ internal class VlcVideoEngine(context: Context) : VideoEngine {
             return
         }
         pictureOff = false
-        // The vout needs a surface first: the track comes back once a view is attached,
-        // now if the UI still has one, or on the next attach if its layout is being rebuilt.
-        restoreTrackOnAttach = true
+        // The vout needs a surface first: the track comes back once the attached view's surface
+        // is ready, now if the UI still has one, or on the next attach if its layout is rebuilt.
+        trackPending = true
         latest?.let(::attach)
     }
 
-    /** Re-enables the video track a lock disabled; only with a view attached. */
-    private fun restoreVideoTrack(mediaPlayer: MediaPlayer) {
-        if (!restoreTrackOnAttach) return
-        restoreTrackOnAttach = false
+    /** Turns the saved video track back on; only with a view attached and the picture on. */
+    private fun restorePendingTrack() {
+        mainHandler.removeCallbacks(fallbackRestore)
+        if (!trackPending || pictureOff || attached == null) return
+        trackPending = false
+        val mediaPlayer = player ?: return
         val track = savedVideoTrack
-            ?: mediaPlayer.videoTracks.orEmpty().firstOrNull { it.id != TrackMapping.DisabledId }?.id
+            ?: mediaPlayer.videoTracks.orEmpty().firstOrNull { it.id != SurfaceHandoff.NoTrack }?.id
         savedVideoTrack = null
-        if (track != null) mediaPlayer.setVideoTrack(track)
+        if (track != null) {
+            mediaPlayer.setVideoTrack(track)
+            // Paused: a seek to the same place makes the new surface show the current frame.
+            if (!mediaPlayer.isPlaying) mediaPlayer.setTime(mediaPlayer.time)
+        }
+    }
+
+    /** libVLC normally reports the new surface; if it never does, the track still comes back. */
+    private fun scheduleFallbackRestore() {
+        mainHandler.removeCallbacks(fallbackRestore)
+        mainHandler.postDelayed(fallbackRestore, SurfaceHandoff.RestoreFallbackMs)
     }
 
     /** Null only if libVLC itself cannot start; the state then says why. */
@@ -318,6 +411,7 @@ internal class VlcVideoEngine(context: Context) : VideoEngine {
         }
         return MediaPlayer(vlc).also { created ->
             created.setEventListener(listener)
+            created.vlcVout.addCallback(voutCallback)
             player = created
         }
     }
@@ -482,6 +576,7 @@ internal class VlcVideoEngine(context: Context) : VideoEngine {
 
     private fun releasePlayer() {
         player?.let { mediaPlayer ->
+            mediaPlayer.vlcVout.removeCallback(voutCallback)
             mediaPlayer.setEventListener(null)
             if (attached != null) mediaPlayer.detachViews()
             mediaPlayer.stop()
@@ -492,6 +587,7 @@ internal class VlcVideoEngine(context: Context) : VideoEngine {
         libVlc?.release()
         libVlc = null
         libVlcTextSize = null
+        mainHandler.removeCallbacks(fallbackRestore)
     }
 
     private fun MediaPlayer.applyScale() {
