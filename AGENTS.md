@@ -139,3 +139,10 @@ After every task, append an entry below: `- [task] what went wrong -> new rule`.
 - The mini player and carousel live in `SectionScaffold`'s `ChromeSlot` (opaque `pageFill`), under a `ListViewport` that fades its last 32dp (`ListEdgeFade`) into that fill. Do not overlay chrome on the list. Keep `MiniPlayerCarouselGap` at 8dp so the unchanged mini player sits snug above the compact ring. Hide the bar on the full Now Playing route. In two-pane with a loaded track, the same chrome slot is window-wide under the split. Without a mini player, keep the carousel in the list column's chrome slot.
 - `OutputRoute.classify` is pure. Car is `TYPE_BUS`, car mode, or Bluetooth major `AUDIO_VIDEO` with hands-free / car-audio. A denied `BLUETOOTH_CONNECT` (API 31+) or a `SecurityException` from `bondedDevices` is `RouteIcon.UNKNOWN`, drawn as the generic Bluetooth glyph. `AudioDeviceCallback` is the top-level `android.media.AudioDeviceCallback`.
 - `likedAt` and `playCount` live on the existing `favorites` row. Add them with `ALTER TABLE` (`MIGRATION_3_4`); do not drop the table. Unliking clears `likedAt` and keeps `playCount`. Do not build the like-weighted shuffle.
+
+## Lesson (fix-debug-signing): CI debug APKs must share one signing key
+- Without a signingConfig, AGP signs debug builds with ~/.android/debug.keystore. Every GitHub Actions runner is fresh, so each run made a new key: two CI APKs had different cert SHA-256s, and Android refused the update with "App not installed" (after Play Protect passed). versionCode was also fixed at 1.
+- app/debug.keystore is committed on purpose. It is a DEBUG-ONLY, NON-SECRET key (standard debug credentials: android / androiddebugkey). It is not for release or the Play Store; never point a release signingConfig at it.
+- versionCode = GITHUB_RUN_NUMBER in CI (1 locally), so each newer CI APK is an upgrade.
+- After this change, uninstall the app once on every phone (old installs carry a different key); after that, CI APKs update in place.
+- Check with: apksigner verify --print-certs <apk> on two runs; the SHA-256 must match.
