@@ -244,6 +244,8 @@
     <string name="error_log_copy_all">Copy all</string>
     <string name="error_log_copied">Copied</string>
     <string name="error_log_clip_label">%s error log</string>
+    <string name="crash_last_time_uncaught">App crashed last time (uncaught error on %1$s)</string>
+    <string name="crash_last_time_exit">App crashed last time (%1$s)</string>
     <plurals name="song_count">
         <item quantity="one">%d song</item>
         <item quantity="other">%d songs</item>

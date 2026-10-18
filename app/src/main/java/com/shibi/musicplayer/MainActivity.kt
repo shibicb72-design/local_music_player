@@ -21,6 +21,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.shibi.musicplayer.diagnostics.CrashSafetyNet
 import com.shibi.musicplayer.diagnostics.ErrorLog
 import com.shibi.musicplayer.domain.BackgroundPolicy
 import com.shibi.musicplayer.domain.ExternalVideo
@@ -75,7 +76,12 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        CrashSafetyNet.install(this)
         super.onCreate(savedInstanceState)
+        Thread(
+            { runCatching { CrashSafetyNet.recordExitReasons(applicationContext) } },
+            "exit-reasons",
+        ).start()
         enableEdgeToEdge()
         setContent {
             val playlistViewModel: PlaylistViewModel = viewModel()

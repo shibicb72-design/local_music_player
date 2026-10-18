@@ -28,8 +28,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 
 /**
  * Where every error goes. Screens show a short message only; the details are written here
@@ -59,7 +57,9 @@ class ErrorLog internal constructor(
 ) : ErrorLogger {
 
     private val scope = CoroutineScope(SupervisorJob() + io)
-    private val writeLock = Mutex()
+
+    /** Guards every file read and write: the crash path writes from a dying thread. */
+    private val fileLock = Any()
     private val loaded = CompletableDeferred<Unit>()
     private val _entries = MutableStateFlow<List<ErrorLogEntry>>(emptyList())
 
@@ -69,32 +69,66 @@ class ErrorLog internal constructor(
     init {
         scope.launch {
             val stored = runCatching { read() }.getOrDefault(emptyList())
-            // Anything logged while the file was being read is newer than what it held.
-            _entries.update { newer -> ErrorLogEntries.merge(newer, stored) }
-            loaded.complete(Unit)
+            synchronized(fileLock) {
+                if (!loaded.isCompleted) {
+                    // Anything logged while the file was being read is newer than what it held.
+                    _entries.update { newer -> ErrorLogEntries.merge(newer, stored) }
+                    loaded.complete(Unit)
+                }
+            }
         }
     }
 
     override fun log(step: String, error: Throwable?, shown: String?, media: MediaFacts?) {
-        val entry = runCatching {
-            val (device, app) = facts()
-            val report = ErrorReport(
-                timeMillis = clock(),
-                step = step,
-                shown = shown,
-                causes = ErrorReport.causesOf(error),
-                media = media,
-                device = device,
-                app = app,
-            )
-            ErrorLogEntry.of(report, zone())
-        }.getOrNull() ?: return
+        val entry = buildEntry(step, error, shown, media) ?: return
         _entries.update { current -> ErrorLogEntries.prepend(current, entry) }
         scope.launch {
             loaded.await()
-            writeLock.withLock { runCatching { write(_entries.value) } }
+            synchronized(fileLock) { runCatching { write(_entries.value) } }
         }
     }
+
+    /**
+     * The crash path: builds the entry like [log] but keeps [maxFrames] stack frames and writes
+     * the file on the calling thread before the process can die. Never throws. If the stored file
+     * has not been read yet it is read here first, so nothing already stored is lost.
+     */
+    fun logNow(step: String, error: Throwable?, shown: String?, maxFrames: Int = 40) {
+        runCatching {
+            val entry = buildEntry(step, error, shown, media = null, maxFrames = maxFrames) ?: return
+            synchronized(fileLock) {
+                if (!loaded.isCompleted) {
+                    val stored = runCatching { read() }.getOrDefault(emptyList())
+                    _entries.update { current -> ErrorLogEntries.merge(current, stored) }
+                    loaded.complete(Unit)
+                }
+                _entries.update { current -> ErrorLogEntries.prepend(current, entry) }
+                runCatching { write(_entries.value) }
+            }
+        }
+    }
+
+    private fun buildEntry(
+        step: String,
+        error: Throwable?,
+        shown: String?,
+        media: MediaFacts?,
+        maxFrames: Int = ErrorReport.MaxFrames,
+    ): ErrorLogEntry? = runCatching {
+        val (device, app) = facts()
+        ErrorLogEntry.of(
+            ErrorReport(
+                timeMillis = clock(),
+                step = step,
+                shown = shown,
+                causes = ErrorReport.causesOf(error, maxFrames = maxFrames),
+                media = media,
+                device = device,
+                app = app,
+            ),
+            zone(),
+        )
+    }.getOrNull()
 
     private fun read(): List<ErrorLogEntry> {
         if (!file.exists()) return emptyList()
