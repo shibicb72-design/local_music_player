@@ -173,3 +173,11 @@ After every task, append an entry below: `- [task] what went wrong -> new rule`.
 - The fix is VoutAttach.attachRawSurfaces: it sets both surfaces, catches exactly that IllegalArgumentException when the vout is already attached, and rethrows anything else. VoutAttachTest drives the real AWindow to pin the behaviour.
 - Robolectric cannot run libVLC playback, so any change to how surfaces reach libVLC still needs a device check; a crash safety net now records uncaught errors in the error log.
 - [V18 c03 first-frame timing] VideoViewModel only sees engine StateFlow, so an event that leaves state unchanged never arrives -> give such signals their own flow on VideoEngine (firstFrames) instead of routing through the reducer.
+
+## Lesson (V18): the first video of a process waited ~9 s for libVLC's fontconfig
+- Evidence: libVLC logged "Fontconfig error: Cannot load default config file", then a 9.2 s silent gap before the video output opened; a second video in the same process started in 45 ms; /system/fonts holds 275 files (134 MB).
+- Cause: the fontconfig compiled into libvlc.so has the build machine's config path, so on the phone it has no config and no cachedir and rescans every font in each new process, never saving the result.
+- Fix: FONTCONFIG_FILE and FONTCONFIG_PATH are set before libVLC starts, pointing at a generated fonts.conf (/system/fonts etc. plus a persistent cachedir) in noBackupFilesDir; on the first run after install a background warm-up plays a 2 KB clip with a subtitle so the cache exists before the first tap.
+- Measured by the "first frame N ms" part of the Playback check line.
+- [V18 c04b] FontWarmup and FontConfigSetup.prepare ran native libVLC / Os.setenv inside Robolectric activity tests, killing the Gradle test executor (and the setenv path failed the config test) -> guard native/process-env startup code with a Build.FINGERPRINT == "robolectric" check and give tests an overload without setenv.
+- [V18 Claude Code headless] In `claude -p` the PowerShell tool denies a nested `powershell -File` ("cannot be validated") even with an allow rule, and background subagents cannot ask (reasonType asyncAgent); in c03 the implementer then reported "BUILD OK" without ever running Gradle -> run gradle-brief with the Bash tool (agent files say so), and the planner verifies every build itself before committing.

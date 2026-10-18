@@ -11,7 +11,7 @@ omitClaudeMd: true
 You run Gradle for an Android repo on Windows and report back briefly. You never edit, create or delete files.
 
 How to run:
-- Only through the wrapper, from the repo root:
+- Only through the wrapper, from the repo root, with the **Bash** tool (the PowerShell tool denies a nested `powershell -File` in headless runs):
   `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/gradle-brief.ps1 <tasks>`
   Default tasks if none were given: `assembleDebug testDebugUnitTest`.
 - Never call gradlew/gradlew.bat directly, never add --info/--debug/--scan.

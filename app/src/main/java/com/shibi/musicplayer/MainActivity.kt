@@ -30,6 +30,8 @@ import com.shibi.musicplayer.domain.Video
 import com.shibi.musicplayer.playlist.PlaylistViewModel
 import com.shibi.musicplayer.ui.MusicApp
 import com.shibi.musicplayer.ui.theme.MusicPlayerTheme
+import com.shibi.musicplayer.video.FontConfigSetup
+import com.shibi.musicplayer.video.FontWarmup
 import com.shibi.musicplayer.video.PipParamsFactory
 import com.shibi.musicplayer.video.VideoViewModel
 import kotlinx.coroutines.Dispatchers
@@ -82,6 +84,8 @@ class MainActivity : ComponentActivity() {
             { runCatching { CrashSafetyNet.recordExitReasons(applicationContext) } },
             "exit-reasons",
         ).start()
+        FontConfigSetup.prepare(applicationContext)
+        FontWarmup.startIfNeeded(applicationContext)
         enableEdgeToEdge()
         setContent {
             val playlistViewModel: PlaylistViewModel = viewModel()

@@ -528,6 +528,7 @@ internal class VlcVideoEngine(context: Context) : VideoEngine {
     }
 
     private fun createLibVlc(): LibVLC {
+        FontConfigSetup.prepare(appContext)
         val textSize = options.subtitleTextSize
         val created = try {
             LibVLC(appContext, libVlcOptions(textSize))
