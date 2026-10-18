@@ -1,8 +1,9 @@
 package com.shibi.musicplayer.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -34,10 +36,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.VideoLibrary
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -79,6 +83,7 @@ import coil3.compose.SubcomposeAsyncImageContent
 import com.shibi.musicplayer.R
 import com.shibi.musicplayer.domain.ArtTile
 import com.shibi.musicplayer.domain.ResumePolicy
+import com.shibi.musicplayer.domain.Selection
 import com.shibi.musicplayer.domain.Video
 import com.shibi.musicplayer.domain.VideoAccess
 import com.shibi.musicplayer.domain.VideoFormat
@@ -122,11 +127,13 @@ fun VideosScreen(
     viewModel: VideoLibraryViewModel = viewModel(),
     // Called with the loaded list so stale history and saved positions can be pruned.
     onLibraryLoaded: (List<Video>) -> Unit = {},
+    onTrashVideos: (List<Video>, Boolean) -> Unit = { _, _ -> },
 ) {
     val context = LocalContext.current
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    LaunchedEffect(state.videos) {
-        if (!state.hasError && !state.isLoading && state.access != VideoAccess.Denied) {
+    LaunchedEffect(state.videos, state.access) {
+        // Partial access lists only the picked videos: pruning then would drop the rest.
+        if (!state.hasError && !state.isLoading && state.access == VideoAccess.Full) {
             onLibraryLoaded(state.videos)
         }
     }
@@ -158,6 +165,7 @@ fun VideosScreen(
         modifier = modifier,
         playingVideoId = video.video?.id,
         savedProgress = savedProgress,
+        onTrashVideos = onTrashVideos,
         player = if (video.isActive && showInlinePlayer) {
             { maxHeight ->
                 InlineVideoPlayer(
@@ -193,22 +201,63 @@ internal fun VideosContent(
     savedProgress: Map<String, VideoProgress> = emptyMap(),
     listState: LazyListState = rememberLazyListState(),
     player: (@Composable (maxHeight: Dp) -> Unit)? = null,
+    onTrashVideos: (List<Video>, Boolean) -> Unit = { _, _ -> },
+    initialSelection: Selection = Selection(),
 ) {
+    var selection by remember { mutableStateOf(initialSelection) }
+    val allIds = remember(state.videos) { state.videos.map { it.id } }
+    LaunchedEffect(allIds) { selection = selection.retain(allIds.toSet()) }
+    BackHandler(enabled = selection.active) { selection = selection.clear() }
+    val selectionBar: (@Composable () -> Unit)? = if (selection.active) {
+        {
+            SelectionTopBar(
+                count = selection.count,
+                onSelectAll = { selection = selection.selectAll(allIds) },
+                onCancel = { selection = selection.clear() },
+                modifier = Modifier.padding(start = 8.dp, end = 8.dp, top = 12.dp, bottom = 8.dp),
+                actions = {
+                    IconButton(
+                        onClick = {
+                            val picked = state.videos.filter { it.id in selection.ids }
+                            val whole = selection.isWholeList(allIds)
+                            selection = selection.clear()
+                            onTrashVideos(picked, whole)
+                        },
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Delete,
+                            contentDescription = stringResource(R.string.move_to_trash),
+                            tint = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                },
+            )
+        }
+    } else {
+        null
+    }
     if (player != null) {
         PlayingFrame(
             player = player,
             modifier = modifier,
         ) {
-            VideoList(
-                state = state,
-                onVideoClick = onVideoClick,
-                contentBottomPadding = contentBottomPadding,
-                playingVideoId = playingVideoId,
-                savedProgress = savedProgress,
-                listState = listState,
-                topPadding = 8.dp,
-                modifier = Modifier.fillMaxSize(),
-            )
+            Column(modifier = Modifier.fillMaxSize()) {
+                selectionBar?.invoke()
+                VideoList(
+                    state = state,
+                    onVideoClick = onVideoClick,
+                    contentBottomPadding = contentBottomPadding,
+                    playingVideoId = playingVideoId,
+                    savedProgress = savedProgress,
+                    listState = listState,
+                    selection = selection,
+                    onSelectionChange = { selection = it },
+                    topPadding = 8.dp,
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                )
+            }
         }
         return
     }
@@ -219,6 +268,7 @@ internal fun VideosContent(
         } else {
             pluralStringResource(R.plurals.video_count, state.videos.size, state.videos.size)
         },
+        selectionBar = selectionBar,
         modifier = modifier,
     ) {
         when {
@@ -254,6 +304,8 @@ internal fun VideosContent(
                     playingVideoId = playingVideoId,
                     savedProgress = savedProgress,
                     listState = listState,
+                    selection = selection,
+                    onSelectionChange = { selection = it },
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth(),
@@ -271,6 +323,8 @@ private fun VideoList(
     playingVideoId: Long?,
     savedProgress: Map<String, VideoProgress>,
     listState: LazyListState,
+    selection: Selection,
+    onSelectionChange: (Selection) -> Unit,
     modifier: Modifier = Modifier,
     topPadding: Dp = 0.dp,
 ) {
@@ -299,8 +353,22 @@ private fun VideoList(
                     video = video,
                     isPlaying = video.id == playingVideoId,
                     saved = savedProgress[video.contentUri],
-                    onClick = { onVideoClick(video) },
+                    onClick = {
+                        // While selecting, a tap toggles and never opens the video.
+                        if (selection.active) {
+                            onSelectionChange(selection.toggle(video.id))
+                        } else {
+                            onVideoClick(video)
+                        }
+                    },
                     modifier = Modifier.animateItem(),
+                    selectionMode = selection.active,
+                    selected = video.id in selection.ids,
+                    onLongClick = {
+                        onSelectionChange(
+                            if (selection.active) selection.toggle(video.id) else selection.start(video.id),
+                        )
+                    },
                 )
             }
         }
@@ -319,9 +387,16 @@ internal fun VideoRow(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     saved: VideoProgress? = null,
+    selectionMode: Boolean = false,
+    selected: Boolean = false,
+    onLongClick: (() -> Unit)? = null,
 ) {
     val chrome = LocalBackgroundChrome.current
-    val fill by animateColorAsState(if (isPlaying) chrome.playingRowFill else chrome.rowFill, highlightSpec(), label = "videoRowFill")
+    val fill by animateColorAsState(
+        if (isPlaying || selected) chrome.playingRowFill else chrome.rowFill,
+        highlightSpec(),
+        label = "videoRowFill",
+    )
     val roles = rememberSurfaceRoles(fill)
     val watched = ResumePolicy.watchedFraction(saved, video.durationMs)
     val watchedText = watched?.let { stringResource(R.string.video_watched, (it * 100).roundToInt()) }
@@ -331,23 +406,33 @@ internal fun VideoRow(
             .padding(horizontal = 8.dp)
             .clip(RoundedCornerShape(16.dp))
             .background(fill)
-            .clickable(onClick = onClick)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(start = 12.dp, top = 8.dp, bottom = 8.dp, end = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        VideoThumbnail(
-            video = video,
-            durationMs = ResumePolicy.displayDuration(video.durationMs, saved),
-            modifier = Modifier
-                .size(width = 96.dp, height = 54.dp)
-                .then(
-                    if (watched != null && watchedText != null) {
-                        Modifier.watchedHairline(watched, roles.onSurfaceArgb.toComposeColor(), watchedText)
-                    } else {
-                        Modifier
-                    },
-                ),
-        )
+        Box {
+            VideoThumbnail(
+                video = video,
+                durationMs = ResumePolicy.displayDuration(video.durationMs, saved),
+                modifier = Modifier
+                    .size(width = 96.dp, height = 54.dp)
+                    .then(
+                        if (watched != null && watchedText != null) {
+                            Modifier.watchedHairline(watched, roles.onSurfaceArgb.toComposeColor(), watchedText)
+                        } else {
+                            Modifier
+                        },
+                    ),
+            )
+            if (selectionMode) {
+                SelectionCheck(
+                    selected = selected,
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .offset(x = (-4).dp, y = (-4).dp),
+                )
+            }
+        }
         Column(
             modifier = Modifier
                 .weight(1f)
@@ -498,6 +583,7 @@ private fun DurationBadge(text: String, modifier: Modifier = Modifier) {
 private fun VideosFrame(
     subtitle: String,
     modifier: Modifier = Modifier,
+    selectionBar: (@Composable () -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Column(
@@ -507,26 +593,30 @@ private fun VideosFrame(
                 WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal),
             ),
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .statusBarsPadding()
-                .padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 12.dp),
-        ) {
-            Text(
-                text = stringResource(R.string.videos_title),
-                style = MaterialTheme.typography.headlineMedium,
-                color = MaterialTheme.colorScheme.onBackground,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+        if (selectionBar != null) {
+            Box(modifier = Modifier.statusBarsPadding()) { selectionBar() }
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 12.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.videos_title),
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
         content()
     }

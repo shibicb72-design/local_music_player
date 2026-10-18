@@ -184,3 +184,4 @@ After every task, append an entry below: `- [task] what went wrong -> new rule`.
 - [V19 d01_selection_domain] nothing failed -> keep selection and trash-plan rules pure in domain/ so UI tickets only wire them.
 - [V19 d02_cleanup_store] adding DAO methods broke a hand-written FailingDao in VideoProgressRepositoryTest -> grep tests for `: SomeDao` fakes when extending a DAO interface.
 - [V19 d03_mediastore_trash_watch] nothing failed; no LibraryViewModel seam added (MusicRepository is final, so a reload test needs a real provider) -> add a seam only when a test needs it.
+- [V19 d04_selection_ui] nothing failed (assertExists/assertDoesNotExist are SemanticsNodeInteraction members, not imports); screenshots need an initialSelection param since captureRoboImage cannot gesture -> give stateful composables an initial-state param for Roborazzi.

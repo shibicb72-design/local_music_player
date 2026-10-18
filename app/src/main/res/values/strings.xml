@@ -246,6 +246,15 @@
     <string name="error_log_clip_label">%s error log</string>
     <string name="crash_last_time_uncaught">App crashed last time (uncaught error on %1$s)</string>
     <string name="crash_last_time_exit">App crashed last time (%1$s)</string>
+    <plurals name="selection_count">
+        <item quantity="one">%d selected</item>
+        <item quantity="other">%d selected</item>
+    </plurals>
+    <string name="select_all">Select all</string>
+    <string name="cancel_selection">Cancel selection</string>
+    <string name="move_to_trash">Move to trash</string>
+    <string name="selected">Selected</string>
+    <string name="not_selected">Not selected</string>
     <plurals name="song_count">
         <item quantity="one">%d song</item>
         <item quantity="other">%d songs</item>

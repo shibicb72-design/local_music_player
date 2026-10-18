@@ -3,6 +3,7 @@ package com.shibi.musicplayer.ui
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.provider.Settings
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
@@ -27,6 +28,7 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -47,6 +49,7 @@ import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.filled.Smartphone
 import androidx.compose.material.icons.filled.Speaker
 import androidx.compose.material.icons.outlined.FavoriteBorder
@@ -87,6 +90,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.shibi.musicplayer.R
 import com.shibi.musicplayer.domain.PlaybackTime
 import com.shibi.musicplayer.domain.RouteIcon
+import com.shibi.musicplayer.domain.Selection
 import com.shibi.musicplayer.domain.RoutePresentation
 import com.shibi.musicplayer.domain.Track
 import com.shibi.musicplayer.domain.TrackDisplay
@@ -108,6 +112,7 @@ fun LibraryScreen(
     onAddToPlaylist: (Track) -> Unit = {},
     favoriteIds: Set<Long> = emptySet(),
     onToggleFavorite: (Track) -> Unit = {},
+    onTrashSongs: (List<Track>, Boolean) -> Unit = { _, _ -> },
     showMiniPlayer: Boolean = true,
     contentBottomPadding: Dp = 120.dp,
     modifier: Modifier = Modifier,
@@ -226,6 +231,7 @@ fun LibraryScreen(
             onAddToPlaylist = onAddToPlaylist,
             favoriteIds = favoriteIds,
             onToggleFavorite = onToggleFavorite,
+            onTrashSongs = onTrashSongs,
             contentBottomPadding = contentBottomPadding,
             modifier = modifier,
         )
@@ -243,10 +249,16 @@ fun LibraryContent(
     onAddToPlaylist: (Track) -> Unit = {},
     favoriteIds: Set<Long> = emptySet(),
     onToggleFavorite: (Track) -> Unit = {},
+    onTrashSongs: (List<Track>, Boolean) -> Unit = { _, _ -> },
     contentBottomPadding: Dp = 120.dp,
     listState: LazyListState = rememberLazyListState(),
     modifier: Modifier = Modifier,
+    initialSelection: Selection = Selection(),
 ) {
+    var selection by remember { mutableStateOf(initialSelection) }
+    val allIds = remember(tracks) { tracks.map { it.id } }
+    LaunchedEffect(allIds) { selection = selection.retain(allIds.toSet()) }
+    BackHandler(enabled = selection.active) { selection = selection.clear() }
     LibraryScaffold(
         nowPlaying = nowPlaying,
         showMiniPlayer = showMiniPlayer,
@@ -262,26 +274,53 @@ fun LibraryContent(
                     WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal),
                 ),
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .statusBarsPadding()
-                    .padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 8.dp),
-            ) {
-                Text(
-                    text = stringResource(R.string.library_title),
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = MaterialTheme.colorScheme.onBackground,
+            if (selection.active) {
+                SelectionTopBar(
+                    count = selection.count,
+                    onSelectAll = { selection = selection.selectAll(allIds) },
+                    onCancel = { selection = selection.clear() },
+                    modifier = Modifier
+                        .statusBarsPadding()
+                        .padding(start = 8.dp, end = 8.dp, top = 12.dp, bottom = 8.dp),
+                    actions = {
+                        IconButton(
+                            onClick = {
+                                val picked = tracks.filter { it.id in selection.ids }
+                                val whole = selection.isWholeList(allIds)
+                                selection = selection.clear()
+                                onTrashSongs(picked, whole)
+                            },
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Delete,
+                                contentDescription = stringResource(R.string.move_to_trash),
+                                tint = MaterialTheme.colorScheme.onSurface,
+                            )
+                        }
+                    },
                 )
-                Text(
-                    text = pluralStringResource(
-                        R.plurals.song_count,
-                        tracks.size,
-                        tracks.size,
-                    ),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+            } else {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .statusBarsPadding()
+                        .padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 8.dp),
+                ) {
+                    Text(
+                        text = stringResource(R.string.library_title),
+                        style = MaterialTheme.typography.headlineMedium,
+                        color = MaterialTheme.colorScheme.onBackground,
+                    )
+                    Text(
+                        text = pluralStringResource(
+                            R.plurals.song_count,
+                            tracks.size,
+                            tracks.size,
+                        ),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
             SongColumn(
                 tracks = tracks,
@@ -293,6 +332,8 @@ fun LibraryContent(
                 contentBottomPadding = contentBottomPadding,
                 emptyMessage = stringResource(R.string.empty_library),
                 listState = listState,
+                selection = selection,
+                onSelectionChange = { selection = it },
                 modifier = Modifier.weight(1f),
             )
         }
@@ -338,6 +379,9 @@ internal fun SongColumn(
     emptyMessage: String,
     listState: LazyListState = rememberLazyListState(),
     modifier: Modifier = Modifier,
+    // Null keeps long-press = add to playlist (Favorites, Search).
+    onSelectionChange: ((Selection) -> Unit)? = null,
+    selection: Selection = Selection(),
 ) {
     if (tracks.isEmpty()) {
         MessagePane(
@@ -353,14 +397,29 @@ internal fun SongColumn(
             contentPadding = PaddingValues(bottom = contentBottomPadding),
         ) {
             items(tracks, key = { it.id }) { track ->
+                val change = onSelectionChange
+                val selecting = change != null && selection.active
                 TrackRow(
                     track = track,
                     isPlaying = nowPlaying.currentMediaId == track.id.toString(),
                     isFavorite = track.id in favoriteIds,
-                    onClick = { onTrackSelected(tracks, track.id) },
+                    onClick = {
+                        if (selecting && change != null) {
+                            change(selection.toggle(track.id))
+                        } else {
+                            onTrackSelected(tracks, track.id)
+                        }
+                    },
                     onAddToPlaylist = { onAddToPlaylist(track) },
                     onToggleFavorite = { onToggleFavorite(track) },
                     modifier = Modifier.animateItem(),
+                    selectionMode = selecting,
+                    selected = selecting && track.id in selection.ids,
+                    onLongClick = change?.let { apply ->
+                        {
+                            apply(if (selection.active) selection.toggle(track.id) else selection.start(track.id))
+                        }
+                    },
                 )
             }
         }
@@ -376,6 +435,10 @@ internal fun TrackRow(
     onAddToPlaylist: () -> Unit,
     onToggleFavorite: () -> Unit,
     modifier: Modifier = Modifier,
+    selectionMode: Boolean = false,
+    selected: Boolean = false,
+    // Null keeps long-press = add to playlist.
+    onLongClick: (() -> Unit)? = null,
 ) {
     val title = TrackDisplay.title(track.title)
     var menuOpen by remember { mutableStateOf(false) }
@@ -385,20 +448,30 @@ internal fun TrackRow(
             .fillMaxWidth()
             .padding(horizontal = 8.dp)
             .clip(RoundedCornerShape(16.dp))
-            .background(if (isPlaying) chrome.playingRowFill else chrome.rowFill)
+            .background(if (isPlaying || selected) chrome.playingRowFill else chrome.rowFill)
             .combinedClickable(
                 onClick = onClick,
-                onLongClick = onAddToPlaylist,
+                onLongClick = onLongClick ?: onAddToPlaylist,
             )
             .padding(start = 12.dp, top = 8.dp, bottom = 8.dp, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        AlbumArtwork(
-            albumArtUri = track.albumArtUri,
-            modifier = Modifier.size(52.dp),
-            shape = RoundedCornerShape(12.dp),
-            title = track.title,
-        )
+        Box {
+            AlbumArtwork(
+                albumArtUri = track.albumArtUri,
+                modifier = Modifier.size(52.dp),
+                shape = RoundedCornerShape(12.dp),
+                title = track.title,
+            )
+            if (selectionMode) {
+                SelectionCheck(
+                    selected = selected,
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .offset(x = (-4).dp, y = (-4).dp),
+                )
+            }
+        }
         Column(
             modifier = Modifier
                 .weight(1f)
@@ -437,6 +510,10 @@ internal fun TrackRow(
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        if (selectionMode) {
+            Spacer(Modifier.width(8.dp))
+            return@Row
+        }
         IconButton(onClick = onToggleFavorite) {
             Icon(
                 imageVector = if (isFavorite) Icons.Rounded.Favorite else Icons.Outlined.FavoriteBorder,
