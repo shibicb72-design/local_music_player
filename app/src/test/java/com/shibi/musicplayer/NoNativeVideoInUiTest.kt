@@ -22,7 +22,7 @@ class NoNativeVideoInUiTest {
     @Test
     fun onlyTheEngineNamesLibVlc() {
         assertTrue("run from the app module", sources.isDirectory)
-        assertEquals(setOf("video/VlcVideoEngine.kt"), filesNaming(Regex("""org\.videolan""")))
+        assertEquals(setOf("video/VlcVideoEngine.kt", "video/VoutAttach.kt"), filesNaming(Regex("""org\.videolan""")))
     }
 
     @Test

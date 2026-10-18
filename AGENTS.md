@@ -187,3 +187,9 @@ After every task, append an entry below: `- [task] what went wrong -> new rule`.
 - versionCode = GITHUB_RUN_NUMBER in CI (1 locally), so each newer CI APK is an upgrade.
 - After this change, uninstall the app once on every phone (old installs carry a different key); after that, CI APKs update in place.
 - Check with: apksigner verify --print-certs <apk> on two runs; the SHA-256 must match.
+
+## Lesson (V17): libVLC 3.7.7 attachViews throws with two raw Surfaces
+- Every video tap on the Fold crashed with IllegalArgumentException("invalid state") from AWindow.onSurfaceCreated, thrown while attachViews attached the subtitles helper.
+- A raw Surface counts as ready (isReady() is true without a SurfaceView), so the video helper already moves the vout to READY and fires onSurfacesCreated; the subtitles helper is the last step of attachViews, and its second onSurfaceCreated throws because the state is no longer ATTACHED. The vout is fully attached at that point.
+- The fix is VoutAttach.attachRawSurfaces: it sets both surfaces, catches exactly that IllegalArgumentException when the vout is already attached, and rethrows anything else. VoutAttachTest drives the real AWindow to pin the behaviour.
+- Robolectric cannot run libVLC playback, so any change to how surfaces reach libVLC still needs a device check; a crash safety net now records uncaught errors in the error log.

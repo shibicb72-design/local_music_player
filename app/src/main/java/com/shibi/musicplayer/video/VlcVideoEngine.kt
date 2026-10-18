@@ -501,10 +501,13 @@ internal class VlcVideoEngine(context: Context) : VideoEngine {
             val video = SurfaceTexture(false).also { videoTexture = it }
             val subtitles = SurfaceTexture(false).also { subtitleTexture = it; it.setDefaultBufferSize(1920, 1080) }
             val vout = created.vlcVout
-            vout.setVideoSurface(Surface(video).also { videoOut = it }, null)
-            vout.setSubtitlesSurface(Surface(subtitles).also { subtitleOut = it }, null)
             vout.setWindowSize(1920, 1080)
-            vout.attachViews(newLayoutListener)
+            VoutAttach.attachRawSurfaces(
+                vout,
+                Surface(video).also { videoOut = it },
+                Surface(subtitles).also { subtitleOut = it },
+                newLayoutListener,
+            )
             player = created
         }
     }
