@@ -193,3 +193,7 @@ After every task, append an entry below: `- [task] what went wrong -> new rule`.
 - A raw Surface counts as ready (isReady() is true without a SurfaceView), so the video helper already moves the vout to READY and fires onSurfacesCreated; the subtitles helper is the last step of attachViews, and its second onSurfaceCreated throws because the state is no longer ATTACHED. The vout is fully attached at that point.
 - The fix is VoutAttach.attachRawSurfaces: it sets both surfaces, catches exactly that IllegalArgumentException when the vout is already attached, and rethrows anything else. VoutAttachTest drives the real AWindow to pin the behaviour.
 - Robolectric cannot run libVLC playback, so any change to how surfaces reach libVLC still needs a device check; a crash safety net now records uncaught errors in the error log.
+
+## GROUND RULE (Shibi, 2026-10-18 9:40 AM ET, corrected 9:43): never install on Shibi's phone on your own
+- No `adb install`, no uninstall, no clearing or changing app data on his devices unless Shibi has explicitly said yes to that specific install. Never decide it yourself: when a build is ready, stop and report the CI APK artifact id so he can be asked.
+- Read-only adb (logcat, dumpsys, timing with am start / input tap) only when truly needed. Prefer measuring through the app's own Debugging / Error log lines (Playback check, App crashed last time).
