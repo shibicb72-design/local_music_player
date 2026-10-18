@@ -448,6 +448,34 @@ class VideoViewModelTest {
         assertEquals(1, focus.released)
     }
 
+    @Test
+    fun positionReachesTheUiAboutFourTimesASecond() {
+        viewModel.open(beach)
+        val engine = engines.single()
+        engine.emit(VideoEngineEvent.Playing)
+        idle()
+
+        engine.emit(VideoEngineEvent.Time(1_000L))
+        idle()
+        assertEquals(1_000L, viewModel.uiState.value.positionMs)
+
+        engine.emit(VideoEngineEvent.Time(1_100L))
+        idle()
+        assertEquals(1_000L, viewModel.uiState.value.positionMs)
+
+        engine.emit(VideoEngineEvent.Time(1_200L))
+        idle()
+        assertEquals(1_000L, viewModel.uiState.value.positionMs)
+
+        engine.emit(VideoEngineEvent.Time(1_260L))
+        idle()
+        assertEquals(1_260L, viewModel.uiState.value.positionMs)
+
+        engine.emit(VideoEngineEvent.Time(9_000L))
+        idle()
+        assertEquals(9_000L, viewModel.uiState.value.positionMs)
+    }
+
     private class FakeFocus : VideoAudioFocus {
         var acquired = 0
         var released = 0

@@ -15,6 +15,8 @@ import com.shibi.musicplayer.domain.BackgroundPolicy
 import com.shibi.musicplayer.domain.InlineVideoBox
 import com.shibi.musicplayer.domain.MediaFacts
 import com.shibi.musicplayer.domain.PlaybackArbiter
+import com.shibi.musicplayer.domain.PlaybackCheck
+import com.shibi.musicplayer.domain.PositionThrottle
 import com.shibi.musicplayer.domain.ResumePolicy
 import com.shibi.musicplayer.domain.Video
 import com.shibi.musicplayer.domain.VideoAudioEvent
@@ -189,6 +191,7 @@ class VideoViewModel internal constructor(
     private var started = false
     private var lastSavedAtMs = 0L
     private var noticeJob: Job? = null
+    private var checkJob: Job? = null
 
     /** The last aspect mode picked in fullscreen (saved); the box and the pane always fit. */
     val aspectMode: StateFlow<AspectMode> =
@@ -212,7 +215,7 @@ class VideoViewModel internal constructor(
 
     /** The session's buttons: the same calls as the app's own controls. */
     private val sessionControls = object : VideoSessionControls {
-        override val positionMs: Long get() = _uiState.value.positionMs
+        override val positionMs: Long get() = exactPositionMs()
         override fun play() = this@VideoViewModel.play()
         override fun pause() = this@VideoViewModel.pause()
         override fun seekTo(positionMs: Long) = this@VideoViewModel.seekTo(positionMs)
@@ -336,6 +339,7 @@ class VideoViewModel internal constructor(
         checkpoint()
         stateJob?.cancel()
         noticeJob?.cancel()
+        checkJob?.cancel()
         resetTrackLoad()
         externalTracks?.clear()
         val engine = _engine.value ?: engineFactory().also { created ->
@@ -552,6 +556,8 @@ class VideoViewModel internal constructor(
         stateJob = null
         noticeJob?.cancel()
         noticeJob = null
+        checkJob?.cancel()
+        checkJob = null
         started = false
         resetTrackLoad()
         externalTracks?.clear()
@@ -573,15 +579,17 @@ class VideoViewModel internal constructor(
     private fun merge(video: Video, engineState: VideoEngineState) {
         val wasEnded = _uiState.value.status == VideoStatus.Ended
         val wasFailed = _uiState.value.status == VideoStatus.Error
-        _uiState.update { state ->
-            state.copy(
-                status = engineState.status,
-                positionMs = engineState.positionMs,
-                durationMs = engineState.durationMs.takeIf { it > 0L } ?: state.durationMs,
-                aspect = engineState.aspect ?: state.aspect,
-                error = engineState.error,
-            )
-        }
+        val current = _uiState.value
+        val next = current.copy(
+            status = engineState.status,
+            positionMs = engineState.positionMs,
+            durationMs = engineState.durationMs.takeIf { it > 0L } ?: current.durationMs,
+            aspect = engineState.aspect ?: current.aspect,
+            error = engineState.error,
+        )
+        val otherChanged = next.copy(positionMs = current.positionMs) != current
+        // The position reaches the UI about 4 times a second (PositionThrottle) so the app does not recompose on every libVLC tick.
+        if (PositionThrottle.shouldPublish(current.positionMs, next.positionMs, otherChanged)) _uiState.value = next
         val status = engineState.status
         if (!started && (status == VideoStatus.Playing || status == VideoStatus.Paused) &&
             (resumeFromMs == 0L || engineState.positionMs > 0L)
@@ -589,6 +597,7 @@ class VideoViewModel internal constructor(
             started = true
             lastSavedAtMs = clock()
             if (resumeFromMs > 0L) showResumeNotice(resumeFromMs)
+            if (status == VideoStatus.Playing) startPlaybackCheck()
         }
         if (status == VideoStatus.Playing && ResumePolicy.isSaveDue(clock(), lastSavedAtMs)) checkpoint()
         if (!wasEnded && status == VideoStatus.Ended) {
@@ -612,6 +621,36 @@ class VideoViewModel internal constructor(
         noticeJob = viewModelScope.launch {
             delay(ResumePolicy.NoticeMs)
             _uiState.update { it.copy(resumedAtMs = null) }
+        }
+    }
+
+    /** One playback-check log line per load: the frames shown over the first 5 s of playing. */
+    private fun startPlaybackCheck() {
+        checkJob?.cancel()
+        checkJob = viewModelScope.launch {
+            val engine = _engine.value ?: return@launch
+            val before = engine.playbackStats() ?: return@launch
+            delay(PlaybackCheck.WindowMs)
+            val after = engine.playbackStats() ?: return@launch
+            val video = _uiState.value.video ?: return@launch
+            errorLogger.log(
+                step = PlaybackCheck.summary(
+                    PlaybackCheck.fps(before.displayedPictures, after.displayedPictures, PlaybackCheck.WindowMs),
+                    after.lostPictures - before.lostPictures,
+                    engineOptions.value.hardwareDecoding,
+                ) + " (${surface.label})",
+                error = null,
+                shown = null,
+                media = MediaFacts(
+                    fileName = video.displayName,
+                    mimeType = video.mimeType,
+                    codecs = TrackMapping.codecSummary(engine.tracks.value.mediaTracks),
+                    width = video.width,
+                    height = video.height,
+                    durationMs = video.durationMs,
+                    sizeBytes = video.sizeBytes,
+                ),
+            )
         }
     }
 
@@ -700,6 +739,9 @@ class VideoViewModel internal constructor(
         _engine.value?.setAspectMode(if (fullscreen) aspectMode.value else AspectMode.Fit)
     }
 
+    /** The engine's exact position; the UI's copy moves in 250 ms steps (PositionThrottle). */
+    private fun exactPositionMs(): Long = _engine.value?.state?.value?.positionMs ?: _uiState.value.positionMs
+
     /**
      * Saves where the open video is. Not before it has played (its position is not real yet),
      * not after a failure, and not after the end, which already cleared it.
@@ -709,6 +751,6 @@ class VideoViewModel internal constructor(
         val video = state.video ?: return
         if (!started || state.status == VideoStatus.Error || state.status == VideoStatus.Ended) return
         lastSavedAtMs = clock()
-        progress.onCheckpoint(video, state.positionMs, state.durationMs)
+        progress.onCheckpoint(video, exactPositionMs(), state.durationMs)
     }
 }

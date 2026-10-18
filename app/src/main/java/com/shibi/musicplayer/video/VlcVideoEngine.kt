@@ -378,6 +378,15 @@ internal class VlcVideoEngine(context: Context) : VideoEngine {
         latest?.let(::attach)
     }
 
+    override fun playbackStats(): PlaybackStats? {
+        val media = player?.media ?: return null
+        return try {
+            media.stats?.let { PlaybackStats(it.decodedVideo, it.displayedPictures, it.lostPictures) }
+        } finally {
+            media.release()
+        }
+    }
+
     /** Turns the saved video track back on; only with a view attached and the picture on. */
     private fun restorePendingTrack() {
         mainHandler.removeCallbacks(fallbackRestore)

@@ -39,6 +39,9 @@ data class EngineOptions(
     val subtitleTextSize: SubtitleTextSize = SubtitleTextSize.Default,
 )
 
+/** libVLC's counters for the open video since it started; null when unknown. */
+data class PlaybackStats(val decodedVideo: Int, val displayedPictures: Int, val lostPictures: Int)
+
 /**
  * The video player behind the UI. The app uses [VlcVideoEngine]; tests use a fake that draws
  * a placeholder frame, so Robolectric never loads libVLC's native code. Nothing here names
@@ -101,6 +104,9 @@ interface VideoEngine {
      * attached (box, pane or fullscreen) gets the picture again.
      */
     fun setPictureEnabled(enabled: Boolean)
+
+    /** libVLC's counters for the open video since it started; null when unknown. */
+    fun playbackStats(): PlaybackStats? = null
 }
 
 /** Engine events in our own terms, so the state mapping is pure and unit-tested. */
