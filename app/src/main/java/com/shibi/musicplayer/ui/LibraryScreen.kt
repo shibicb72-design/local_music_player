@@ -396,7 +396,7 @@ internal fun SongColumn(
             state = listState,
             contentPadding = PaddingValues(bottom = contentBottomPadding),
         ) {
-            items(tracks, key = { it.id }) { track ->
+            items(tracks, key = { it.id }, contentType = { "track" }) { track ->
                 val change = onSelectionChange
                 val selecting = change != null && selection.active
                 TrackRow(

@@ -204,7 +204,7 @@ internal fun BackgroundPickerContent(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            items(tiles, key = { it.id }) { tile ->
+            items(tiles, key = { it.id }, contentType = { "background_tile" }) { tile ->
                 BackgroundPreviewTile(
                     title = stringResource(backgroundTitleRes(tile.titleId())),
                     selected = tile == selected,

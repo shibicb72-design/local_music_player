@@ -178,7 +178,7 @@ internal fun BackgroundFineTuneContent(
             userScrollEnabled = false,
             contentPadding = PaddingValues(bottom = 4.dp),
         ) {
-            items(BackgroundCatalog.solids, key = { it.id }) { swatch ->
+            items(BackgroundCatalog.solids, key = { it.id }, contentType = { "swatch" }) { swatch ->
                 Box(
                     modifier = Modifier
                         .size(36.dp)
