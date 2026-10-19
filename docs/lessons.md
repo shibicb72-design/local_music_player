@@ -192,3 +192,4 @@ After every task, append an entry below: `- [task] what went wrong -> new rule`.
 
 - [V20 e02_trash_messages] nothing failed; old text blamed SD/USB for every failure -> name SD/USB only for the Removable reason and word each failure group by its own reason.
 - [V21 f01_skills_port] first full run hit a one-off OutOfMemoryError in VideosScreenshotTest (passed on rerun); MainActivity was ported by hand because main's version had grown -> when a cherry-pick keeps main's file, re-apply the old diff by hand, and rerun once before treating a lone OOM in a screenshot test as a regression.
+- [V21 f02_predictive_back] nothing failed; navigationevent-compose was already on the compile classpath via activity-compose -> route all Back hooks through ui/AppBackHandler (NavigationBackHandler) and never import androidx.activity.compose.BackHandler directly.

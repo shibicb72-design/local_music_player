@@ -1,6 +1,5 @@
 package com.shibi.musicplayer.ui
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -207,7 +206,7 @@ internal fun VideosContent(
     var selection by remember { mutableStateOf(initialSelection) }
     val allIds = remember(state.videos) { state.videos.map { it.id } }
     LaunchedEffect(allIds) { selection = selection.retain(allIds.toSet()) }
-    BackHandler(enabled = selection.active) { selection = selection.clear() }
+    AppBackHandler(enabled = selection.active) { selection = selection.clear() }
     val selectionBar: (@Composable () -> Unit)? = if (selection.active) {
         {
             SelectionTopBar(

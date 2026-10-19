@@ -6,7 +6,6 @@ import android.content.pm.ActivityInfo
 import android.media.AudioManager
 import android.provider.Settings
 import android.view.WindowManager
-import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivity
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -170,7 +169,7 @@ internal fun FullscreenVideo(
         keepScreenOn = state.isPlaying,
     )
     // Composed last in MusicApp, so this callback is the newest and wins over the others.
-    BackHandler(onBack = animatedExit)
+    AppBackHandler(onBack = animatedExit)
     val volume = remember(context) { MusicStreamVolume(context) }
     val brightness = remember(activity) { activity?.let(::WindowBrightness) }
     Box(Modifier.fillMaxSize()) {

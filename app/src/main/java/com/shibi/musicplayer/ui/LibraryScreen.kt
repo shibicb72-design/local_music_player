@@ -3,7 +3,6 @@ package com.shibi.musicplayer.ui
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.provider.Settings
-import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
@@ -258,7 +257,7 @@ fun LibraryContent(
     var selection by remember { mutableStateOf(initialSelection) }
     val allIds = remember(tracks) { tracks.map { it.id } }
     LaunchedEffect(allIds) { selection = selection.retain(allIds.toSet()) }
-    BackHandler(enabled = selection.active) { selection = selection.clear() }
+    AppBackHandler(enabled = selection.active) { selection = selection.clear() }
     LibraryScaffold(
         nowPlaying = nowPlaying,
         showMiniPlayer = showMiniPlayer,
