@@ -19,3 +19,21 @@ The Claude Code config in `.claude/` (opusplan, Haiku/Sonnet subagents, read-den
 - Headroom (github.com/headroomlabs-ai/headroom) is only a possible later experiment, not part of this
   setup: it has open Windows bugs, and routing a subscription (OAuth) session through it is a
   Terms-of-Service grey area.
+
+## Headless (`claude -p`) pattern
+`opusplan` only switches to Opus in interactive plan mode; in `-p` runs the main session is Sonnet the
+whole time, so Opus never plans. Headless tickets therefore run as separate, explicit steps:
+1. **Plan** - `claude -p --model opus` with read-only tools (Read, Grep, Glob, Task; Edit/Write denied).
+   It uses the Haiku `Explore` agent for searching and answers with a short plan (files, signatures,
+   decisions, traps), which is saved as the plan file. The same run can also review the previous
+   step's `git diff` (run `git add -N .` first so new files show up).
+2. **Implement** - `claude -p --model sonnet` gets the plan pasted into its prompt and edits the code
+   itself (no extra `android-implementer` hop, which reads the same files a second time).
+3. **Build / screenshots** - the Haiku `gradle-runner` and `screenshot-reviewer` agents, so build logs
+   and PNGs never enter the Sonnet or Opus context.
+4. **Review** - `claude -p --model opus`, read-only, reviews the diff against the plan and lists fixes;
+   a short Sonnet run applies them.
+
+After every run, record the per-model cost from the JSON output (`modelUsage`: cost, output,
+cache-read and cache-creation tokens) and run `claude -p "/usage"` (free) to log the session and weekly
+percentage, so a spike can be traced to one run.

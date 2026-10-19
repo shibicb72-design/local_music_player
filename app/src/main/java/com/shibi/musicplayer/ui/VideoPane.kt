@@ -3,10 +3,12 @@ package com.shibi.musicplayer.ui
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.systemGestures
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -44,6 +46,12 @@ internal fun VideoPane(
     holdControls: Boolean = false,
     initialControlsVisible: Boolean = false,
     onStartOver: () -> Unit = {},
+    extras: PlayerExtras = NoPlayerExtras,
+    initialScrubMs: Long? = null,
+    initialSpeedMenuOpen: Boolean = false,
+    gestureEdges: WindowInsets = WindowInsets.systemGestures,
+    initialSwipe: SwipePreview? = null,
+    initialTap: TapPreview? = null,
 ) {
     ContrastSurface(
         color = Color.Black,
@@ -70,6 +78,12 @@ internal fun VideoPane(
                     holdControls = holdControls,
                     initialControlsVisible = initialControlsVisible,
                     onStartOver = onStartOver,
+                    extras = extras,
+                    initialScrubMs = initialScrubMs,
+                    initialSpeedMenuOpen = initialSpeedMenuOpen,
+                    gestureEdges = gestureEdges,
+                    initialSwipe = initialSwipe,
+                    initialTap = initialTap,
                     modifier = Modifier
                         .fillMaxWidth()
                         .animatedHeight { height.value },

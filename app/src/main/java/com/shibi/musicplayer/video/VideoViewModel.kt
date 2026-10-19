@@ -18,6 +18,7 @@ import com.shibi.musicplayer.domain.InlineVideoBox
 import com.shibi.musicplayer.domain.MediaFacts
 import com.shibi.musicplayer.domain.PlaybackArbiter
 import com.shibi.musicplayer.domain.PlaybackCheck
+import com.shibi.musicplayer.domain.PlaybackSpeed
 import com.shibi.musicplayer.domain.PositionThrottle
 import com.shibi.musicplayer.domain.ResumePolicy
 import com.shibi.musicplayer.domain.Video
@@ -57,6 +58,8 @@ data class VideoUiState(
     val error: VideoError? = null,
     /** The video resumed here: the "Resumed at 12:34 · Start over" chip shows for 4 s. */
     val resumedAtMs: Long? = null,
+    /** Playback speed; back to 1x for every newly opened video. */
+    val speed: Float = PlaybackSpeed.Default,
 ) {
     /** Loaded, playing, paused, ended or failed: the box is on screen and the mini player is not. */
     val isActive: Boolean get() = video != null
@@ -163,6 +166,23 @@ class VideoViewModel internal constructor(
         @VisibleForTesting
         @Volatile
         var testProgress: (() -> VideoProgressHooks)? = null
+    }
+
+    /**
+     * Seek-preview pictures: their own extractor on its own thread, nothing from the engine.
+     * Created empty; the first [requestPreview] is the first cost.
+     */
+    private val previewLoader = PreviewFrameLoader(
+        scope = viewModelScope,
+        extractorFactory = { MmrFrameExtractor(application) },
+        onTiming = { ms -> Log.d("TheatrumPerf", "preview frame $ms ms") },
+    )
+
+    val previewFrame: StateFlow<PreviewFrame?> get() = previewLoader.frame
+
+    /** A drag is over [positionMs]: ask for its picture; cheap, safe at drag rate. */
+    fun requestPreview(positionMs: Long) {
+        previewLoader.request(positionMs)
     }
 
     private var openedAtMs = 0L
@@ -361,6 +381,9 @@ class VideoViewModel internal constructor(
             if (fullscreen) applyAspect()
         }
         engine.configure(engineOptions.value)
+        // Speed is per video; the native call is only made when it was changed.
+        if (current.speed != PlaybackSpeed.Default) engine.setRate(PlaybackSpeed.Default)
+        previewLoader.setVideo(video.contentUri)
         val saved = progress.saved(video)
         val startMs = ResumePolicy.startAt(saved, video.durationMs)
         resumeFromMs = startMs
@@ -429,6 +452,14 @@ class VideoViewModel internal constructor(
 
     fun seekTo(positionMs: Long) {
         _engine.value?.seekTo(positionMs)
+    }
+
+    /** Playback speed from [PlaybackSpeed.Options]; resets to 1x when another video opens. */
+    fun setSpeed(rate: Float) {
+        val engine = _engine.value ?: return
+        val speed = PlaybackSpeed.coerce(rate)
+        engine.setRate(speed)
+        _uiState.update { it.copy(speed = speed) }
     }
 
     /**
@@ -598,11 +629,13 @@ class VideoViewModel internal constructor(
         audioFocus.release()
         pausedForTransientLoss = false
         pictureOff = false
+        previewLoader.setVideo(null)
         _uiState.value = VideoUiState()
     }
 
     override fun onCleared() {
         close()
+        previewLoader.close()
         super.onCleared()
     }
 

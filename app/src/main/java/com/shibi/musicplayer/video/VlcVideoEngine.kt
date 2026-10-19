@@ -65,6 +65,7 @@ internal class VlcVideoEngine(context: Context) : VideoEngine {
     override val firstFrames: Flow<VideoEngineEvent.FirstFrame> = _firstFrames
     private var released = false
     private var aspectMode = AspectMode.Default
+    private var rate = 1f
 
     private var options = EngineOptions()
 
@@ -284,6 +285,11 @@ internal class VlcVideoEngine(context: Context) : VideoEngine {
         val target = if (duration > 0L) positionMs.coerceIn(0L, duration) else positionMs.coerceAtLeast(0L)
         mediaPlayer.setTime(target)
         dispatch(VideoEngineEvent.Time(target))
+    }
+
+    override fun setRate(rate: Float) {
+        this.rate = rate
+        player?.setRate(rate)
     }
 
     override fun setAspectMode(mode: AspectMode) {
@@ -524,6 +530,7 @@ internal class VlcVideoEngine(context: Context) : VideoEngine {
                 newLayoutListener,
             )
             player = created
+            if (rate != 1f) created.setRate(rate)
         }
     }
 

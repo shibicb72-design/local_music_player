@@ -158,6 +158,30 @@ class VideoViewModelTest {
     }
 
     @Test
+    fun theSpeedIsSetOnTheEngineAndResetsForTheNextVideo() {
+        viewModel.open(beach)
+        val engine = engines.single()
+        assertEquals(1f, viewModel.uiState.value.speed, 0f)
+        assertEquals("opening at 1x makes no native call", 0, engine.rateCalls)
+
+        viewModel.setSpeed(1.5f)
+        assertEquals(1.5f, engine.rate, 0f)
+        assertEquals(1.5f, viewModel.uiState.value.speed, 0f)
+
+        viewModel.open(portrait)
+        assertEquals(1f, viewModel.uiState.value.speed, 0f)
+        assertEquals(1f, engine.rate, 0f)
+        assertEquals(2, engine.rateCalls)
+
+        // Already at 1x: the next open does not touch the engine's rate again.
+        viewModel.open(beach)
+        assertEquals(2, engine.rateCalls)
+
+        viewModel.setSpeed(1.4f)
+        assertEquals(1.5f, viewModel.uiState.value.speed, 0f)
+    }
+
+    @Test
     fun startOverSeeksToZeroClearsTheSavedPlaceAndHidesTheChip() {
         progress.stored[beach.contentUri] = VideoProgress(positionMs = 600_000L, durationMs = 754_000L)
         viewModel.open(beach)
