@@ -60,10 +60,14 @@ class VideoRepositoryTest {
                 MediaStore.Video.Media.MIME_TYPE,
                 MediaStore.Video.Media.DATE_ADDED,
                 MediaStore.Video.Media.BUCKET_DISPLAY_NAME,
+                MediaStore.Video.Media.DATE_TAKEN,
             ),
             provider.lastProjection,
         )
-        assertEquals("${MediaStore.Video.Media.TITLE} COLLATE NOCASE ASC", provider.lastSortOrder)
+        assertEquals(
+            "${MediaStore.Video.Media.DATE_TAKEN} DESC, ${MediaStore.Video.Media.DATE_ADDED} DESC",
+            provider.lastSortOrder,
+        )
     }
 
     @Test

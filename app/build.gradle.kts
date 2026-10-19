@@ -78,6 +78,10 @@ android {
     testOptions {
         unitTests {
             isIncludeAndroidResources = true
+            all {
+                // 780+ Robolectric/Roborazzi tests share one worker; the 512 MB default ran out (OOM in VideosScreenshotTest).
+                it.maxHeapSize = "2g"
+            }
         }
     }
 }

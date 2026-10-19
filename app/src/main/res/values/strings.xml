@@ -54,6 +54,8 @@
     <string name="nav_videos">Videos</string>
     <string name="videos_title">Videos</string>
     <string name="videos_empty">No videos found on this device.</string>
+    <string name="video_date_unknown">Unknown date</string>
+    <string name="video_fast_scroll">Scroll by month</string>
     <string name="video_library_error">Could not read videos from this device.</string>
     <string name="video_permission_title">Video access needed</string>
     <string name="video_permission_body">Allow access to videos so Theatrum can list the videos stored on this device.</string>

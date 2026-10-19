@@ -16,6 +16,8 @@ data class Video(
     val dateAddedSeconds: Long,
     val folder: String?,
     val contentUri: String,
+    /** MediaStore DATE_TAKEN (usually milliseconds), 0 when missing. */
+    val dateTakenMs: Long = 0L,
 ) {
     companion object {
         /** MediaStore's placeholder for an unknown text column (`MediaStore.UNKNOWN_STRING`). */

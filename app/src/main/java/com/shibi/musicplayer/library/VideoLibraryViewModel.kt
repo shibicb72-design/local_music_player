@@ -11,6 +11,7 @@ import com.shibi.musicplayer.diagnostics.ErrorLog
 import com.shibi.musicplayer.diagnostics.ErrorLogger
 import com.shibi.musicplayer.domain.Video
 import com.shibi.musicplayer.domain.VideoAccess
+import com.shibi.musicplayer.domain.VideoTimeline
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -93,7 +94,7 @@ class VideoLibraryViewModel internal constructor(
             }
             _uiState.update { current ->
                 result.fold(
-                    onSuccess = { videos -> current.copy(videos = videos, isLoading = false, hasError = false) },
+                    onSuccess = { videos -> current.copy(videos = VideoTimeline.sortNewestFirst(videos), isLoading = false, hasError = false) },
                     onFailure = { current.copy(isLoading = false, hasError = true) },
                 )
             }
