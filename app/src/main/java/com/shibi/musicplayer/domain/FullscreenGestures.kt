@@ -32,12 +32,37 @@ object FullscreenGestures {
     /** Decided once, at the touch slop; a tie is vertical. */
     fun isHorizontal(dx: Float, dy: Float): Boolean = abs(dx) > abs(dy)
 
+    /**
+     * What a drag across the whole width covers: [SeekFullWidthMs] (90 s), or the whole clip
+     * when it is shorter, so a full-width drag on a short clip reaches its end.
+     */
+    fun swipeFullWidthMs(durationMs: Long): Long =
+        if (durationMs in 1 until SeekFullWidthMs) durationMs else SeekFullWidthMs
+
     /** Where a horizontal drag of [dragPx] from [startMs] lands; unknown length stays put. */
     fun seekPreview(startMs: Long, durationMs: Long, dragPx: Float, widthPx: Float): Long {
         if (durationMs <= 0L || widthPx <= 0f) return startMs
-        val delta = (dragPx / widthPx * SeekFullWidthMs).roundToLong()
+        val delta = (dragPx / widthPx * swipeFullWidthMs(durationMs)).roundToLong()
         return (startMs + delta).coerceIn(0L, durationMs)
     }
+
+    /** `+0:45 · 2:13`: the change and the target, as m:ss (h:mm:ss from one hour). */
+    fun seekOffsetLabel(deltaMs: Long, targetMs: Long): String {
+        val total = (targetMs.coerceAtLeast(0L)) / 1_000L
+        val hours = total / 3_600L
+        val minutes = (total % 3_600L) / 60L
+        val seconds = total % 60L
+        val target = if (hours > 0L) {
+            "$hours:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}"
+        } else {
+            "${total / 60L}:${seconds.toString().padStart(2, '0')}"
+        }
+        return "${seekDelta(deltaMs)} · $target"
+    }
+
+    /** True when a touch starts in the system gesture strips at either side. */
+    fun startsInGestureEdge(x: Float, width: Float, leftEdgePx: Float, rightEdgePx: Float): Boolean =
+        x < leftEdgePx || x > width - rightEdgePx
 
     /** `+0:45` or `-1:05`, whole seconds. */
     fun seekDelta(deltaMs: Long): String {

@@ -61,6 +61,36 @@ class FullscreenGesturesTest {
     }
 
     @Test
+    fun fullWidthIsNinetySecondsOrTheWholeShortClip() {
+        assertEquals(30_000L, FullscreenGestures.swipeFullWidthMs(30_000L))
+        assertEquals(90_000L, FullscreenGestures.swipeFullWidthMs(90_000L))
+        assertEquals(90_000L, FullscreenGestures.swipeFullWidthMs(7_200_000L))
+        assertEquals(90_000L, FullscreenGestures.swipeFullWidthMs(0L))
+    }
+
+    @Test
+    fun aFullWidthDragOnAShortClipReachesTheEnd() {
+        assertEquals(30_000L, FullscreenGestures.seekPreview(0L, 30_000L, width, width))
+        assertEquals(15_000L, FullscreenGestures.seekPreview(0L, 30_000L, width / 2, width))
+        assertEquals(0L, FullscreenGestures.seekPreview(30_000L, 30_000L, -width, width))
+    }
+
+    @Test
+    fun theOffsetLabelShowsTheJumpAndTheTarget() {
+        assertEquals("+0:45 · 2:13", FullscreenGestures.seekOffsetLabel(45_000L, 133_000L))
+        assertEquals("-1:05 · 0:08", FullscreenGestures.seekOffsetLabel(-65_000L, 8_000L))
+        assertEquals("+0:30 · 1:02:03", FullscreenGestures.seekOffsetLabel(30_000L, 3_723_000L))
+    }
+
+    @Test
+    fun theGestureEdgesAreTheOuterStrips() {
+        assertTrue(FullscreenGestures.startsInGestureEdge(10f, 1000f, 48f, 48f))
+        assertTrue(FullscreenGestures.startsInGestureEdge(990f, 1000f, 48f, 48f))
+        assertFalse(FullscreenGestures.startsInGestureEdge(48f, 1000f, 48f, 48f))
+        assertFalse(FullscreenGestures.startsInGestureEdge(500f, 1000f, 48f, 48f))
+    }
+
+    @Test
     fun theSeekChipShowsTheSignedJump() {
         assertEquals("+0:45", FullscreenGestures.seekDelta(45_000L))
         assertEquals("-1:05", FullscreenGestures.seekDelta(-65_000L))

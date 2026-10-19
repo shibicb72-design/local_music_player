@@ -127,6 +127,7 @@ fun MusicApp(
     val inPip by videoViewModel.inPip.collectAsStateWithLifecycle()
     val brightnessSwipe by videoViewModel.brightnessSwipe.collectAsStateWithLifecycle()
     val trackSheet by videoViewModel.trackSheet.collectAsStateWithLifecycle()
+    val playerExtras = rememberPlayerExtras(videoViewModel)
     val videoBounds = remember { VideoBounds() }
     // The tracks sheet, over the box, the pane or fullscreen; closing the video closes it.
     var showTracks by rememberSaveable { mutableStateOf(false) }
@@ -607,6 +608,7 @@ fun MusicApp(
                         onOpenTracks = openTracks,
                         holdControls = tracksOpen,
                         onStartOver = videoViewModel::startOver,
+                        extras = playerExtras,
                         modifier = paneModifier,
                     )
                 },
@@ -687,6 +689,7 @@ fun MusicApp(
                     onOpenTracks = openTracks,
                     holdControls = tracksOpen,
                     brightnessSwipe = brightnessSwipe,
+                    extras = playerExtras,
                     onTrashSongs = onTrashSongs,
                     onTrashVideos = onTrashVideos,
                     modifier = Modifier.fillMaxSize(),
@@ -745,6 +748,7 @@ fun MusicApp(
                             onOpenTracks = openTracks,
                             holdControls = tracksOpen,
                             brightnessSwipe = brightnessSwipe,
+                            extras = playerExtras,
                             onTrashSongs = onTrashSongs,
                             onTrashVideos = onTrashVideos,
                             modifier = Modifier.fillMaxSize(),
@@ -811,6 +815,7 @@ fun MusicApp(
                 onOpenTracks = openTracks,
                 holdControls = tracksOpen,
                 onStartOver = videoViewModel::startOver,
+                extras = playerExtras,
             )
         }
         }
@@ -905,6 +910,7 @@ private fun AppNavHost(
     onOpenTracks: () -> Unit,
     holdControls: Boolean,
     brightnessSwipe: Boolean,
+    extras: PlayerExtras,
     onTrashSongs: (List<Track>, Boolean) -> Unit,
     onTrashVideos: (List<Video>, Boolean) -> Unit,
     modifier: Modifier = Modifier,
@@ -1105,6 +1111,7 @@ private fun AppNavHost(
                 holdControls = holdControls,
                 showInlinePlayer = !wide,
                 onTrashVideos = onTrashVideos,
+                videoExtras = extras,
                 modifier = Modifier.fillMaxSize(),
                 onLibraryLoaded = { playlistViewModel.pruneMissingVideos(it, true) },
             )

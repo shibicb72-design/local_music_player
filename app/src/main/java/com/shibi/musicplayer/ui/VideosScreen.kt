@@ -109,7 +109,7 @@ private val ThumbnailShape = RoundedCornerShape(12.dp)
  * Access is re-checked on every resume; the first visit asks once if access is denied.
  */
 @Composable
-fun VideosScreen(
+internal fun VideosScreen(
     onVideoClick: (Video) -> Unit,
     contentBottomPadding: Dp,
     modifier: Modifier = Modifier,
@@ -130,6 +130,7 @@ fun VideosScreen(
     // Called with the loaded list so stale history and saved positions can be pruned.
     onLibraryLoaded: (List<Video>) -> Unit = {},
     onTrashVideos: (List<Video>, Boolean) -> Unit = { _, _ -> },
+    videoExtras: PlayerExtras = NoPlayerExtras,
 ) {
     val context = LocalContext.current
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -181,6 +182,7 @@ fun VideosScreen(
                     onOpenTracks = onOpenTracks,
                     holdControls = holdControls,
                     onStartOver = onStartOver,
+                    extras = videoExtras,
                 )
             }
         } else {
