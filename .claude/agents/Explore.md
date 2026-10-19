@@ -3,6 +3,7 @@ name: Explore
 description: Fast read-only codebase search (overrides the built-in Explore to run on Haiku). Use for finding files, symbols, call sites and how something works.
 tools: Read, Grep, Glob
 model: haiku
+maxTurns: 12
 omitClaudeMd: true
 ---
 
