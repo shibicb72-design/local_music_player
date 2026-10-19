@@ -43,6 +43,6 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/gradle-brief.ps1 rec
 - Builds and tests -> `gradle-runner` (Haiku).
 - Screenshot review -> `screenshot-reviewer` (Haiku, failing `*_compare.png` only).
 - Code search -> `Explore` (Haiku, read-only).
-- Planned implementation -> `android-implementer` (Sonnet). Planning stays in the main conversation (`opusplan`).
+- Headless work: Opus plans and reviews (`claude -p --model opus`, read-only). Sonnet implements each plan step in a fresh `claude -p --model sonnet` session of at most ~30 turns. No Sonnet helper subagents. **Hard limits: `docs/token-budget.md`, "Hard limits (v2)"** (line-range reads, builds outside Claude, pre-generated diff for review, `/usage` after every run, under 8 session points per medium feature).
 - The main conversation never reads PNGs, full Gradle logs or files under `build/`.
 - `/clear` between tickets. How to measure: `docs/token-budget.md`.

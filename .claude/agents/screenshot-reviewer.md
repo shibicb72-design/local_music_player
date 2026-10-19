@@ -3,6 +3,7 @@ name: screenshot-reviewer
 description: Reviews failing Roborazzi screenshot comparisons (the *_compare.png files) and returns one line per screen. Use after compareRoborazziDebug/verifyRoborazziDebug reports changes.
 tools: Read, Grep, Glob
 model: haiku
+maxTurns: 10
 effort: low
 omitClaudeMd: true
 ---
