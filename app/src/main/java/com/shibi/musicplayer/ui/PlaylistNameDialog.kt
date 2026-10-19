@@ -32,6 +32,7 @@ internal fun PlaylistNameDialog(
         textContentColor = onDialog,
         title = { Text(title) },
         text = {
+            FitDialogWindowAboveIme()
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },

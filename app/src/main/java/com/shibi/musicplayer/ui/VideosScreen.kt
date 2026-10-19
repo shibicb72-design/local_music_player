@@ -348,7 +348,7 @@ private fun VideoList(
             state = listState,
             contentPadding = PaddingValues(top = topPadding, bottom = contentBottomPadding),
         ) {
-            items(videos, key = { it.id }) { video ->
+            items(videos, key = { it.id }, contentType = { "video" }) { video ->
                 VideoRow(
                     video = video,
                     isPlaying = video.id == playingVideoId,
