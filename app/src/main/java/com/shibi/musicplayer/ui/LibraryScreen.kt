@@ -3,7 +3,6 @@ package com.shibi.musicplayer.ui
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.provider.Settings
-import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
@@ -258,7 +257,7 @@ fun LibraryContent(
     var selection by remember { mutableStateOf(initialSelection) }
     val allIds = remember(tracks) { tracks.map { it.id } }
     LaunchedEffect(allIds) { selection = selection.retain(allIds.toSet()) }
-    BackHandler(enabled = selection.active) { selection = selection.clear() }
+    AppBackHandler(enabled = selection.active) { selection = selection.clear() }
     LibraryScaffold(
         nowPlaying = nowPlaying,
         showMiniPlayer = showMiniPlayer,
@@ -396,7 +395,7 @@ internal fun SongColumn(
             state = listState,
             contentPadding = PaddingValues(bottom = contentBottomPadding),
         ) {
-            items(tracks, key = { it.id }) { track ->
+            items(tracks, key = { it.id }, contentType = { "track" }) { track ->
                 val change = onSelectionChange
                 val selecting = change != null && selection.active
                 TrackRow(
@@ -404,7 +403,7 @@ internal fun SongColumn(
                     isPlaying = nowPlaying.currentMediaId == track.id.toString(),
                     isFavorite = track.id in favoriteIds,
                     onClick = {
-                        if (selecting && change != null) {
+                        if (selecting) {
                             change(selection.toggle(track.id))
                         } else {
                             onTrackSelected(tracks, track.id)
