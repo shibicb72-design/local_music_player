@@ -403,7 +403,7 @@ internal fun SongColumn(
                     isPlaying = nowPlaying.currentMediaId == track.id.toString(),
                     isFavorite = track.id in favoriteIds,
                     onClick = {
-                        if (selecting && change != null) {
+                        if (selecting) {
                             change(selection.toggle(track.id))
                         } else {
                             onTrackSelected(tracks, track.id)
