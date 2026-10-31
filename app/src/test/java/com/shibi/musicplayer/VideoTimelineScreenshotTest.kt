@@ -42,14 +42,16 @@ import com.shibi.musicplayer.ui.background.AppBackgroundHost
 import com.shibi.musicplayer.ui.theme.MusicPlayerTheme
 import java.time.LocalDateTime
 import java.time.ZoneId
+import java.util.Locale
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 /**
- * V22 review set: month headers and the month fast-scroll bubble on the folded and
- * unfolded layouts, headers with a selection active, and headers on a pastel backdrop.
+ * V22 review set: month headers and the week fast-scroll bubble on the folded and
+ * unfolded layouts, headers with a selection active, and headers on a pastel backdrop;
+ * plus the busy-week dots on the track, folded and unfolded.
  */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -85,18 +87,36 @@ class VideoTimelineScreenshotTest {
         dragFraction = 0.3f,
     )
 
+    @Test
+    fun weekDotsFolded() = capture(
+        "cv24_week_dots_folded.png",
+        expanded = false,
+        dragFraction = busyDragFraction,
+        videos = busyVideos,
+    )
+
+    @Test
+    @Config(qualifiers = "w900dp-h600dp-xhdpi")
+    fun weekDotsUnfolded() = capture(
+        "cv24_week_dots_unfolded.png",
+        expanded = true,
+        dragFraction = busyDragFraction,
+        videos = busyVideos,
+    )
+
     private fun capture(
         fileName: String,
         expanded: Boolean,
         background: AppBackground = AppBackground.Default,
         dragFraction: Float? = null,
         selection: Selection = Selection(),
+        videos: List<Video> = VideoTimelineScreenshotTest.videos,
     ) {
         captureRoboImage("build/outputs/roborazzi/$fileName") {
             MusicPlayerTheme {
                 AppBackgroundHost(background, emptyMap(), forceStatic = true) {
                     if (expanded) {
-                        TwoPane(dragFraction, selection)
+                        TwoPane(dragFraction, selection, videos)
                     } else {
                         SectionScaffold(
                             modifier = Modifier.fillMaxSize(),
@@ -112,7 +132,7 @@ class VideoTimelineScreenshotTest {
                                 )
                             },
                         ) { bottom ->
-                            Videos(bottom, dragFraction, selection)
+                            Videos(bottom, dragFraction, selection, videos)
                         }
                     }
                 }
@@ -121,11 +141,11 @@ class VideoTimelineScreenshotTest {
     }
 
     @Composable
-    private fun TwoPane(dragFraction: Float?, selection: Selection) {
+    private fun TwoPane(dragFraction: Float?, selection: Selection, videos: List<Video>) {
         Column(modifier = Modifier.fillMaxSize()) {
             Row(modifier = Modifier.weight(1f).fillMaxSize()) {
                 ListViewport(modifier = Modifier.weight(0.42f).fillMaxHeight()) {
-                    Videos(SongListBottomPadding, dragFraction, selection)
+                    Videos(SongListBottomPadding, dragFraction, selection, videos)
                 }
                 Box(modifier = Modifier.weight(0.58f).fillMaxHeight()) {
                     PlayerScreen(
@@ -159,13 +179,13 @@ class VideoTimelineScreenshotTest {
 
     @OptIn(ExperimentalCoilApi::class)
     @Composable
-    private fun Videos(bottom: Dp, dragFraction: Float?, selection: Selection) {
+    private fun Videos(bottom: Dp, dragFraction: Float?, selection: Selection, videos: List<Video>) {
         CompositionLocalProvider(
             LocalInspectionMode provides true,
             LocalAsyncImagePreviewHandler provides VideosScreenshotTest.thumbnails,
         ) {
             VideosContent(
-                state = state,
+                state = VideoLibraryUiState(access = VideoAccess.Full, videos = videos),
                 onVideoClick = {},
                 onRequestAccess = {},
                 onOpenSettings = {},
@@ -173,10 +193,10 @@ class VideoTimelineScreenshotTest {
                 modifier = Modifier.fillMaxSize(),
                 initialSelection = selection,
                 fastScrollDragFraction = dragFraction,
-                // Where a real drag to this fraction leaves the list (snapped to a month start).
+                // Where a real drag to this fraction leaves the list: the entry under the thumb.
                 listState = rememberLazyListState(
                     initialFirstVisibleItemIndex = dragFraction?.let {
-                        VideoTimeline.snapIndexForFraction(VideoTimeline.layout(state.videos, ZoneId.systemDefault()), it)
+                        VideoTimeline.entryIndexForFraction(it, VideoTimeline.layout(videos, ZoneId.systemDefault()).entries.size)
                     } ?: 0,
                 ),
             )
@@ -231,5 +251,23 @@ class VideoTimelineScreenshotTest {
             VideoTimeline.sortNewestFirst(dated + addedOnly + undated)
         }
         val state = VideoLibraryUiState(access = VideoAccess.Full, videos = videos)
+
+        /** [videos] plus two weeks busy enough for a fast-scroll dot, in October and June 2025. */
+        val busyVideos: List<Video> = run {
+            var id = 500L
+            fun week(year: Int, month: Int, day: Int, count: Int) = (1..count).map { n ->
+                VideosScreenshotTest.video(id++, "Busy $year-$month-$day #$n", 20_000L, 8_000_000L, 1920, 1080, "Camera")
+                    .copy(dateTakenMs = takenAt(year, month, day))
+            }
+            VideoTimeline.sortNewestFirst(videos + week(2025, 10, 15, 30) + week(2025, 6, 18, 26))
+        }
+
+        /** Just past the first busy week's dot, so the thumb sits on it and the bubble names that week. */
+        val busyDragFraction: Float = run {
+            val zone = ZoneId.systemDefault()
+            val layout = VideoTimeline.layout(busyVideos, zone)
+            val stops = VideoTimeline.weekStops(VideoTimeline.weeks(layout, zone, Locale.getDefault()))
+            VideoTimeline.dotFractions(stops, layout.entries.size).first() + 0.005f
+        }
     }
 }

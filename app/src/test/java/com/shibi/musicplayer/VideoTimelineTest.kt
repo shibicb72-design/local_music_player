@@ -1,12 +1,16 @@
 package com.shibi.musicplayer
 
 import com.shibi.musicplayer.domain.FAST_SCROLL_HIDE_DELAY_MS
+import com.shibi.musicplayer.domain.MIN_VIDEOS_PER_WEEK_DOT
+import com.shibi.musicplayer.domain.MagneticSnap
 import com.shibi.musicplayer.domain.Video
 import com.shibi.musicplayer.domain.VideoListEntry
 import com.shibi.musicplayer.domain.VideoSection
 import com.shibi.musicplayer.domain.VideoTimeline
+import com.shibi.musicplayer.domain.VideoWeek
 import com.shibi.musicplayer.domain.fastScrollVisible
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
 import java.util.Locale
 import org.junit.Assert.assertEquals
@@ -17,6 +21,7 @@ import org.junit.Test
 
 class VideoTimelineTest {
     private val ny = ZoneId.of("America/New_York")
+    private val utc = ZoneId.of("UTC")
 
     private fun ms(iso: String): Long = Instant.parse(iso).toEpochMilli()
 
@@ -120,14 +125,12 @@ class VideoTimelineTest {
         assertNull(section.year)
         assertEquals("month_unknown", (layout.entries[0] as VideoListEntry.Header).key)
         assertNull(VideoTimeline.headerLabel(section, Locale.US))
-        assertNull(VideoTimeline.bubbleLabel(section, Locale.US))
     }
 
     @Test
-    fun labelsFormatMonthAndYear() {
+    fun headerLabelFormatsMonthAndYear() {
         val section = VideoSection(2025, 3, 0, 1)
         assertEquals("March 2025", VideoTimeline.headerLabel(section, Locale.US))
-        assertEquals("Mar 2025", VideoTimeline.bubbleLabel(section, Locale.US))
     }
 
     @Test
@@ -149,17 +152,6 @@ class VideoTimelineTest {
         assertEquals(1, VideoTimeline.sectionIndexForEntry(layout, 4))
         assertEquals(2, VideoTimeline.sectionIndexForEntry(layout, 5))
         assertEquals(3, VideoTimeline.sectionIndexForEntry(layout, 8))
-    }
-
-    @Test
-    fun snapIndexLandsOnAHeader() {
-        val layout = sampleLayout()
-        val headerStarts = layout.sections.map { it.startIndex }.toSet()
-        for (i in 0..20) {
-            assertTrue(VideoTimeline.snapIndexForFraction(layout, i / 20f) in headerStarts)
-        }
-        assertEquals(0, VideoTimeline.snapIndexForFraction(layout, 0f))
-        assertEquals(7, VideoTimeline.snapIndexForFraction(layout, 1f))
     }
 
     @Test
@@ -197,5 +189,126 @@ class VideoTimelineTest {
         assertTrue(fastScrollVisible(false, 1_000L, 2_999L))
         assertFalse(fastScrollVisible(false, 1_000L, 3_000L))
         assertFalse(fastScrollVisible(false, null, 0L))
+    }
+
+    /** [count] videos taken at [iso], ids from [firstId] up. */
+    private fun clips(iso: String, count: Int, firstId: Long): List<Video> =
+        (0 until count).map { video(firstId + it, takenMs = ms(iso)) }
+
+    private fun utcLayout(videos: List<Video>) = VideoTimeline.layout(VideoTimeline.sortNewestFirst(videos), utc)
+
+    /**
+     * 25, 24 and 26 videos on the Wednesdays of three weeks in a row (the same weeks whichever day
+     * the locale starts on). Entries: header 0, rows 1-25, rows 26-49, rows 50-75.
+     */
+    private fun threeWeeks() = utcLayout(
+        clips("2025-03-19T12:00:00Z", 25, 100) +
+            clips("2025-03-12T12:00:00Z", 24, 200) +
+            clips("2025-03-05T12:00:00Z", 26, 300),
+    )
+
+    @Test
+    fun weeksStartOnTheLocalesFirstDayOfTheWeek() {
+        // Monday 10 and Sunday 9 March 2025. Entries: header, row, row.
+        val layout = utcLayout(
+            listOf(video(2, takenMs = ms("2025-03-10T12:00:00Z")), video(1, takenMs = ms("2025-03-09T12:00:00Z"))),
+        )
+        assertEquals(
+            listOf(VideoWeek(LocalDate.of(2025, 3, 9), 0, 2)),
+            VideoTimeline.weeks(layout, utc, Locale.US),
+        )
+        assertEquals(
+            listOf(VideoWeek(LocalDate.of(2025, 3, 10), 0, 1), VideoWeek(LocalDate.of(2025, 3, 3), 2, 1)),
+            VideoTimeline.weeks(layout, utc, Locale.UK),
+        )
+    }
+
+    @Test
+    fun weeksUseTheGivenZone() {
+        // 03:00 UTC on Monday 10 March 2025 is still Sunday evening in New York.
+        val videos = listOf(video(1, takenMs = ms("2025-03-10T03:00:00Z")))
+        val inUtc = VideoTimeline.weeks(VideoTimeline.layout(videos, utc), utc, Locale.UK)
+        assertEquals(LocalDate.of(2025, 3, 10), inUtc.single().start)
+        val inNewYork = VideoTimeline.weeks(VideoTimeline.layout(videos, ny), ny, Locale.UK)
+        assertEquals(LocalDate.of(2025, 3, 3), inNewYork.single().start)
+    }
+
+    @Test
+    fun aWeekRunsAcrossTheNewYearAndBothMonthHeaders() {
+        // Friday 2 January 2026 and Tuesday 30 December 2025. Entries: Jan header, row, Dec header, row.
+        val layout = utcLayout(
+            listOf(video(2, takenMs = ms("2026-01-02T12:00:00Z")), video(1, takenMs = ms("2025-12-30T12:00:00Z"))),
+        )
+        val us = VideoTimeline.weeks(layout, utc, Locale.US)
+        assertEquals(listOf(VideoWeek(LocalDate.of(2025, 12, 28), 0, 2)), us)
+        assertEquals(listOf(VideoWeek(LocalDate.of(2025, 12, 29), 0, 2)), VideoTimeline.weeks(layout, utc, Locale.UK))
+        assertEquals(us.single(), VideoTimeline.weekForEntry(us, 2))
+        assertEquals("Dec 28", VideoTimeline.weekLabel(us.single(), Locale.US))
+    }
+
+    @Test
+    fun onlyWeeksWithAtLeast25VideosBecomeStops() {
+        assertEquals(25, MIN_VIDEOS_PER_WEEK_DOT)
+        val layout = threeWeeks()
+        val weeks = VideoTimeline.weeks(layout, utc, Locale.US)
+        assertEquals(listOf(25, 24, 26), weeks.map { it.count })
+        assertEquals(listOf(0, 26, 50), weeks.map { it.startIndex })
+        val stops = VideoTimeline.weekStops(weeks)
+        assertEquals(listOf(weeks[0], weeks[2]), stops)
+        assertEquals(listOf(0f, 50f / 75f), VideoTimeline.dotFractions(stops, layout.entries.size))
+        // The 24-video week is one short; with the bar at 24 it gets a dot too.
+        assertEquals(weeks, VideoTimeline.weekStops(weeks, minVideos = 24))
+    }
+
+    @Test
+    fun weekForEntryFindsTheWeekOfARowOrHeader() {
+        val weeks = VideoTimeline.weeks(threeWeeks(), utc, Locale.US)
+        assertEquals(weeks[0], VideoTimeline.weekForEntry(weeks, 0))
+        assertEquals(weeks[0], VideoTimeline.weekForEntry(weeks, 25))
+        assertEquals(weeks[1], VideoTimeline.weekForEntry(weeks, 26))
+        assertEquals(weeks[1], VideoTimeline.weekForEntry(weeks, 49))
+        assertEquals(weeks[2], VideoTimeline.weekForEntry(weeks, 50))
+        assertEquals(weeks[2], VideoTimeline.weekForEntry(weeks, 75))
+        assertEquals(weeks[0], VideoTimeline.weekForEntry(weeks, -1))
+    }
+
+    @Test
+    fun undatedVideosShareOneWeekThatNeverGetsADot() {
+        val undated = (1..30L).map { video(it) }
+        // Entries: Mar header 0, rows 1-25, unknown header 26, rows 27-56.
+        val weeks = VideoTimeline.weeks(utcLayout(clips("2025-03-12T12:00:00Z", 25, 100) + undated), utc, Locale.US)
+        assertEquals(listOf(VideoWeek(LocalDate.of(2025, 3, 9), 0, 25), VideoWeek(null, 26, 30)), weeks)
+        assertEquals(listOf(weeks[0]), VideoTimeline.weekStops(weeks))
+        assertEquals(weeks[1], VideoTimeline.weekForEntry(weeks, 26))
+        assertNull(VideoTimeline.weekLabel(weeks[1], Locale.US))
+    }
+
+    @Test
+    fun anEmptyListHasNoWeeksOrDots() {
+        val weeks = VideoTimeline.weeks(utcLayout(emptyList()), utc, Locale.US)
+        assertTrue(weeks.isEmpty())
+        assertTrue(VideoTimeline.weekStops(weeks).isEmpty())
+        assertTrue(VideoTimeline.dotFractions(emptyList(), 0).isEmpty())
+        assertNull(VideoTimeline.weekForEntry(weeks, 0))
+        assertEquals(0, VideoTimeline.dragTargetIndex(MagneticSnap(0.5f, lockedIndex = 0), emptyList(), 0))
+    }
+
+    @Test
+    fun weekLabelIsTheWeeksFirstDay() {
+        // Wednesday 7 September 2022; in the US its week starts on Sunday the 4th.
+        val layout = utcLayout(listOf(video(1, takenMs = ms("2022-09-07T12:00:00Z"))))
+        val week = VideoTimeline.weeks(layout, utc, Locale.US).single()
+        assertEquals("Sep 4", VideoTimeline.weekLabel(week, Locale.US))
+    }
+
+    @Test
+    fun aDragHoldsTheListAtTheLockedWeekElseFollowsTheThumb() {
+        val layout = threeWeeks()
+        val stops = VideoTimeline.weekStops(VideoTimeline.weeks(layout, utc, Locale.US))
+        val count = layout.entries.size
+        assertEquals(50, VideoTimeline.dragTargetIndex(MagneticSnap(0.64f, lockedIndex = 1), stops, count))
+        assertEquals(30, VideoTimeline.dragTargetIndex(MagneticSnap(0.41f), stops, count))
+        // A lock on a dot that no longer exists falls back to the thumb.
+        assertEquals(30, VideoTimeline.dragTargetIndex(MagneticSnap(0.41f, lockedIndex = 5), stops, count))
     }
 }
