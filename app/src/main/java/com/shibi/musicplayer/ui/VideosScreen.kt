@@ -1,6 +1,5 @@
 package com.shibi.musicplayer.ui
 
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -86,6 +85,7 @@ import com.shibi.musicplayer.domain.VideoFormat
 import com.shibi.musicplayer.domain.VideoListEntry
 import com.shibi.musicplayer.domain.VideoProgress
 import com.shibi.musicplayer.domain.VideoTimeline
+import com.shibi.musicplayer.library.MediaTrash
 import com.shibi.musicplayer.library.VideoLibraryUiState
 import com.shibi.musicplayer.library.VideoLibraryViewModel
 import com.shibi.musicplayer.library.videoThumbnailRequest
@@ -213,6 +213,8 @@ internal fun VideosContent(
     onSortChange: (SortSpec) -> Unit = {},
     /** Screenshots only: the sort menu starts open. */
     initialSortMenuOpen: Boolean = false,
+    /** Whether rows get a ⋮ with Move to trash: the system trash needs Android 11. */
+    canTrash: Boolean = MediaTrash.isSupported(),
 ) {
     // Set when the user picks a sort: the list goes to the top once it shows that sort. It is
     // not saved, so a return from fullscreen (which recomposes this) leaves the list where it was.
@@ -230,7 +232,11 @@ internal fun VideosContent(
     }
     var selection by remember { mutableStateOf(initialSelection) }
     val allIds = remember(state.videos) { state.videos.map { it.id } }
-    val trashVideo: (Video) -> Unit = { video -> onTrashVideos(listOf(video), allIds == listOf(video.id)) }
+    val trashVideo: ((Video) -> Unit)? = if (canTrash) {
+        { video -> onTrashVideos(listOf(video), allIds == listOf(video.id)) }
+    } else {
+        null
+    }
     LaunchedEffect(allIds) { selection = selection.retain(allIds.toSet()) }
     AppBackHandler(enabled = selection.active) { selection = selection.clear() }
     val selectionBar: (@Composable () -> Unit)? = if (selection.active) {
@@ -374,7 +380,8 @@ internal fun VideosContent(
 private fun VideoList(
     state: VideoLibraryUiState,
     onVideoClick: (Video) -> Unit,
-    onTrashVideo: (Video) -> Unit,
+    /** A row's ⋮ Move to trash; null gives the rows no ⋮. */
+    onTrashVideo: ((Video) -> Unit)?,
     contentBottomPadding: Dp,
     playingVideoId: Long?,
     savedProgress: Map<String, VideoProgress>,
@@ -456,7 +463,7 @@ private fun VideoList(
                                                 },
                                             )
                                         },
-                                        onTrash = { onTrashVideo(video) },
+                                        onTrash = onTrashVideo?.let { trash -> { trash(video) } },
                                     )
                                 }
                             }
@@ -500,28 +507,24 @@ private fun MonthHeader(text: String, modifier: Modifier = Modifier) {
 
 /**
  * A Videos list row ([ListRow]): a square frame, the title over the length and details, then
- * the ⋮ menu (move to trash). A partly watched video ([saved] would resume) gets a hairline
- * under its frame, drawn in the row's own text colour, so it reads on the dark row and on
- * every pastel one.
+ * the ⋮ menu with move to trash ([onTrash]; null leaves the row without a ⋮). A partly watched
+ * video ([saved] would resume) gets a hairline under its frame, drawn in the row's own text
+ * colour, so it reads on the dark row and on every pastel one.
  */
 @Composable
 internal fun VideoRow(
     video: Video,
     isPlaying: Boolean,
     onClick: () -> Unit,
+    onTrash: (() -> Unit)?,
     modifier: Modifier = Modifier,
     saved: VideoProgress? = null,
     selectionMode: Boolean = false,
     selected: Boolean = false,
     onLongClick: (() -> Unit)? = null,
-    onTrash: () -> Unit = {},
 ) {
     val chrome = LocalBackgroundChrome.current
-    val fill by animateColorAsState(
-        if (isPlaying || selected) chrome.playingRowFill else chrome.rowFill,
-        highlightSpec(),
-        label = "videoRowFill",
-    )
+    val fill = if (isPlaying || selected) chrome.playingRowFill else chrome.rowFill
     val roles = rememberSurfaceRoles(fill)
     val watched = ResumePolicy.watchedFraction(saved, video.durationMs)
     val watchedText = watched?.let { stringResource(R.string.video_watched, (it * 100).roundToInt()) }
@@ -551,17 +554,20 @@ internal fun VideoRow(
         modifier = modifier,
         selectionMode = selectionMode,
         selected = selected,
-    ) { tint ->
-        RowOverflowMenu(tint = tint) { dismiss ->
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.move_to_trash)) },
-                onClick = {
-                    dismiss()
-                    onTrash()
-                },
-            )
-        }
-    }
+        actions = onTrash?.let { trash ->
+            { tint ->
+                RowOverflowMenu(tint = tint) { dismiss ->
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.move_to_trash)) },
+                        onClick = {
+                            dismiss()
+                            trash()
+                        },
+                    )
+                }
+            }
+        },
+    )
 }
 
 /** `1.4 GB · 1080p · Camera`; values MediaStore could not read are left out, not dashed. */

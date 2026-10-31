@@ -103,6 +103,7 @@ import com.shibi.musicplayer.domain.TrackDisplay
 import com.shibi.musicplayer.domain.VideoTimeline
 import com.shibi.musicplayer.domain.section
 import com.shibi.musicplayer.library.LibraryViewModel
+import com.shibi.musicplayer.library.MediaTrash
 import com.shibi.musicplayer.playback.PlayerUiState
 import com.shibi.musicplayer.ui.background.ContrastSurface
 import com.shibi.musicplayer.ui.background.LocalBackgroundChrome
@@ -296,6 +297,8 @@ fun LibraryContent(
     initialSortMenuOpen: Boolean = false,
     /** Tests only: starts the fast-scroll thumb mid-drag at this fraction. */
     fastScrollDragFraction: Float? = null,
+    /** Whether a row's ⋮ offers Move to trash: the system trash needs Android 11. */
+    canTrash: Boolean = MediaTrash.isSupported(),
 ) {
     // Set when the user picks a sort: the list goes to the top once it shows that sort.
     var jumpToTopFor by remember { mutableStateOf<SortSpec?>(null) }
@@ -413,7 +416,11 @@ fun LibraryContent(
                 fastScroll = sorted,
                 fastScrollDragFraction = fastScrollDragFraction,
                 listLayout = true,
-                onTrash = { track -> onTrashSongs(listOf(track), allIds == listOf(track.id)) },
+                onTrash = if (canTrash) {
+                    { track -> onTrashSongs(listOf(track), allIds == listOf(track.id)) }
+                } else {
+                    null
+                },
                 modifier = Modifier.weight(1f),
             )
         }
@@ -469,12 +476,10 @@ internal fun SongColumn(
     fastScroll: SortedList<Track>? = null,
     /** Tests only: starts the fast-scroll thumb mid-drag at this fraction. */
     fastScrollDragFraction: Float? = null,
-    /**
-     * The Songs list: [SongListRow]s, whose ⋮ menu can also [onTrash] a song. Favorites, Recent
-     * and Search keep [TrackRow].
-     */
+    /** The Songs list: [SongListRow]s. Favorites, Recent and Search keep [TrackRow]. */
     listLayout: Boolean = false,
-    onTrash: (Track) -> Unit = {},
+    /** With [listLayout], the ⋮ menu's Move to trash; null leaves it out. */
+    onTrash: ((Track) -> Unit)? = null,
 ) {
     if (tracks.isEmpty()) {
         MessagePane(
@@ -623,7 +628,7 @@ private fun SongRows(
     onSelectionChange: ((Selection) -> Unit)?,
     selection: Selection,
     listLayout: Boolean,
-    onTrash: (Track) -> Unit,
+    onTrash: ((Track) -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     val reduceMotion = rememberReduceMotion()
@@ -653,31 +658,34 @@ private fun SongRows(
             } else {
                 Modifier.animateItem()
             }
+            val isPlaying = nowPlaying.currentMediaId == track.id.toString()
+            val isFavorite = track.id in favoriteIds
+            val selected = selecting && track.id in selection.ids
             if (listLayout) {
                 SongListRow(
                     track = track,
-                    isPlaying = nowPlaying.currentMediaId == track.id.toString(),
-                    isFavorite = track.id in favoriteIds,
+                    isPlaying = isPlaying,
+                    isFavorite = isFavorite,
                     onClick = onClick,
                     onAddToPlaylist = { onAddToPlaylist(track) },
                     onToggleFavorite = { onToggleFavorite(track) },
-                    onTrash = { onTrash(track) },
+                    onTrash = onTrash?.let { trash -> { trash(track) } },
                     modifier = itemModifier,
                     selectionMode = selecting,
-                    selected = selecting && track.id in selection.ids,
+                    selected = selected,
                     onLongClick = onLongClick,
                 )
             } else {
                 TrackRow(
                     track = track,
-                    isPlaying = nowPlaying.currentMediaId == track.id.toString(),
-                    isFavorite = track.id in favoriteIds,
+                    isPlaying = isPlaying,
+                    isFavorite = isFavorite,
                     onClick = onClick,
                     onAddToPlaylist = { onAddToPlaylist(track) },
                     onToggleFavorite = { onToggleFavorite(track) },
                     modifier = itemModifier,
                     selectionMode = selecting,
-                    selected = selecting && track.id in selection.ids,
+                    selected = selected,
                     onLongClick = onLongClick,
                 )
             }
@@ -687,17 +695,17 @@ private fun SongRows(
 
 /**
  * A Songs list row ([ListRow]): the album art, the title over the artist and length, then the
- * ♥ and the ⋮ menu (add to a playlist, move to trash).
+ * ♥ and the ⋮ menu (add to a playlist, and move to trash when [onTrash] is given).
  */
 @Composable
-internal fun SongListRow(
+private fun SongListRow(
     track: Track,
     isPlaying: Boolean,
     isFavorite: Boolean,
     onClick: () -> Unit,
     onAddToPlaylist: () -> Unit,
     onToggleFavorite: () -> Unit,
-    onTrash: () -> Unit,
+    onTrash: (() -> Unit)?,
     modifier: Modifier = Modifier,
     selectionMode: Boolean = false,
     selected: Boolean = false,
@@ -725,15 +733,7 @@ internal fun SongListRow(
         selectionMode = selectionMode,
         selected = selected,
     ) { tint ->
-        IconButton(onClick = onToggleFavorite) {
-            Icon(
-                imageVector = if (isFavorite) Icons.Rounded.Favorite else Icons.Outlined.FavoriteBorder,
-                contentDescription = stringResource(
-                    if (isFavorite) R.string.unfavorite else R.string.favorite,
-                ),
-                tint = if (isFavorite) Secondary else chrome.iconMuted,
-            )
-        }
+        RowFavoriteButton(isFavorite = isFavorite, onToggle = onToggleFavorite)
         RowOverflowMenu(tint = tint) { dismiss ->
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.add_to_playlist)) },
@@ -742,14 +742,31 @@ internal fun SongListRow(
                     onAddToPlaylist()
                 },
             )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.move_to_trash)) },
-                onClick = {
-                    dismiss()
-                    onTrash()
-                },
-            )
+            if (onTrash != null) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.move_to_trash)) },
+                    onClick = {
+                        dismiss()
+                        onTrash()
+                    },
+                )
+            }
         }
+    }
+}
+
+/** A song row's ♥: the accent when [isFavorite], muted otherwise. */
+@Composable
+private fun RowFavoriteButton(isFavorite: Boolean, onToggle: () -> Unit) {
+    val chrome = LocalBackgroundChrome.current
+    IconButton(onClick = onToggle) {
+        Icon(
+            imageVector = if (isFavorite) Icons.Rounded.Favorite else Icons.Outlined.FavoriteBorder,
+            contentDescription = stringResource(
+                if (isFavorite) R.string.unfavorite else R.string.favorite,
+            ),
+            tint = if (isFavorite) Secondary else chrome.iconMuted,
+        )
     }
 }
 
@@ -841,15 +858,7 @@ internal fun TrackRow(
             Spacer(Modifier.width(8.dp))
             return@Row
         }
-        IconButton(onClick = onToggleFavorite) {
-            Icon(
-                imageVector = if (isFavorite) Icons.Rounded.Favorite else Icons.Outlined.FavoriteBorder,
-                contentDescription = stringResource(
-                    if (isFavorite) R.string.unfavorite else R.string.favorite,
-                ),
-                tint = if (isFavorite) Secondary else chrome.iconMuted,
-            )
-        }
+        RowFavoriteButton(isFavorite = isFavorite, onToggle = onToggleFavorite)
         Box {
             IconButton(onClick = { menuOpen = true }) {
                 Icon(

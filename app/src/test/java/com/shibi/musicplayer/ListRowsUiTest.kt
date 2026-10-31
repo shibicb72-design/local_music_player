@@ -1,6 +1,11 @@
 package com.shibi.musicplayer
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.semantics.Role
@@ -31,6 +36,7 @@ import coil3.compose.LocalAsyncImagePreviewHandler
 import com.shibi.musicplayer.domain.Track
 import com.shibi.musicplayer.domain.Video
 import com.shibi.musicplayer.playback.PlayerUiState
+import com.shibi.musicplayer.ui.FavoritesContent
 import com.shibi.musicplayer.ui.LibraryContent
 import com.shibi.musicplayer.ui.ListThumbnailTag
 import com.shibi.musicplayer.ui.SongFastScrollerTag
@@ -83,7 +89,7 @@ class ListRowsUiTest {
     @Test
     fun songMenuGlyphEndsSixteenDpFromTheRowsEnd() {
         // No sort, no fast scroller: the rows reach the list's end.
-        songs(sorted = false)
+        songs(withSort = false)
         val list = list()
         val menus = menuButtons()
         assertEquals(tracks.size, menus.size)
@@ -91,6 +97,18 @@ class ListRowsUiTest {
             menuButton(index).assertTouchWidthIsEqualTo(48.dp).assertTouchHeightIsEqualTo(48.dp)
             // The 24 dp glyph is centred in its touch target.
             assertDp("glyph to the row's end", 16.dp, list.right - (menus[index].center.x + px(12.dp)))
+        }
+    }
+
+    @Test
+    fun besideTheScrollerTheSongMenuGlyphStillEndsSixteenDpFromTheRowsEnd() {
+        // As shipped: sorted, so the rows end 48 dp (the fast-scroll gutter) short of the list.
+        songs()
+        val rowsEnd = list().right - px(48.dp)
+        val menus = menuButtons()
+        assertEquals(tracks.size, menus.size)
+        for (menu in menus) {
+            assertDp("glyph to the row's end", 16.dp, rowsEnd - (menu.center.x + px(12.dp)))
         }
     }
 
@@ -112,9 +130,10 @@ class ListRowsUiTest {
     @Test
     fun songSecondLineIsTheArtistThenTheLength() {
         songs()
+        // The dot between them is decoration: the row reads out "01:40" alone.
         compose.onNodeWithText("Alpha")
             .assert(hasText("Artist One"))
-            .assert(hasText("· 01:40", substring = true))
+            .assert(hasText("01:40"))
     }
 
     @Test
@@ -174,6 +193,47 @@ class ListRowsUiTest {
         assertDp("row height while selecting", 60.dp, rowOf("Bravo").height)
     }
 
+    @Test
+    fun aOneSongListTrashesItsWholeList() {
+        var trashed: Pair<List<Track>, Boolean>? = null
+        songs(list = tracks.take(1), onTrashSongs = { picked, whole -> trashed = picked to whole })
+        openMenuOf("Alpha")
+        compose.onNodeWithText("Move to trash").performClick()
+        assertEquals(listOf(tracks[0]) to true, trashed)
+    }
+
+    @Test
+    fun withoutTheSystemTrashTheSongMenuOnlyAddsToAPlaylist() {
+        // Below Android 11 there is no system trash (MediaTrash.isSupported()).
+        songs(canTrash = false)
+        openMenuOf("Alpha")
+        compose.onNodeWithText("Add to playlist").assertExists()
+        compose.onNodeWithText("Move to trash").assertDoesNotExist()
+    }
+
+    @Test
+    fun favoritesKeepTheirOwnRowsAndMenu() {
+        // Only the Songs list is restyled; Favorites, like Recent and Search, keeps TrackRow.
+        compose.setContent {
+            MusicPlayerTheme {
+                FavoritesContent(
+                    tracks = tracks,
+                    favoriteIds = tracks.map { it.id }.toSet(),
+                    nowPlaying = PlayerUiState(),
+                    onTrackSelected = { _, _ -> },
+                    onToggleFavorite = {},
+                    onAddToPlaylist = {},
+                    contentBottomPadding = 0.dp,
+                )
+            }
+        }
+        assertDp("TrackRow height", 68.dp, rowOf("Alpha").height)
+        playAll().assertDoesNotExist()
+        openMenuOf("Alpha")
+        compose.onNodeWithText("Add to playlist").assertExists()
+        compose.onNodeWithText("Move to trash").assertDoesNotExist()
+    }
+
     // --- Videos ---
 
     @Test
@@ -199,6 +259,33 @@ class ListRowsUiTest {
             val touchRight = menus[index].center.x + px(24.dp)
             assertTrue("touch target ends at $touchRight, thumb starts at ${thumb.left}", touchRight <= thumb.left)
         }
+    }
+
+    @Test
+    fun besideTheScrollerTheVideoMenuGlyphEndsSixteenDpFromTheRowsEnd() {
+        // Videos always have the fast scroller: the rows end 48 dp short of the list.
+        videos()
+        val rowsEnd = list().right - px(48.dp)
+        val menus = menuButtons()
+        assertTrue("rows on screen", menus.size >= 4)
+        for (menu in menus) {
+            assertDp("glyph to the row's end", 16.dp, rowsEnd - (menu.center.x + px(12.dp)))
+        }
+    }
+
+    @Test
+    fun withoutTheSystemTrashVideoRowsHaveNoMenu() {
+        videos(canTrash = false)
+        compose.onAllNodesWithContentDescription("More").assertCountEquals(0)
+        assertDp("row height", 60.dp, rowOf("Beach day").height)
+    }
+
+    @Test
+    fun theInlinePlayerLayoutHasNoPlayAll() {
+        // A video plays in the box above the list: no title row, so no pill either.
+        videos(player = { Box(Modifier.fillMaxWidth().height(200.dp)) })
+        compose.onNodeWithText("Beach day").assertExists()
+        playAll().assertDoesNotExist()
     }
 
     @Test
@@ -252,18 +339,21 @@ class ListRowsUiTest {
     // --- Helpers ---
 
     private fun songs(
-        sorted: Boolean = true,
+        list: List<Track> = tracks,
+        withSort: Boolean = true,
         onTrackSelected: (List<Track>, Long) -> Unit = { _, _ -> },
         onAddToPlaylist: (Track) -> Unit = {},
         onToggleFavorite: (Track) -> Unit = {},
         onTrashSongs: (List<Track>, Boolean) -> Unit = { _, _ -> },
         dragFraction: Float? = null,
+        canTrash: Boolean = true,
     ) {
+        val sorted = shippedSongs(list)
         compose.setContent {
             MusicPlayerTheme {
                 LibraryContent(
-                    tracks = shipped.items,
-                    sorted = if (sorted) shipped else null,
+                    tracks = sorted.items,
+                    sorted = if (withSort) sorted else null,
                     nowPlaying = PlayerUiState(),
                     showMiniPlayer = false,
                     onTrackSelected = onTrackSelected,
@@ -274,6 +364,7 @@ class ListRowsUiTest {
                     onTrashSongs = onTrashSongs,
                     contentBottomPadding = 0.dp,
                     fastScrollDragFraction = dragFraction,
+                    canTrash = canTrash,
                 )
             }
         }
@@ -285,6 +376,8 @@ class ListRowsUiTest {
         onVideoClick: (Video) -> Unit = {},
         onTrashVideos: (List<Video>, Boolean) -> Unit = { _, _ -> },
         dragFraction: Float? = null,
+        canTrash: Boolean = true,
+        player: (@Composable (maxHeight: Dp) -> Unit)? = null,
     ) {
         compose.setContent {
             MusicPlayerTheme {
@@ -298,8 +391,10 @@ class ListRowsUiTest {
                         onRequestAccess = {},
                         onOpenSettings = {},
                         contentBottomPadding = 0.dp,
+                        player = player,
                         onTrashVideos = onTrashVideos,
                         fastScrollDragFraction = dragFraction,
+                        canTrash = canTrash,
                     )
                 }
             }
