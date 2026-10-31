@@ -2,7 +2,12 @@ package com.shibi.musicplayer
 
 import com.shibi.musicplayer.domain.DotTickState
 import com.shibi.musicplayer.domain.MagneticSnap
+import com.shibi.musicplayer.domain.ScrollSection
+import com.shibi.musicplayer.domain.dragTargetIndex
 import com.shibi.musicplayer.domain.magneticSnap
+import com.shibi.musicplayer.domain.sectionIndexAt
+import com.shibi.musicplayer.domain.stopFractions
+import com.shibi.musicplayer.domain.thinStops
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -127,5 +132,49 @@ class FastScrollTest {
         assertTrue(lock(2))
         assertTrue(lock(3))
         assertFalse(lock(3))
+    }
+
+    @Test
+    fun stopsSitAtTheirShareOfTheListAndADragLandsOnTheLockedOne() {
+        val stops = listOf(ScrollSection(0, 10), ScrollSection(50, 5), ScrollSection(100, 1))
+        assertEquals(listOf(0f, 0.5f, 1f), stopFractions(stops, 101))
+        assertEquals(50, dragTargetIndex(MagneticSnap(0.48f, lockedIndex = 1), stops, 101))
+        // Between stops the entry under the thumb wins.
+        assertEquals(30, dragTargetIndex(MagneticSnap(0.3f), stops, 101))
+    }
+
+    @Test
+    fun theSectionHoldingAnEntryIsTheLastOneStartingAtOrBeforeIt() {
+        val sections = listOf(ScrollSection(0, 3), ScrollSection(4, 2), ScrollSection(7, 9))
+        assertEquals(0, sectionIndexAt(sections, 0))
+        assertEquals(0, sectionIndexAt(sections, 3))
+        assertEquals(1, sectionIndexAt(sections, 4))
+        assertEquals(2, sectionIndexAt(sections, 20))
+        assertNull(sectionIndexAt(emptyList(), 2))
+    }
+
+    @Test
+    fun crowdedStopsAreThinnedSoTheBiggestKeepTheirDots() {
+        // 1000 entries on a 1000 px track: one entry per pixel. Letters X, Y, Z are 3 px apart.
+        val a = ScrollSection(0, 400)
+        val x = ScrollSection(990, 2)
+        val y = ScrollSection(993, 1)
+        val z = ScrollSection(996, 4)
+        val kept = thinStops(listOf(a, x, y, z), entryCount = 1001, trackPx = 1000f, minGapPx = 16f)
+        // Z is the biggest of the crowded three; A is far away and stays.
+        assertEquals(listOf(a, z), kept)
+        // Far apart, nothing is dropped, and the order is the list's.
+        val spread = listOf(ScrollSection(0, 1), ScrollSection(500, 1), ScrollSection(1000, 1))
+        assertEquals(spread, thinStops(spread, 1001, 1000f, 16f))
+    }
+
+    @Test
+    fun thinnedStopsAreAlwaysAtLeastTheSnapDistanceApart() {
+        val stops = (0 until 60).map { ScrollSection(it * 7, it % 5 + 1) }
+        val kept = thinStops(stops, entryCount = 420, trackPx = 600f, minGapPx = 16f)
+        val positions = stopFractions(kept, 420).map { it * 600f }
+        positions.zipWithNext().forEach { (first, second) -> assertTrue(second - first >= 16f) }
+        assertEquals(kept.sortedBy { it.startIndex }, kept)
+        assertTrue(kept.size in 2 until stops.size)
     }
 }

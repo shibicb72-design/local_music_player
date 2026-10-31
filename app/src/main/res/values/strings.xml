@@ -341,4 +341,63 @@
     <string name="pip_forward_10">Forward 10 seconds</string>
     <string name="pip_play">Play</string>
     <string name="pip_pause">Pause</string>
+
+    <!-- Library sort: the menu on Videos and Songs, its labels, list headers and fast-scroll stops. -->
+    <string name="sort_button">Sort</string>
+    <string name="sort_current">Current sort</string>
+    <!-- Title-row subtitle: the count, then the sort, e.g. "1,234 songs · Name A–Z". -->
+    <string name="sort_subtitle">%1$s · %2$s</string>
+    <string name="sort_date_newest">Newest first</string>
+    <string name="sort_date_oldest">Oldest first</string>
+    <string name="sort_name_az">Name A–Z</string>
+    <string name="sort_name_za">Name Z–A</string>
+    <string name="sort_artist_az">Artist A–Z</string>
+    <string name="sort_artist_za">Artist Z–A</string>
+    <string name="sort_album_az">Album A–Z</string>
+    <string name="sort_album_za">Album Z–A</string>
+    <string name="sort_size_largest">Largest first</string>
+    <string name="sort_size_smallest">Smallest first</string>
+    <string name="sort_length_longest">Longest first</string>
+    <string name="sort_length_shortest">Shortest first</string>
+    <string name="sort_group_unknown">Unknown</string>
+    <string name="sort_unknown_size">Unknown size</string>
+    <string name="sort_unknown_length">Unknown length</string>
+    <string name="fast_scroll_by_name">Scroll by name</string>
+    <string name="fast_scroll_by_artist">Scroll by artist</string>
+    <string name="fast_scroll_by_album">Scroll by album</string>
+    <string name="fast_scroll_by_size">Scroll by size</string>
+    <string name="fast_scroll_by_length">Scroll by length</string>
+    <!-- One per band of SortBands.VideoSize, in order. -->
+    <string-array name="sort_bands_video_size">
+        <item>Under 10 MB</item>
+        <item>10–100 MB</item>
+        <item>100 MB–1 GB</item>
+        <item>1–4 GB</item>
+        <item>4 GB and up</item>
+    </string-array>
+    <!-- One per band of SortBands.VideoLength, in order. -->
+    <string-array name="sort_bands_video_length">
+        <item>Under 1 min</item>
+        <item>1–5 min</item>
+        <item>5–20 min</item>
+        <item>20–60 min</item>
+        <item>1–2 h</item>
+        <item>2 h and up</item>
+    </string-array>
+    <!-- One per band of SortBands.MusicSize, in order. -->
+    <string-array name="sort_bands_music_size">
+        <item>Under 5 MB</item>
+        <item>5–10 MB</item>
+        <item>10–20 MB</item>
+        <item>20–50 MB</item>
+        <item>50 MB and up</item>
+    </string-array>
+    <!-- One per band of SortBands.MusicLength, in order. -->
+    <string-array name="sort_bands_music_length">
+        <item>Under 2 min</item>
+        <item>2–4 min</item>
+        <item>4–6 min</item>
+        <item>6–10 min</item>
+        <item>10 min and up</item>
+    </string-array>
 </resources>

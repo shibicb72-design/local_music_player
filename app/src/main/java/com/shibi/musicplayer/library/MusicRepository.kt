@@ -3,6 +3,7 @@ package com.shibi.musicplayer.library
 import android.content.ContentUris
 import android.content.Context
 import android.database.ContentObserver
+import android.database.Cursor
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
@@ -39,11 +40,14 @@ class MusicRepository(private val context: Context) {
             MediaStore.Audio.Media.ALBUM,
             MediaStore.Audio.Media.DURATION,
             MediaStore.Audio.Media.ALBUM_ID,
+            MediaStore.Audio.Media.DATE_ADDED,
+            MediaStore.Audio.Media.SIZE,
         )
         // All on-device music. A specific folder filter will be added later.
         val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0" +
             " AND ${MediaStore.Audio.Media.MIME_TYPE} LIKE ?"
         val selectionArgs = arrayOf("audio/%")
+        // The library order (Favorites, Search); the Songs list sorts its own copy (LibrarySorter).
         val sortOrder = "${MediaStore.Audio.Media.TITLE} COLLATE NOCASE ASC"
 
         val tracks = mutableListOf<Track>()
@@ -60,6 +64,9 @@ class MusicRepository(private val context: Context) {
             val albumColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
             val durationColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
             val albumIdColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
+            // Only the sorts read these; a provider without them leaves the values unknown.
+            val dateAddedColumn = cursor.getColumnIndex(MediaStore.Audio.Media.DATE_ADDED)
+            val sizeColumn = cursor.getColumnIndex(MediaStore.Audio.Media.SIZE)
             while (cursor.moveToNext()) {
                 val id = cursor.getLong(idColumn)
                 val albumId = cursor.getLong(albumIdColumn)
@@ -71,6 +78,8 @@ class MusicRepository(private val context: Context) {
                     durationMs = cursor.getLong(durationColumn).coerceAtLeast(0L),
                     contentUri = ContentUris.withAppendedId(collection, id).toString(),
                     albumArtUri = albumArtUri(albumId),
+                    dateAddedSeconds = cursor.positiveLong(dateAddedColumn) ?: 0L,
+                    sizeBytes = cursor.positiveLong(sizeColumn),
                 )
             }
         }
@@ -91,6 +100,12 @@ class MusicRepository(private val context: Context) {
     }
 
     private fun String?.toArtistName(): String = toDisplayName(R.string.unknown_artist)
+
+    /** The column's value when it is there and positive; null for a missing column, NULL or 0. */
+    private fun Cursor.positiveLong(column: Int): Long? {
+        if (column < 0 || isNull(column)) return null
+        return getLong(column).takeIf { it > 0L }
+    }
 
     private companion object {
         val ALBUM_ART_URI: Uri = Uri.parse("content://media/external/audio/albumart")

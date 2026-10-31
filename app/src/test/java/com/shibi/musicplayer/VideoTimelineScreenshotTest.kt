@@ -24,9 +24,7 @@ import com.shibi.musicplayer.domain.AppBackground
 import com.shibi.musicplayer.domain.RoutePresentation
 import com.shibi.musicplayer.domain.Selection
 import com.shibi.musicplayer.domain.Video
-import com.shibi.musicplayer.domain.VideoAccess
 import com.shibi.musicplayer.domain.VideoTimeline
-import com.shibi.musicplayer.library.VideoLibraryUiState
 import com.shibi.musicplayer.ui.ChromeSlot
 import com.shibi.musicplayer.ui.ListViewport
 import com.shibi.musicplayer.ui.MiniPlayerCarouselGap
@@ -185,7 +183,7 @@ class VideoTimelineScreenshotTest {
             LocalAsyncImagePreviewHandler provides VideosScreenshotTest.thumbnails,
         ) {
             VideosContent(
-                state = VideoLibraryUiState(access = VideoAccess.Full, videos = videos),
+                state = VideosScreenshotTest.sortedState(videos),
                 onVideoClick = {},
                 onRequestAccess = {},
                 onOpenSettings = {},
@@ -250,7 +248,7 @@ class VideoTimelineScreenshotTest {
                 .copy(dateTakenMs = 0L, dateAddedSeconds = 0L)
             VideoTimeline.sortNewestFirst(dated + addedOnly + undated)
         }
-        val state = VideoLibraryUiState(access = VideoAccess.Full, videos = videos)
+        val state = VideosScreenshotTest.sortedState(videos)
 
         /** [videos] plus two weeks busy enough for a fast-scroll dot, in October and June 2025. */
         val busyVideos: List<Video> = run {

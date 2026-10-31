@@ -3,6 +3,7 @@ package com.shibi.musicplayer.playback
 import android.app.Application
 import android.content.ComponentName
 import android.os.Bundle
+import androidx.annotation.VisibleForTesting
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -28,14 +29,18 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 class PlayerViewModel(application: Application) : AndroidViewModel(application) {
-    private val sessionToken = SessionToken(
-        application,
-        ComponentName(application, PlaybackService::class.java),
-    )
-    private val controllerFuture: ListenableFuture<MediaController> =
-        MediaController.Builder(application, sessionToken).buildAsync()
+    /** Robolectric cannot bind the session service; a real-activity test hands in its own player. */
+    private val testPlayer: Player? = testPlayerFactory?.invoke()
+    private val controllerFuture: ListenableFuture<MediaController>? = if (testPlayer == null) {
+        MediaController.Builder(
+            application,
+            SessionToken(application, ComponentName(application, PlaybackService::class.java)),
+        ).buildAsync()
+    } else {
+        null
+    }
 
-    private var controller: MediaController? = null
+    private var controller: Player? = null
     private var pendingTracks: List<Track>? = null
     private var pendingTrackId: Long? = null
     private var pendingContext: ShuffleContext = ShuffleContext.ALL_SONGS
@@ -84,24 +89,16 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     init {
-        controllerFuture.addListener(
-            {
-                val connected = runCatching { controllerFuture.get() }.getOrNull() ?: return@addListener
-                controller = connected
-                connected.addListener(playerListener)
-                pendingTracks?.let { tracks ->
-                    val trackId = pendingTrackId
-                    val context = pendingContext
-                    pendingTracks = null
-                    pendingTrackId = null
-                    if (trackId != null) {
-                        startPlayback(connected, tracks, trackId, context)
-                    }
-                }
-                publish(connected)
-            },
-            ContextCompat.getMainExecutor(application),
-        )
+        testPlayer?.let(::connect)
+        controllerFuture?.let { future ->
+            future.addListener(
+                {
+                    val connected = runCatching { future.get() }.getOrNull() ?: return@addListener
+                    connect(connected)
+                },
+                ContextCompat.getMainExecutor(application),
+            )
+        }
         progressJob = viewModelScope.launch {
             while (isActive) {
                 val player = controller
@@ -111,6 +108,21 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 delay(POSITION_POLL_MS)
             }
         }
+    }
+
+    private fun connect(connected: Player) {
+        controller = connected
+        connected.addListener(playerListener)
+        pendingTracks?.let { tracks ->
+            val trackId = pendingTrackId
+            val context = pendingContext
+            pendingTracks = null
+            pendingTrackId = null
+            if (trackId != null) {
+                startPlayback(connected, tracks, trackId, context)
+            }
+        }
+        publish(connected)
     }
 
     fun playTrack(
@@ -219,7 +231,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     fun setOutputDevice(deviceId: Int?) {
         _preferredOutputId.value = deviceId
-        controller?.sendCustomCommand(
+        (controller as? MediaController)?.sendCustomCommand(
             OutputCommands.SET_OUTPUT,
             Bundle().apply { putInt(OutputCommands.EXTRA_DEVICE_ID, deviceId ?: -1) },
         )
@@ -228,13 +240,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     override fun onCleared() {
         progressJob?.cancel()
         controller?.removeListener(playerListener)
-        MediaController.releaseFuture(controllerFuture)
+        controllerFuture?.let(MediaController::releaseFuture)
         controller = null
         super.onCleared()
     }
 
     private fun startPlayback(
-        player: MediaController,
+        player: Player,
         tracks: List<Track>,
         trackId: Long,
         context: ShuffleContext,
@@ -311,7 +323,15 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         )
     }
 
-    private companion object {
+    internal companion object {
         const val POSITION_POLL_MS = 500L
+
+        /**
+         * Robolectric tests of the real activity hand in a fake player here, since the activity
+         * builds this view model with the default factory. The app never sets it.
+         */
+        @VisibleForTesting
+        @Volatile
+        var testPlayerFactory: (() -> Player)? = null
     }
 }

@@ -134,7 +134,6 @@ fun MusicApp(
     val tracksOpen = showTracks && videoState.isActive
     // While in picture-in-picture only the video is on screen; nothing else may be composed.
     val pipOnly = inPip && videoState.isActive
-    var musicPausedByVideo by rememberSaveable { mutableStateOf(false) }
     val selectedOutputId by playerViewModel.preferredOutputId.collectAsStateWithLifecycle()
     val playlistState by playlistViewModel.state.collectAsStateWithLifecycle()
     val favoriteIds by playlistViewModel.favoriteIds.collectAsStateWithLifecycle()
@@ -296,15 +295,11 @@ fun MusicApp(
 
     fun closeVideo() {
         videoViewModel.close()
-        musicPausedByVideo = false
     }
 
     fun playVideo(video: Video) {
         val decision = PlaybackArbiter.onVideoStart(playerViewModel.uiState.value.isPlaying)
-        if (decision.pauseMusic) {
-            playerViewModel.pause()
-            musicPausedByVideo = true
-        }
+        if (decision.pauseMusic) playerViewModel.pause()
         videoViewModel.open(video)
     }
 
@@ -405,8 +400,13 @@ fun MusicApp(
         val sections = SectionRoutes.sectionsFor(expanded = wide)
         // Pure, so the first expanded frame already shows the fallback: the ring never spins in.
         val carouselSection = SectionRoutes.selectionFor(wide, section, previousSection)
-        // A second play button would fight the video; the bar returns when it closes.
-        val showMini = playerState.hasMedia && route != PlayerRoute && !videoState.isActive
+        // A second play button would fight the video; the bar returns, paused, once it ends or closes.
+        val showMini = PlaybackArbiter.showMusicBanner(
+            hasMusic = playerState.hasMedia,
+            onNowPlaying = route == PlayerRoute,
+            videoActive = videoState.isActive,
+            videoEnded = videoState.status == VideoStatus.Ended,
+        )
         val activeOutputId = playbackRoute.activeDeviceId
 
         fun openFullscreen() {
@@ -433,16 +433,14 @@ fun MusicApp(
             wasInPip = inPip
         }
 
-        // No auto-next: the ended video stays loaded with "Play again". Two-pane leaves fullscreen
-        // for the pane, which keeps the video; it never goes back to Now Playing on its own.
-        // Only the end itself counts: a later fold, unfold or rotation keeps fullscreen, as it
-        // does for a playing video, and a return from PiP is left to the effect above.
+        // No auto-next and no music: the ended video stays loaded with "Play again", and the
+        // music it paused stays paused until the mini player's play button. Two-pane leaves
+        // fullscreen for the pane, which keeps the video; it never goes back to Now Playing on
+        // its own. Only the end itself counts: a later fold, unfold or rotation keeps fullscreen,
+        // as it does for a playing video, and a return from PiP is left to the effect above.
         LaunchedEffect(videoState.status) {
             if (videoState.status == VideoStatus.Ended) {
-                val decision = PlaybackArbiter.onVideoEnded(musicPausedByVideo, twoPane = wide)
-                if (decision.resumeMusic && !playerViewModel.uiState.value.isPlaying) {
-                    playerViewModel.togglePlayPause()
-                }
+                val decision = PlaybackArbiter.onVideoEnded(twoPane = wide)
                 if (decision.exitFullscreen && navController.currentDestination?.route == VideoFullscreenRoute) {
                     exitFullscreen()
                     // Fullscreen was over another tab (a video from another app): the pane is on Videos.

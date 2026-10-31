@@ -65,6 +65,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -87,12 +88,20 @@ import androidx.core.net.toUri
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.shibi.musicplayer.R
+import com.shibi.musicplayer.domain.LibrarySorts
 import com.shibi.musicplayer.domain.PlaybackTime
 import com.shibi.musicplayer.domain.RouteIcon
 import com.shibi.musicplayer.domain.Selection
 import com.shibi.musicplayer.domain.RoutePresentation
+import com.shibi.musicplayer.domain.ScrollSection
+import com.shibi.musicplayer.domain.SortField
+import com.shibi.musicplayer.domain.SortGroup
+import com.shibi.musicplayer.domain.SortSpec
+import com.shibi.musicplayer.domain.SortedList
 import com.shibi.musicplayer.domain.Track
 import com.shibi.musicplayer.domain.TrackDisplay
+import com.shibi.musicplayer.domain.VideoTimeline
+import com.shibi.musicplayer.domain.section
 import com.shibi.musicplayer.library.LibraryViewModel
 import com.shibi.musicplayer.playback.PlayerUiState
 import com.shibi.musicplayer.ui.background.ContrastSurface
@@ -100,6 +109,8 @@ import com.shibi.musicplayer.ui.background.LocalBackgroundChrome
 import com.shibi.musicplayer.ui.theme.DeviceGreen
 import com.shibi.musicplayer.ui.theme.Secondary
 import com.shibi.musicplayer.ui.theme.Spacing
+import java.time.ZoneId
+import java.util.Locale
 
 @Composable
 fun LibraryScreen(
@@ -118,6 +129,8 @@ fun LibraryScreen(
 ) {
     val context = LocalContext.current
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    // The Songs list in its own sort; Favorites, Search and Recent keep the library order.
+    val songs = state.songs
     val audioPermission = remember { audioReadPermission() }
     var audioGranted by remember {
         mutableStateOf(
@@ -220,8 +233,27 @@ fun LibraryScreen(
                     .padding(24.dp),
             )
         }
+        // Loaded but not yet in the stored sort: wait, rather than flash the library order.
+        songs == null || songs.items.isEmpty() -> LibraryScaffold(
+            nowPlaying = nowPlaying,
+            showMiniPlayer = showMiniPlayer,
+            onOpenPlayer = onOpenPlayer,
+            onTogglePlayPause = onTogglePlayPause,
+            modifier = modifier,
+        ) { padding ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+                contentAlignment = Alignment.Center,
+            ) {
+                CircularProgressIndicator()
+            }
+        }
         else -> LibraryContent(
-            tracks = state.tracks,
+            tracks = songs.items,
+            sorted = songs,
+            onSortChange = viewModel::setSort,
             nowPlaying = nowPlaying,
             showMiniPlayer = showMiniPlayer,
             onTrackSelected = onTrackSelected,
@@ -253,7 +285,27 @@ fun LibraryContent(
     listState: LazyListState = rememberLazyListState(),
     modifier: Modifier = Modifier,
     initialSelection: Selection = Selection(),
+    /**
+     * [tracks] with their sort and groups: shows the sort menu, the sort in the subtitle and the
+     * fast scroller. Null keeps the plain list.
+     */
+    sorted: SortedList<Track>? = null,
+    /** The user picked a new sort; [sorted] comes back in it. */
+    onSortChange: (SortSpec) -> Unit = {},
+    /** Screenshots only: the sort menu starts open. */
+    initialSortMenuOpen: Boolean = false,
+    /** Tests only: starts the fast-scroll thumb mid-drag at this fraction. */
+    fastScrollDragFraction: Float? = null,
 ) {
+    // Set when the user picks a sort: the list goes to the top once it shows that sort.
+    var jumpToTopFor by remember { mutableStateOf<SortSpec?>(null) }
+    if (jumpToTopFor != null && jumpToTopFor == sorted?.spec) {
+        SideEffect {
+            // Before the new order's first layout, so the list never shows the old position.
+            listState.requestScrollToItem(0)
+            jumpToTopFor = null
+        }
+    }
     var selection by remember { mutableStateOf(initialSelection) }
     val allIds = remember(tracks) { tracks.map { it.id } }
     LaunchedEffect(allIds) { selection = selection.retain(allIds.toSet()) }
@@ -299,26 +351,44 @@ fun LibraryContent(
                     },
                 )
             } else {
-                Column(
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .statusBarsPadding()
-                        .padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 8.dp),
+                        // The icon button's own 12 dp inset lines its glyph up with the 20 dp margin.
+                        .padding(start = 20.dp, end = if (sorted != null) 8.dp else 20.dp, top = 16.dp, bottom = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(
-                        text = stringResource(R.string.library_title),
-                        style = MaterialTheme.typography.headlineMedium,
-                        color = MaterialTheme.colorScheme.onBackground,
-                    )
-                    Text(
-                        text = pluralStringResource(
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(R.string.library_title),
+                            style = MaterialTheme.typography.headlineMedium,
+                            color = MaterialTheme.colorScheme.onBackground,
+                        )
+                        val count = pluralStringResource(
                             R.plurals.song_count,
                             tracks.size,
                             tracks.size,
-                        ),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                        )
+                        Text(
+                            text = if (sorted != null) sortSubtitle(count, sorted.spec) else count,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    if (sorted != null) {
+                        SortButton(
+                            sort = sorted.spec,
+                            options = LibrarySorts.MusicOptions,
+                            onSortChange = { spec ->
+                                jumpToTopFor = spec
+                                onSortChange(spec)
+                            },
+                            initialOpen = initialSortMenuOpen,
+                        )
+                    }
                 }
             }
             SongColumn(
@@ -333,6 +403,8 @@ fun LibraryContent(
                 listState = listState,
                 selection = selection,
                 onSelectionChange = { selection = it },
+                fastScroll = sorted,
+                fastScrollDragFraction = fastScrollDragFraction,
                 modifier = Modifier.weight(1f),
             )
         }
@@ -381,6 +453,13 @@ internal fun SongColumn(
     // Null keeps long-press = add to playlist (Favorites, Search).
     onSelectionChange: ((Selection) -> Unit)? = null,
     selection: Selection = Selection(),
+    /**
+     * Opt-in fast scroll, the Songs list only: [tracks] with their sort and groups. The rows end
+     * short of the thumb, so it never covers a row's heart or menu button.
+     */
+    fastScroll: SortedList<Track>? = null,
+    /** Tests only: starts the fast-scroll thumb mid-drag at this fraction. */
+    fastScrollDragFraction: Float? = null,
 ) {
     if (tracks.isEmpty()) {
         MessagePane(
@@ -389,38 +468,188 @@ internal fun SongColumn(
                 .fillMaxWidth()
                 .padding(horizontal = 24.dp),
         )
+    } else if (fastScroll != null) {
+        Box(modifier = modifier) {
+            SongRows(
+                tracks = tracks,
+                nowPlaying = nowPlaying,
+                favoriteIds = favoriteIds,
+                onTrackSelected = onTrackSelected,
+                onToggleFavorite = onToggleFavorite,
+                onAddToPlaylist = onAddToPlaylist,
+                contentPadding = PaddingValues(end = SongScrollerGutter, bottom = contentBottomPadding),
+                listState = listState,
+                onSelectionChange = onSelectionChange,
+                selection = selection,
+                modifier = Modifier.fillMaxSize(),
+            )
+            SongFastScroller(
+                listState = listState,
+                songs = fastScroll,
+                initialDragFraction = fastScrollDragFraction,
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(bottom = contentBottomPadding),
+            )
+        }
     } else {
-        LazyColumn(
-            modifier = modifier,
-            state = listState,
+        SongRows(
+            tracks = tracks,
+            nowPlaying = nowPlaying,
+            favoriteIds = favoriteIds,
+            onTrackSelected = onTrackSelected,
+            onToggleFavorite = onToggleFavorite,
+            onAddToPlaylist = onAddToPlaylist,
             contentPadding = PaddingValues(bottom = contentBottomPadding),
-        ) {
-            items(tracks, key = { it.id }, contentType = { "track" }) { track ->
-                val change = onSelectionChange
-                val selecting = change != null && selection.active
-                TrackRow(
-                    track = track,
-                    isPlaying = nowPlaying.currentMediaId == track.id.toString(),
-                    isFavorite = track.id in favoriteIds,
-                    onClick = {
-                        if (selecting) {
-                            change(selection.toggle(track.id))
-                        } else {
-                            onTrackSelected(tracks, track.id)
-                        }
-                    },
-                    onAddToPlaylist = { onAddToPlaylist(track) },
-                    onToggleFavorite = { onToggleFavorite(track) },
-                    modifier = Modifier.animateItem(),
-                    selectionMode = selecting,
-                    selected = selecting && track.id in selection.ids,
-                    onLongClick = change?.let { apply ->
-                        {
-                            apply(if (selection.active) selection.toggle(track.id) else selection.start(track.id))
-                        }
-                    },
-                )
-            }
+            listState = listState,
+            onSelectionChange = onSelectionChange,
+            selection = selection,
+            modifier = modifier,
+        )
+    }
+}
+
+/**
+ * Room the Songs rows leave at their end for the fast-scroll thumb: with the rows' own 12 dp,
+ * the ♥ and ⋮ buttons end 4 dp left of the thumb's touch area. This is how the thumb never
+ * covers them (`LibrarySortUiTest.theSongsScrollerNeverCoversARowsHeartOrMenu`). The room stays
+ * while the thumb is hidden, so the rows never change width as it shows and fades; Favorites,
+ * Recent and Search have no scroller and keep full-width rows.
+ */
+internal val SongScrollerGutter = FastScrollTouchWidth - 8.dp
+
+/** Test tag of the Songs list's fast-scroll thumb. */
+internal const val SongFastScrollerTag = "song_fast_scroller"
+
+/**
+ * Fast scroll for the Songs list, by its sort: busy weeks of date added (as on Videos), letters
+ * for name, artist and album, ranges for size and length. The unknown group gets no dot.
+ */
+@Composable
+private fun SongFastScroller(
+    listState: LazyListState,
+    songs: SortedList<Track>,
+    modifier: Modifier = Modifier,
+    initialDragFraction: Float? = null,
+) {
+    val sort = songs.spec
+    val entryCount = songs.items.size
+    val description = stringResource(fastScrollDescriptionRes(sort.field))
+    if (sort.field == SortField.Date) {
+        val zone = remember { ZoneId.systemDefault() }
+        val locale = Locale.getDefault()
+        val weekOf = stringResource(R.string.video_week_of)
+        val unknown = stringResource(R.string.video_date_unknown)
+        val weeks = remember(songs, zone, locale) {
+            VideoTimeline.weeks(
+                entryCount = entryCount,
+                zone = zone,
+                locale = locale,
+                isHeader = { false },
+                timeAt = { index -> songs.items[index].dateAddedSeconds.takeIf { it > 0L }?.times(1_000L) },
+            )
+        }
+        val sections = remember(weeks) { weeks.map { it.section() } }
+        val stops = remember(weeks) { VideoTimeline.weekStops(weeks).map { it.section() } }
+        // A year label where the first song added that year sits.
+        val ticks = remember(songs) {
+            val denominator = maxOf(1, entryCount - 1)
+            songs.runs.mapNotNull { run -> (run.group as? SortGroup.Month)?.year?.let { it to run.start } }
+                .distinctBy { it.first }
+                .map { (year, start) -> FastScrollTick(year.toString(), start.toFloat() / denominator) }
+        }
+        FastScroller(
+            listState = listState,
+            entryCount = entryCount,
+            sections = sections,
+            stops = stops,
+            label = { index ->
+                index?.let(weeks::getOrNull)?.let { VideoTimeline.weekLabel(it, locale) }
+                    ?.let { weekOf.format(locale, it) } ?: unknown
+            },
+            description = description,
+            modifier = modifier,
+            ticks = ticks,
+            resetKey = sort,
+            tag = SongFastScrollerTag,
+            initialDragFraction = initialDragFraction,
+            // Every busy week keeps its dot, as on Videos.
+            thin = false,
+        )
+    } else {
+        val names = rememberSortGroupNames(music = true)
+        val sections = remember(songs) { songs.runs.map { ScrollSection(it.start, it.count) } }
+        val stops = remember(songs) {
+            songs.runs.filterNot { it.group.isUnknown }.map { ScrollSection(it.start, it.count) }
+        }
+        FastScroller(
+            listState = listState,
+            entryCount = entryCount,
+            sections = sections,
+            stops = stops,
+            label = { index ->
+                val group = index?.let(songs.runs::getOrNull)?.group
+                if (group != null) names.name(group, sort.field) else ""
+            },
+            description = description,
+            modifier = modifier,
+            resetKey = sort,
+            tag = SongFastScrollerTag,
+            initialDragFraction = initialDragFraction,
+        )
+    }
+}
+
+@Composable
+private fun SongRows(
+    tracks: List<Track>,
+    nowPlaying: PlayerUiState,
+    favoriteIds: Set<Long>,
+    onTrackSelected: (List<Track>, Long) -> Unit,
+    onToggleFavorite: (Track) -> Unit,
+    onAddToPlaylist: (Track) -> Unit,
+    contentPadding: PaddingValues,
+    listState: LazyListState,
+    onSelectionChange: ((Selection) -> Unit)?,
+    selection: Selection,
+    modifier: Modifier = Modifier,
+) {
+    val reduceMotion = rememberReduceMotion()
+    LazyColumn(
+        modifier = modifier,
+        state = listState,
+        contentPadding = contentPadding,
+    ) {
+        items(tracks, key = { it.id }, contentType = { "track" }) { track ->
+            val change = onSelectionChange
+            val selecting = change != null && selection.active
+            TrackRow(
+                track = track,
+                isPlaying = nowPlaying.currentMediaId == track.id.toString(),
+                isFavorite = track.id in favoriteIds,
+                onClick = {
+                    if (selecting) {
+                        change(selection.toggle(track.id))
+                    } else {
+                        // The queue is the list as shown: the Songs sort, or the screen's own order.
+                        onTrackSelected(tracks, track.id)
+                    }
+                },
+                onAddToPlaylist = { onAddToPlaylist(track) },
+                onToggleFavorite = { onToggleFavorite(track) },
+                modifier = if (reduceMotion) {
+                    Modifier.animateItem(fadeInSpec = null, placementSpec = null, fadeOutSpec = null)
+                } else {
+                    Modifier.animateItem()
+                },
+                selectionMode = selecting,
+                selected = selecting && track.id in selection.ids,
+                onLongClick = change?.let { apply ->
+                    {
+                        apply(if (selection.active) selection.toggle(track.id) else selection.start(track.id))
+                    }
+                },
+            )
         }
     }
 }

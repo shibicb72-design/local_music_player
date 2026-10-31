@@ -23,8 +23,6 @@ import com.shibi.musicplayer.domain.InlineVideoBox
 import com.shibi.musicplayer.domain.PlaybackArbiter
 import com.shibi.musicplayer.domain.Track
 import com.shibi.musicplayer.domain.Video
-import com.shibi.musicplayer.domain.VideoAccess
-import com.shibi.musicplayer.library.VideoLibraryUiState
 import com.shibi.musicplayer.playback.PlayerUiState
 import com.shibi.musicplayer.ui.ChromeSlot
 import com.shibi.musicplayer.ui.LibraryContent
@@ -234,7 +232,8 @@ class TwoPaneVideoScreenshotTest {
     @Composable
     private fun Songs() {
         LibraryContent(
-            tracks = tracks,
+            tracks = songs.items,
+            sorted = songs,
             nowPlaying = trackState,
             showMiniPlayer = false,
             onTrackSelected = { _, _ -> },
@@ -247,7 +246,7 @@ class TwoPaneVideoScreenshotTest {
     }
 
     private companion object {
-        val list = VideoLibraryUiState(access = VideoAccess.Full, videos = VideosScreenshotTest.videos)
+        val list = VideosScreenshotTest.full
         val concert: Video = VideosScreenshotTest.videos.first { it.id == 2L }
 
         fun playing(video: Video) = VideoUiState(
@@ -270,6 +269,9 @@ class TwoPaneVideoScreenshotTest {
             Track(6L, "Static Bloom", "Hollow Coast", "Static Bloom", 202_000L, "content://tracks/6", null),
             Track(7L, "Slow Tide", "June & The Current", "Slow Tide", 176_000L, "content://tracks/7", null),
         )
+
+        /** [tracks] as the Songs screen ships them, with the sort. */
+        val songs = shippedSongs(tracks)
 
         val trackState = PlayerUiState(
             currentMediaId = "2",

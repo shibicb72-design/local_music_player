@@ -31,14 +31,32 @@ object VideoFormat {
     fun size(bytes: Long?): String {
         if (bytes == null || bytes <= 0L) return MISSING
         if (bytes < 1_000L) return "$bytes B"
+        val shown = shownSize(bytes)
+        val unit = sizeUnits[shown.unitIndex]
+        return if (shown.tenths) "${shown.value / 10}.${shown.value % 10} $unit" else "${shown.value} $unit"
+    }
+
+    /**
+     * The byte count [size] shows, rounded the same way: 9,970,000 reads "10 MB", so it is
+     * 10,000,000. The size sort bands on this, so a band always agrees with the row's label.
+     */
+    fun shownBytes(bytes: Long): Long {
+        if (bytes < 1_000L) return bytes
+        val shown = shownSize(bytes)
+        var scale = 1_000L
+        repeat(shown.unitIndex) { scale *= 1_000L }
+        return if (shown.tenths) shown.value * scale / 10 else shown.value * scale
+    }
+
+    /** [value] in [sizeUnits] at [unitIndex], or in tenths of that unit when [tenths]. */
+    private class ShownSize(val value: Long, val tenths: Boolean, val unitIndex: Int)
+
+    private fun shownSize(bytes: Long): ShownSize {
         var value = bytes / 1_000.0
-        for ((index, unit) in sizeUnits.withIndex()) {
-            if (value < 9.95) {
-                val tenths = (value * 10).roundToLong()
-                return "${tenths / 10}.${tenths % 10} $unit"
-            }
+        for (index in sizeUnits.indices) {
+            if (value < 9.95) return ShownSize((value * 10).roundToLong(), tenths = true, unitIndex = index)
             val whole = value.roundToLong()
-            if (whole < 1_000L || index == sizeUnits.lastIndex) return "$whole $unit"
+            if (whole < 1_000L || index == sizeUnits.lastIndex) return ShownSize(whole, tenths = false, unitIndex = index)
             value /= 1_000.0
         }
         error("unreachable")

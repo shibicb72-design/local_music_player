@@ -29,12 +29,23 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.shibi.musicplayer.domain.FAST_SCROLL_HIDE_DELAY_MS
+import com.shibi.musicplayer.domain.LibrarySorter
+import com.shibi.musicplayer.domain.LibrarySorts
+import com.shibi.musicplayer.domain.ScrollSection
+import com.shibi.musicplayer.domain.SortField
+import com.shibi.musicplayer.domain.SortSpec
 import com.shibi.musicplayer.domain.Video
 import com.shibi.musicplayer.domain.VideoTimeline
 import com.shibi.musicplayer.domain.VideoTimelineLayout
+import com.shibi.musicplayer.domain.section
+import com.shibi.musicplayer.domain.stopFractions
+import com.shibi.musicplayer.domain.thinStops
+import com.shibi.musicplayer.domain.thumbFraction
 import com.shibi.musicplayer.ui.VideoFastScroller
 import com.shibi.musicplayer.ui.VideoFastScrollerTag
 import com.shibi.musicplayer.ui.theme.MusicPlayerTheme
+import java.text.Collator
+import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.util.Locale
@@ -62,7 +73,11 @@ class VideoFastScrollerTest {
     private val ListTag = "video_list_under_test"
 
     /** Rows are 56 dp; the default list is two rows tall. */
-    private fun setUp(layout: VideoTimelineLayout = this.layout, listHeight: Dp = 112.dp) {
+    private fun setUp(
+        layout: VideoTimelineLayout = this.layout,
+        listHeight: Dp = 112.dp,
+        sort: SortSpec = LibrarySorts.VideoDefault,
+    ) {
         compose.mainClock.autoAdvance = false
         compose.setContent {
             MusicPlayerTheme {
@@ -81,6 +96,7 @@ class VideoFastScrollerTest {
                             layout = layout,
                             modifier = Modifier.align(Alignment.CenterEnd),
                             zone = zone,
+                            sort = sort,
                         )
                     }
                 }
@@ -108,6 +124,26 @@ class VideoFastScrollerTest {
             VideosScreenshotTest.video(firstId + it, "Clip $day-$it", 60_000L, 1_000_000L, 1920, 1080, "Camera")
                 .copy(dateTakenMs = at)
         }
+    }
+
+    /** [count] clips taken at noon local time on [date], ids from [firstId] up. */
+    private fun clipsOn(date: LocalDate, count: Int, firstId: Long): List<Video> {
+        val at = date.atTime(12, 0).atZone(zone).toInstant().toEpochMilli()
+        return (0 until count).map {
+            VideosScreenshotTest.video(firstId + it, "Clip $date-$it", 60_000L, 1_000_000L, 1920, 1080, "Camera")
+                .copy(dateTakenMs = at)
+        }
+    }
+
+    /** Drags the thumb from where the list is to [fraction] of a [travelPx] track, and holds it there. */
+    private fun dragThumbTo(fraction: Float, travelPx: Float, entryCount: Int) {
+        val start = thumbFraction(listState.firstVisibleItemIndex, listState.layoutInfo.visibleItemsInfo.size, entryCount)
+        compose.onNodeWithTag(VideoFastScrollerTag).performTouchInput {
+            down(center)
+            moveBy(Offset(0f, viewConfiguration.touchSlop))
+            moveBy(Offset(0f, (fraction - start) * travelPx))
+        }
+        compose.mainClock.advanceTimeBy(100)
     }
 
     @Test
@@ -193,6 +229,61 @@ class VideoFastScrollerTest {
         assertEquals("Release fade holds the halo at the finger", after, released, 1f)
         compose.mainClock.advanceTimeBy(300)
         compose.onNodeWithText("Week of " + VideoTimeline.weekLabel(stop, Locale.getDefault())).assertDoesNotExist()
+    }
+
+    @Test
+    fun underTheDateSortBusyWeeksCloseTogetherKeepEveryDot() {
+        // Wednesdays a week apart, newest first: six quiet weeks, a busy week of 25 and a busier
+        // one of 40 right after it, then six quiet weeks. Thinning would keep only the 40.
+        val newest = LocalDate.of(2025, 6, 25)
+        val counts = List(6) { 20 } + listOf(25, 40) + List(6) { 20 }
+        var id = 1L
+        val videos = counts.flatMapIndexed { week, count ->
+            clipsOn(newest.minusWeeks(week.toLong()), count, id).also { id += count }
+        }
+        val busy = VideoTimeline.layout(VideoTimeline.sortNewestFirst(videos), zone)
+        val weeks = VideoTimeline.weekStops(VideoTimeline.weeks(busy, zone, Locale.getDefault()))
+        val stops = weeks.map { it.section() }
+        assertEquals(listOf(25, 40), stops.map { it.size })
+        val listHeight = 200.dp
+        val travelPx = with(compose.density) { (listHeight - 56.dp).toPx() }
+        val snapPx = with(compose.density) { 16.dp.toPx() }
+        // The two dots are inside one snap radius, so thinning would drop the smaller week's.
+        assertEquals(listOf(stops[1]), thinStops(stops, busy.entries.size, travelPx, snapPx))
+
+        setUp(busy, listHeight)
+        scrollAndSettle()
+        scrollAndSettle(up = false)
+        dragThumbTo(stopFractions(stops, busy.entries.size)[0], travelPx, busy.entries.size)
+
+        // As on Videos before the sort menu: both weeks keep a dot, so the smaller one holds the list.
+        assertEquals(stops[0].startIndex, listState.firstVisibleItemIndex)
+        compose.onNodeWithText("Week of " + VideoTimeline.weekLabel(weeks[0], Locale.getDefault())).assertIsDisplayed()
+    }
+
+    @Test
+    fun underANameSortCrowdedLetterDotsAreStillThinned() {
+        // 150 titles under A, one under B and 150 under C: B's dot sits a few pixels from C's.
+        val titles = List(150) { "Alpha $it" } + "Bravo" + List(150) { "Charlie $it" }
+        val videos = titles.mapIndexed { index, title ->
+            VideosScreenshotTest.video(index + 1L, title, 60_000L, 1_000_000L, 1920, 1080, "Camera")
+        }
+        val byName = SortSpec(SortField.Name, ascending = true)
+        val named = VideoTimeline.layout(LibrarySorter.videos(videos, byName, Collator.getInstance(), zone, "Unknown title"))
+        val stops = named.sections.map { ScrollSection(it.startIndex, it.count) }
+        assertEquals(listOf(150, 1, 150), stops.map { it.size })
+        val listHeight = 200.dp
+        val travelPx = with(compose.density) { (listHeight - 56.dp).toPx() }
+        val snapPx = with(compose.density) { 16.dp.toPx() }
+        assertEquals(listOf(stops[0], stops[2]), thinStops(stops, named.entries.size, travelPx, snapPx))
+
+        setUp(named, listHeight, sort = byName)
+        scrollAndSettle()
+        scrollAndSettle(up = false)
+        dragThumbTo(stopFractions(stops, named.entries.size)[1], travelPx, named.entries.size)
+
+        // B has no dot of its own, so the thumb takes C's beside it.
+        assertEquals(stops[2].startIndex, listState.firstVisibleItemIndex)
     }
 
     @Test

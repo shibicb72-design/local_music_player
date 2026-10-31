@@ -20,6 +20,7 @@ import coil3.annotation.ExperimentalCoilApi
 import coil3.compose.LocalAsyncImagePreviewHandler
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.shibi.musicplayer.CarouselV2ScreenshotTest.Companion.playingState
+import com.shibi.musicplayer.CarouselV2ScreenshotTest.Companion.songs
 import com.shibi.musicplayer.CarouselV2ScreenshotTest.Companion.tracks
 import com.shibi.musicplayer.domain.AppBackground
 import com.shibi.musicplayer.domain.RoutePresentation
@@ -191,7 +192,8 @@ class SelectionScreenshotTest {
     @Composable
     private fun Songs(bottom: Dp) {
         LibraryContent(
-            tracks = tracks,
+            tracks = songs.items,
+            sorted = songs,
             nowPlaying = playingState,
             showMiniPlayer = false,
             onTrackSelected = { _, _ -> },

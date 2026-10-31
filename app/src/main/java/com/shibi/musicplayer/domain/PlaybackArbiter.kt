@@ -6,16 +6,10 @@ package com.shibi.musicplayer.domain
  */
 object PlaybackArbiter {
 
-    /**
-     * Music stays paused when a video ends. Surprise audio is worse than one tap on the
-     * mini player; flip this to resume the music the video paused.
-     */
-    val ResumeMusicAfterVideo = false
-
+    /** Nothing here ever starts the music: surprise audio is worse than one tap on the mini player. */
     data class Decision(
         val pauseMusic: Boolean = false,
         val closeVideo: Boolean = false,
-        val resumeMusic: Boolean = false,
         val pauseVideo: Boolean = false,
         val exitFullscreen: Boolean = false,
     )
@@ -36,12 +30,21 @@ object PlaybackArbiter {
         if (!wasPlaying && isPlaying) onMusicStart(videoActive) else None
 
     /**
-     * The video reached its end; there is no auto-next and, by default, no music. The video
-     * stays loaded at its end with "Play again", in the box and in the pane. In two-pane,
-     * fullscreen gives way to the pane; folded, fullscreen keeps its own "Play again".
+     * The video reached its end; there is no auto-next and no music: the music the video paused
+     * stays paused. The video stays loaded at its end with "Play again", in the box and in the
+     * pane. In two-pane, fullscreen gives way to the pane; folded, fullscreen keeps its own
+     * "Play again".
      */
-    fun onVideoEnded(musicPausedByVideo: Boolean, twoPane: Boolean = false): Decision =
-        Decision(resumeMusic = ResumeMusicAfterVideo && musicPausedByVideo, exitFullscreen = twoPane)
+    fun onVideoEnded(twoPane: Boolean = false): Decision = Decision(exitFullscreen = twoPane)
+
+    /**
+     * The music mini player shows wherever Now Playing is not on screen, but not while a video
+     * plays or waits paused, where a second play button would fight it. Once the video ends the
+     * bar comes back with the music as the video left it, paused; only a tap on its play button
+     * starts the music, and that closes the video ([onMusicPlayingChanged]).
+     */
+    fun showMusicBanner(hasMusic: Boolean, onNowPlaying: Boolean, videoActive: Boolean, videoEnded: Boolean): Boolean =
+        hasMusic && !onNowPlaying && (!videoActive || videoEnded)
 
     /** Back in two-pane closes the video pane before it navigates anywhere. */
     fun onBack(videoActive: Boolean, twoPane: Boolean): Decision =

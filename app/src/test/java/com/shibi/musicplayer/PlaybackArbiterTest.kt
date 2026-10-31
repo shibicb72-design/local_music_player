@@ -19,7 +19,6 @@ class PlaybackArbiterTest {
         val decision = PlaybackArbiter.onVideoStart(musicPlaying = true)
         assertTrue(decision.pauseMusic)
         assertFalse(decision.closeVideo)
-        assertFalse(decision.resumeMusic)
     }
 
     @Test
@@ -56,20 +55,30 @@ class PlaybackArbiterTest {
 
     @Test
     fun musicDoesNotResumeWhenTheVideoEnds() {
-        assertFalse(PlaybackArbiter.ResumeMusicAfterVideo)
-        assertFalse(PlaybackArbiter.onVideoEnded(musicPausedByVideo = true).resumeMusic)
-        assertFalse(PlaybackArbiter.onVideoEnded(musicPausedByVideo = false).resumeMusic)
-        assertEquals(PlaybackArbiter.Decision(), PlaybackArbiter.onVideoEnded(musicPausedByVideo = true))
+        // The decision has no way to start music at all; folded, nothing changes.
+        assertEquals(PlaybackArbiter.Decision(), PlaybackArbiter.onVideoEnded())
+        assertFalse(PlaybackArbiter.onVideoEnded(twoPane = true).pauseMusic)
+    }
+
+    @Test
+    fun theMusicBannerComesBackPausedOnceTheVideoEnds() {
+        // While a video plays or waits paused, the bar stays away: one play button at a time.
+        assertFalse(PlaybackArbiter.showMusicBanner(hasMusic = true, onNowPlaying = false, videoActive = true, videoEnded = false))
+        // At the end it is back; the music is whatever the video left it, paused.
+        assertTrue(PlaybackArbiter.showMusicBanner(hasMusic = true, onNowPlaying = false, videoActive = true, videoEnded = true))
+        // No video, as before; never over Now Playing or without a song.
+        assertTrue(PlaybackArbiter.showMusicBanner(hasMusic = true, onNowPlaying = false, videoActive = false, videoEnded = false))
+        assertFalse(PlaybackArbiter.showMusicBanner(hasMusic = true, onNowPlaying = true, videoActive = true, videoEnded = true))
+        assertFalse(PlaybackArbiter.showMusicBanner(hasMusic = false, onNowPlaying = false, videoActive = true, videoEnded = true))
     }
 
     @Test
     fun endOfVideoInTwoPaneLeavesFullscreenAndKeepsTheVideoInThePane() {
-        val twoPane = PlaybackArbiter.onVideoEnded(musicPausedByVideo = true, twoPane = true)
+        val twoPane = PlaybackArbiter.onVideoEnded(twoPane = true)
         assertTrue(twoPane.exitFullscreen)
         assertFalse("the pane keeps the video with \"Play again\"", twoPane.closeVideo)
-        assertFalse(twoPane.resumeMusic)
         // Compact keeps the box, and fullscreen, with "Play again".
-        val compact = PlaybackArbiter.onVideoEnded(musicPausedByVideo = true, twoPane = false)
+        val compact = PlaybackArbiter.onVideoEnded(twoPane = false)
         assertFalse(compact.closeVideo)
         assertFalse(compact.exitFullscreen)
     }
