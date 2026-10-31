@@ -1,14 +1,13 @@
 package com.shibi.musicplayer
 
-import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.SemanticsNodeInteraction
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performSemanticsAction
 import androidx.lifecycle.ViewModelProvider
 import androidx.media3.common.Player
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -57,8 +56,14 @@ class MusicBannerAfterVideoTest {
         assertTrue("the song plays", playerViewModel().uiState.value.isPlaying)
 
         // A video starts: it pauses the music and the bar goes, one play button at a time.
-        compose.onNode(hasContentDescription("Videos").and(IsTab)).performSemanticsAction(SemanticsActions.OnClick)
-        settle()
+        // The song tap put Now playing in front of the ring, and a tap reaches only a tile the
+        // ones in front leave uncovered (the ring takes the frontmost tile under the finger), so
+        // Videos, three tiles to the left, is reached by real taps one neighbour at a time.
+        for (tab in listOf("Playlists", "Songs", "Videos")) {
+            compose.onNode(hasContentDescription(tab).and(IsTab)).performClick()
+            settle()
+            compose.onNode(hasContentDescription(tab).and(IsTab)).assertIsSelected()
+        }
         assertTextShown("Beach day")
         compose.onAllNodesWithText("Beach day")[0].performClick()
         settle()
