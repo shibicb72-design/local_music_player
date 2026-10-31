@@ -74,7 +74,15 @@ class VideoLibraryViewModel internal constructor(
             return
         }
         viewModelScope.launch {
-            _uiState.update { it.copy(access = access, isLoading = true, hasError = false) }
+            _uiState.update { current ->
+                current.copy(
+                    access = access,
+                    // The first scan is the only one that has nothing to show. A later scan
+                    // (resume, a MediaStore change) keeps the list the screen already has.
+                    isLoading = current.videos.isEmpty(),
+                    hasError = false,
+                )
+            }
             val result = withContext(ioDispatcher) {
                 runCatching { repository.loadVideos() }
             }

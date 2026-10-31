@@ -269,32 +269,22 @@ internal fun VideosContent(
         return
     }
     val denied = state.access == VideoAccess.Denied
+    // Fullscreen is its own route, so this screen leaves composition and `checked` starts
+    // false again on the way back. Navigation stays below RESUMED until the pop transition
+    // ends, which is the blank gap under the title. A list already loaded stays up through
+    // that gap and through a refresh; only a first visit with nothing loaded stays blank.
+    val showLibrary = state.videos.isNotEmpty() || (checked && !denied)
     VideosFrame(
-        subtitle = if (!checked || denied) {
-            ""
-        } else {
+        subtitle = if (showLibrary) {
             pluralStringResource(R.plurals.video_count, state.videos.size, state.videos.size)
+        } else {
+            ""
         },
         selectionBar = selectionBar,
         modifier = modifier,
     ) {
         when {
-            !checked -> Unit
-            denied -> Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
-                contentAlignment = Alignment.Center,
-            ) {
-                VideoPermissionPrompt(
-                    onGrant = onRequestAccess,
-                    onOpenSettings = onOpenSettings,
-                    modifier = Modifier
-                        .verticalScroll(rememberScrollState())
-                        .padding(start = 20.dp, end = 20.dp, bottom = contentBottomPadding),
-                )
-            }
-            else -> {
+            showLibrary -> {
                 if (state.access == VideoAccess.Partial) {
                     VideoPartialBanner(
                         onAllowAll = onRequestAccess,
@@ -317,6 +307,21 @@ internal fun VideosContent(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth(),
+                )
+            }
+            !checked -> Unit
+            else -> Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                contentAlignment = Alignment.Center,
+            ) {
+                VideoPermissionPrompt(
+                    onGrant = onRequestAccess,
+                    onOpenSettings = onOpenSettings,
+                    modifier = Modifier
+                        .verticalScroll(rememberScrollState())
+                        .padding(start = 20.dp, end = 20.dp, bottom = contentBottomPadding),
                 )
             }
         }
