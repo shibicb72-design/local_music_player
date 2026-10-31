@@ -167,7 +167,8 @@ data class UnknownNames(val title: String, val artist: String = "", val album: S
  * main thread: every item's keys (collation keys, group, number) are computed once, then
  * compared. The order is group first, then the field's value, then (for artist and album) the
  * title, then the MediaStore id, so equal values keep a stable order and descending is the
- * exact reverse of ascending. Unknown values come last in both directions.
+ * exact reverse of ascending. Unknown values come last in both directions; an unknown artist or
+ * album still reads by title, then id.
  */
 object LibrarySorter {
 
@@ -253,8 +254,11 @@ object LibrarySorter {
     private fun <T> sort(items: List<T>, spec: SortSpec, keyOf: (T) -> Keyed<T>): SortedList<T> {
         val (known, unknown) = items.map(keyOf).partition { !it.group.isUnknown }
         val sign = if (spec.ascending) 1 else -1
+        // The unknown group (often the biggest, "Unknown artist") reads by title like a known one.
         val ordered = known.sortedWith { a, b -> sign * compareKnown(a, b) } +
-            unknown.sortedWith { a, b -> sign * a.id.compareTo(b.id) }
+            unknown.sortedWith { a, b ->
+                sign * (compareCollation(a.secondText, b.secondText).takeIf { it != 0 } ?: a.id.compareTo(b.id))
+            }
         return SortedList(spec, ordered.map { it.item }, runs(ordered.map { it.group }))
     }
 
@@ -300,7 +304,9 @@ object LibrarySorter {
         private val letterKeys = HashMap<String, CollationKey>()
 
         fun <T> key(item: T, id: Long, text: String?, secondText: String?): Keyed<T> {
-            if (text == null) return Keyed(item, id, SortGroup.Letter(null), 0L)
+            if (text == null) {
+                return Keyed(item, id, SortGroup.Letter(null), 0L, secondText = secondText?.let(collator::getCollationKey))
+            }
             val letter = SortLetters.of(text)
             val hash = letter == SortLetters.HASH
             return Keyed(

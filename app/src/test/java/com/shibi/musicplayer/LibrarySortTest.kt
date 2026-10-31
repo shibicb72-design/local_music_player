@@ -279,6 +279,28 @@ class LibrarySortTest {
     }
 
     @Test
+    fun theUnknownArtistGroupReadsByTitleToo() {
+        val tracks = listOf(
+            track(1, "Zed", artist = "Unknown artist"),
+            track(2, "Alpha", artist = "<unknown>"),
+            track(3, "Mid", artist = ""),
+            track(4, "Song", artist = "Abba"),
+        )
+        assertEquals(listOf("Song", "Alpha", "Mid", "Zed"), sortTracks(tracks, SortField.Artist, ascending = true).titles())
+        // Z-A is the exact reverse, the unknown group still last.
+        assertEquals(listOf("Song", "Zed", "Mid", "Alpha"), sortTracks(tracks, SortField.Artist, ascending = false).titles())
+        // Under the album sort, songs with no album read by title as well; equal titles keep id order.
+        val albums = listOf(
+            track(1, "Zed", album = "Unknown album"),
+            track(2, "Alpha", album = ""),
+            track(3, "Alpha", album = "<unknown>"),
+            track(4, "Song", album = "Gold"),
+        )
+        assertEquals(listOf(4L, 2L, 3L, 1L), sortTracks(albums, SortField.Album, ascending = true).items.map { it.id })
+        assertEquals(listOf(4L, 1L, 3L, 2L), sortTracks(albums, SortField.Album, ascending = false).items.map { it.id })
+    }
+
+    @Test
     fun anArtistsSongsReadByTitleAndAlbumsSortTheSameWay() {
         val tracks = listOf(
             track(1, "Zulu", artist = "Abba", album = "Gold"),
