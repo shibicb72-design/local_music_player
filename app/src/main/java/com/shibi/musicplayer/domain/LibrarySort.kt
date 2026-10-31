@@ -159,7 +159,7 @@ object SortLetters {
     }
 }
 
-/** The app's own placeholders for missing tags, which sort as unknown like blank and `<unknown>`. */
+/** The app's own placeholders for missing tags, which sort as unknown (in any case) like blank and `<unknown>`. */
 data class UnknownNames(val title: String, val artist: String = "", val album: String = "")
 
 /**
@@ -188,7 +188,12 @@ object LibrarySorter {
                 SortField.Length -> bandKey(video, video.id, lengthOf(video)?.takeIf { it > 0L }, SortBands.VideoLength, sizes = false)
                 // Videos have no artist or album; a stray spec sorts by name.
                 SortField.Name, SortField.Artist, SortField.Album ->
-                    letters.key(video, video.id, video.title.trim().takeUnless { it.isEmpty() || it == unknownTitle }, null)
+                    letters.key(
+                        video,
+                        video.id,
+                        video.title.trim().takeUnless { it.isEmpty() || it.equals(unknownTitle, ignoreCase = true) },
+                        null,
+                    )
             }
         }
     }
@@ -202,20 +207,21 @@ object LibrarySorter {
     ): SortedList<Track> {
         val letters = LetterKeys(collator)
         return sort(tracks, spec) { track ->
-            val title = TrackDisplay.title(track.title).takeUnless { it.isBlank() || it == unknown.title }
+            // A placeholder in any case ("Unknown Artist", as Windows Media Player writes it) is unknown.
+            val title = TrackDisplay.title(track.title).takeUnless { it.isBlank() || it.equals(unknown.title, ignoreCase = true) }
             when (spec.field) {
                 SortField.Date -> dateKey(track, track.id, track.dateAddedSeconds.takeIf { it > 0L }?.times(1_000L), zone)
                 SortField.Name -> letters.key(track, track.id, title, null)
                 SortField.Artist -> letters.key(
                     track,
                     track.id,
-                    TrackDisplay.artist(track.artist)?.takeUnless { it == unknown.artist },
+                    TrackDisplay.artist(track.artist)?.takeUnless { it.equals(unknown.artist, ignoreCase = true) },
                     title,
                 )
                 SortField.Album -> letters.key(
                     track,
                     track.id,
-                    TrackDisplay.album(track.album)?.takeUnless { it == unknown.album },
+                    TrackDisplay.album(track.album)?.takeUnless { it.equals(unknown.album, ignoreCase = true) },
                     title,
                 )
                 SortField.Size -> bandKey(track, track.id, track.sizeBytes?.takeIf { it > 0L }, SortBands.MusicSize, sizes = true)

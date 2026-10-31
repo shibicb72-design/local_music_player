@@ -244,9 +244,12 @@ class LibrarySortTest {
 
     @Test
     fun unknownTitlesSortLastInBothDirections() {
-        val videos = listOf(video(1, "Unknown title"), video(2, "Beta"), video(3, " "), video(4, "Alpha"))
-        assertEquals(listOf(4L, 2L, 1L, 3L), sortVideos(videos, SortField.Name, ascending = true).items.map { it.id })
-        assertEquals(listOf(2L, 4L, 3L, 1L), sortVideos(videos, SortField.Name, ascending = false).items.map { it.id })
+        // The placeholder in any case is unknown, not a title under U.
+        val videos = listOf(video(1, "Unknown title"), video(2, "Beta"), video(3, " "), video(4, "Alpha"), video(5, "Unknown Title"))
+        assertEquals(listOf(4L, 2L, 1L, 3L, 5L), sortVideos(videos, SortField.Name, ascending = true).items.map { it.id })
+        assertEquals(listOf(2L, 4L, 5L, 3L, 1L), sortVideos(videos, SortField.Name, ascending = false).items.map { it.id })
+        val tracks = listOf(track(1, "Unknown title"), track(2, "Beta"), track(3, "UNKNOWN TITLE"), track(4, "Alpha"))
+        assertEquals(listOf(4L, 2L, 1L, 3L), sortTracks(tracks, SortField.Name, ascending = true).items.map { it.id })
     }
 
     @Test
@@ -257,14 +260,22 @@ class LibrarySortTest {
             track(3, "Three", artist = "<unknown>"),
             track(4, "Four", artist = "Ulla"),
             track(5, "Five", artist = ""),
+            // Windows Media Player writes the placeholder with a capital A.
+            track(6, "Six", artist = "Unknown Artist"),
         )
         val az = sortTracks(tracks, SortField.Artist, ascending = true)
         assertEquals(listOf("Four", "Two"), az.titles().take(2))
-        assertTrue(az.items.drop(2).all { it.id in setOf(1L, 3L, 5L) })
+        assertEquals(setOf(1L, 3L, 5L, 6L), az.items.drop(2).map { it.id }.toSet())
         assertTrue(az.runs.last().group.isUnknown)
         val za = sortTracks(tracks, SortField.Artist, ascending = false)
         assertEquals(listOf("Two", "Four"), za.titles().take(2))
         assertTrue(za.runs.last().group.isUnknown)
+        // The same for an album placeholder that is not "unknown album" in any case.
+        val albums = listOf(track(1, "One", album = "Zed"), track(2, "Two", album = "NO ALBUM"), track(3, "Three", album = "Abbey"))
+        val unknownAlbum = UnknownNames(title = "Unknown title", album = "No album")
+        val byAlbum = LibrarySorter.tracks(albums, SortSpec(SortField.Album, ascending = true), collator, utc, unknownAlbum)
+        assertEquals(listOf(3L, 1L, 2L), byAlbum.items.map { it.id })
+        assertTrue(byAlbum.runs.last().group.isUnknown)
     }
 
     @Test
