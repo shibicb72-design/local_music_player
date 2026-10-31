@@ -570,6 +570,8 @@ private fun SongFastScroller(
             resetKey = sort,
             tag = SongFastScrollerTag,
             initialDragFraction = initialDragFraction,
+            // Every busy week keeps its dot, as on Videos.
+            thin = false,
         )
     } else {
         val names = rememberSortGroupNames(music = true)

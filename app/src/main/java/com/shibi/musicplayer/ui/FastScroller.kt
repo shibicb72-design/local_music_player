@@ -93,8 +93,9 @@ internal data class FastScrollTick(val label: String, val fraction: Float)
  * Fast scroll for a library list of [entryCount] entries. Appears while the list scrolls or the
  * thumb is dragged and fades [FAST_SCROLL_HIDE_DELAY_MS] after the last activity. The list
  * follows the thumb; each of [stops] (a busy week, a letter, a size band) gets a dot that pulls
- * the thumb in, holds the list at the stop's start and ticks once. Dots closer than the snap
- * radius are thinned, the biggest stops kept. The bubble names the one of [sections] under the
+ * the thumb in, holds the list at the stop's start and ticks once. With [thin] (letters, ranges),
+ * dots closer than the snap radius are thinned, the biggest stops kept; busy weeks pass false and
+ * keep every dot, as Videos always has. The bubble names the one of [sections] under the
  * thumb ([label] gets its index, null when there is none) and [ticks] mark the track.
  * [description] names what it scrolls by. A new [resetKey] (the list's sort) starts it over:
  * no drag, no latched dot, no pending tick. [initialDragFraction] (tests only) starts mid-drag
@@ -113,6 +114,7 @@ internal fun FastScroller(
     resetKey: Any? = null,
     tag: String = VideoFastScrollerTag,
     initialDragFraction: Float? = null,
+    thin: Boolean = true,
 ) {
     key(resetKey) {
         FastScrollerBody(
@@ -126,6 +128,7 @@ internal fun FastScroller(
             ticks = ticks,
             tag = tag,
             initialDragFraction = initialDragFraction,
+            thin = thin,
         )
     }
 }
@@ -142,6 +145,7 @@ private fun FastScrollerBody(
     ticks: List<FastScrollTick>,
     tag: String,
     initialDragFraction: Float?,
+    thin: Boolean,
 ) {
     val chrome = LocalBackgroundChrome.current
     val container = chrome.sheet
@@ -198,9 +202,10 @@ private fun FastScrollerBody(
             .graphicsLayer { this.alpha = alpha.value },
     ) {
         val travelPx = (constraints.maxHeight - touchHeightPx).coerceAtLeast(1f)
-        // No two dots inside one snap radius: the thumb could not tell them apart.
-        val shownStops = remember(stops, entryCount, travelPx, snapRadiusPx) {
-            thinStops(stops, entryCount, travelPx, snapRadiusPx)
+        // Thinned, no two dots sit inside one snap radius, where the thumb could not tell them
+        // apart. Busy weeks are not thinned; between two close ones the nearer dot wins.
+        val shownStops = remember(stops, entryCount, travelPx, snapRadiusPx, thin) {
+            if (thin) thinStops(stops, entryCount, travelPx, snapRadiusPx) else stops
         }
         val dots = remember(shownStops, entryCount) { stopFractions(shownStops, entryCount) }
         val currentStops by rememberUpdatedState(shownStops)

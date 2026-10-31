@@ -5,10 +5,14 @@ import android.os.Looper
 import android.provider.MediaStore
 import android.view.HapticFeedbackConstants
 import android.view.View
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.LocalView
@@ -27,9 +31,11 @@ import androidx.compose.ui.test.swipeDown
 import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.shibi.musicplayer.domain.ScrollSection
 import com.shibi.musicplayer.domain.SortField
 import com.shibi.musicplayer.domain.SortSpec
 import com.shibi.musicplayer.domain.Track
+import com.shibi.musicplayer.domain.thinStops
 import com.shibi.musicplayer.library.InMemorySortPrefs
 import com.shibi.musicplayer.library.LibraryViewModel
 import com.shibi.musicplayer.library.MusicRepository
@@ -42,6 +48,8 @@ import com.shibi.musicplayer.ui.SortButtonTag
 import com.shibi.musicplayer.ui.VideosScreen
 import com.shibi.musicplayer.ui.sortOptionTag
 import com.shibi.musicplayer.ui.theme.MusicPlayerTheme
+import java.time.LocalDate
+import java.time.ZoneId
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -211,6 +219,48 @@ class LibrarySortUiTest {
     }
 
     @Test
+    fun underTheDateSortTheSongsScrollerKeepsTwoCloseBusyWeeks() {
+        // Newest first: six quiet weeks of 20 songs, a busy week of 25 and a busier one of 40
+        // right after it, then six quiet weeks. Thinning would keep only the 40's dot.
+        val audio = audioProvider()
+        val newest = LocalDate.of(2025, 6, 25).atTime(12, 0).atZone(ZoneId.systemDefault()).toEpochSecond()
+        var id = 1L
+        val counts = List(6) { 20 } + listOf(25, 40) + List(6) { 20 }
+        counts.forEachIndexed { week, count ->
+            // Wednesdays a week apart; a second apart inside a week, so song 1 is its newest.
+            for (n in 1..count) audio.rows += song(id++, "Week $week song $n", dateAdded = newest - week * 604_800L - n)
+        }
+        setSongs(libraryViewModel(InMemorySortPrefs()), modifier = Modifier.height(260.dp)) { _, _ -> }
+        compose.mainClock.autoAdvance = false
+        flingAndSettle { swipeUp(durationMillis = 300) }
+        flingAndSettle { swipeDown(durationMillis = 300) }
+        val thumb = compose.onNodeWithTag(SongFastScrollerTag)
+        thumb.assertIsDisplayed()
+
+        // The busy weeks start at songs 120 and 145 of 305: their dots are inside one snap radius.
+        val list = compose.onNode(hasScrollAction()).fetchSemanticsNode().boundsInRoot
+        val travel = list.height - with(compose.density) { 56.dp.toPx() }
+        val stops = listOf(ScrollSection(120, 25), ScrollSection(145, 40))
+        assertEquals(
+            "the dots are inside one snap radius on a ${list.height} px list",
+            listOf(stops[1]),
+            thinStops(stops, 305, travel, with(compose.density) { 16.dp.toPx() }),
+        )
+        val start = (thumb.fetchSemanticsNode().boundsInRoot.top - list.top) / travel
+        thumb.performTouchInput {
+            down(center)
+            moveBy(Offset(0f, viewConfiguration.touchSlop))
+            moveBy(Offset(0f, (120f / 304f - start) * travel))
+        }
+        compose.mainClock.advanceTimeBy(100)
+
+        // As on Videos: the smaller week keeps its dot, so the thumb holds the list at its start.
+        assertTrue("Week 6 song 1 heads the list", top("Week 6 song 1") - list.top < with(compose.density) { 72.dp.toPx() })
+        thumb.performTouchInput { up() }
+        compose.mainClock.advanceTimeBy(500)
+    }
+
+    @Test
     fun theSongsScrollerNeverCoversARowsHeartOrMenu() {
         val audio = audioProvider()
         NatoNames.forEachIndexed { index, name -> audio.rows += song(index + 1L, name) }
@@ -270,18 +320,26 @@ class LibrarySortUiTest {
         sortPrefs = prefs,
     )
 
-    private fun setSongs(viewModel: LibraryViewModel, onTrackSelected: (List<Track>, Long) -> Unit) {
+    private fun setSongs(
+        viewModel: LibraryViewModel,
+        modifier: Modifier = Modifier,
+        onTrackSelected: (List<Track>, Long) -> Unit,
+    ) {
         compose.setContent {
             view = LocalView.current
             MusicPlayerTheme {
-                LibraryScreen(
-                    viewModel = viewModel,
-                    nowPlaying = PlayerUiState(),
-                    onTrackSelected = onTrackSelected,
-                    onOpenPlayer = {},
-                    onTogglePlayPause = {},
-                    contentBottomPadding = 0.dp,
-                )
+                // The box takes the window's tight constraints, so [modifier] can size the screen.
+                Box(Modifier.fillMaxSize()) {
+                    LibraryScreen(
+                        viewModel = viewModel,
+                        nowPlaying = PlayerUiState(),
+                        onTrackSelected = onTrackSelected,
+                        onOpenPlayer = {},
+                        onTogglePlayPause = {},
+                        contentBottomPadding = 0.dp,
+                        modifier = modifier,
+                    )
+                }
             }
         }
         settle()

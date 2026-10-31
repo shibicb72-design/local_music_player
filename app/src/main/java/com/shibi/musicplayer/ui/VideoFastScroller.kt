@@ -62,6 +62,8 @@ internal fun VideoFastScroller(
             ticks = ticks,
             resetKey = sort,
             initialDragFraction = initialDragFraction,
+            // Every busy week keeps its dot, as before the sort menu.
+            thin = false,
         )
     } else {
         val names = rememberSortGroupNames(music = false)
