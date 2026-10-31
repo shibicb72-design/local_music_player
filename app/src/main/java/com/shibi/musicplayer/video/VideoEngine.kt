@@ -78,6 +78,13 @@ interface VideoEngine {
     fun pause()
     fun seekTo(positionMs: Long)
 
+    /**
+     * Playback speed, 1f is normal. libVLC's MediaPlayer.setRate keeps the pitch (its default
+     * scaletempo filter). The view model owns the value and asks again after a reopen.
+     * The engine keeps the rate across its own reopens.
+     */
+    fun setRate(rate: Float)
+
     /** How the picture fills its view; kept across views, so a re-attach keeps it. */
     fun setAspectMode(mode: AspectMode)
 

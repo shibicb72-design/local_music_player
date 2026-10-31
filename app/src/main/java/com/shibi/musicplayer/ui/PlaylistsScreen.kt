@@ -155,7 +155,7 @@ internal fun PlaylistsContent(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    items(cards, key = { it.id }) { card ->
+                    items(cards, key = { it.id }, contentType = { "playlist_card" }) { card ->
                         PlaylistCard(card = card, onClick = { onOpen(card.id) })
                     }
                 }

@@ -6,15 +6,12 @@ import android.content.pm.ActivityInfo
 import android.media.AudioManager
 import android.provider.Settings
 import android.view.WindowManager
-import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivity
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,6 +23,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemGestures
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -50,7 +48,6 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -59,12 +56,11 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
@@ -146,6 +142,7 @@ internal fun FullscreenVideo(
     onOpenTracks: (() -> Unit)? = null,
     holdControls: Boolean = false,
     onStartOver: () -> Unit = {},
+    extras: PlayerExtras = NoPlayerExtras,
 ) {
     val bounds = LocalVideoBounds.current
     val reduceMotion = rememberReduceMotion()
@@ -170,7 +167,7 @@ internal fun FullscreenVideo(
         keepScreenOn = state.isPlaying,
     )
     // Composed last in MusicApp, so this callback is the newest and wins over the others.
-    BackHandler(onBack = animatedExit)
+    AppBackHandler(onBack = animatedExit)
     val volume = remember(context) { MusicStreamVolume(context) }
     val brightness = remember(activity) { activity?.let(::WindowBrightness) }
     Box(Modifier.fillMaxSize()) {
@@ -189,6 +186,7 @@ internal fun FullscreenVideo(
             onOpenTracks = onOpenTracks,
             holdControls = holdControls,
             onStartOver = onStartOver,
+            extras = extras,
         )
     }
 }
@@ -248,9 +246,12 @@ private fun FullscreenWindow(activity: Activity?, orientation: FullscreenOrienta
 
 /**
  * The fullscreen picture, gestures and controls, without touching the window, so
- * screenshots can draw it. Taps toggle the controls (they hide after 3 s while playing);
- * a double-tap on the left or right third seeks 10 s; a horizontal drag seeks with a
- * preview; a vertical drag changes the brightness (left half, if on) or the volume (right).
+ * screenshots can draw it. A tap in the middle third toggles the controls at once (they hide
+ * after 3 s while playing); a tap on a side third toggles them after the double-tap timeout,
+ * unless a second tap follows: that skips 10 s, and each further tap adds 10 s with a ripple
+ * and a running total. A horizontal drag seeks with a frame preview; a vertical drag changes
+ * the brightness (left half, if on) or the volume (right). Pointers that go down in the system
+ * gesture edges are ignored.
  */
 @Composable
 internal fun FullscreenVideoContent(
@@ -272,6 +273,17 @@ internal fun FullscreenVideoContent(
     holdControls: Boolean = false,
     /** The resume chip's Start over. */
     onStartOver: () -> Unit = {},
+    extras: PlayerExtras = NoPlayerExtras,
+    /** Test-only: draws the preview bubble as if the thumb were being dragged to this position. */
+    initialScrubMs: Long? = null,
+    /** Test-only: draws the speed menu open. */
+    initialSpeedMenuOpen: Boolean = false,
+    /** Pointers that go down inside these edges are ignored (back gesture, edge panel). */
+    gestureEdges: WindowInsets = WindowInsets.systemGestures,
+    /** Test-only: draws the swipe-seek bubble as if a swipe were under way. */
+    initialSwipe: SwipePreview? = null,
+    /** Test-only: draws the double-tap ripple as if a chain were under way. */
+    initialTap: TapPreview? = null,
 ) {
     ContrastSurface(
         color = Color.Black,
@@ -284,7 +296,12 @@ internal fun FullscreenVideoContent(
         // The chip shown now, and a counter that restarts its fade on every change.
         var chip by remember { mutableStateOf(initialChip) }
         var chipSerial by remember { mutableIntStateOf(0) }
+        var speedMenuOpen by remember { mutableStateOf(false) }
+        val scrub = rememberScrubState(initialScrubMs)
+        val resume by rememberUpdatedState(extras.onPlay)
+        DisposableEffect(scrub) { onDispose { scrub.abandon(resume) } }
         val playing = state.status == VideoStatus.Playing
+        val held = holdControls || speedMenuOpen
         val current by rememberUpdatedState(state)
         val swipeBrightness by rememberUpdatedState(brightnessSwipe)
 
@@ -293,8 +310,8 @@ internal fun FullscreenVideoContent(
             chipSerial++
         }
 
-        LaunchedEffect(controlsVisible, playing, touches, holdControls) {
-            if (controlsVisible && playing && !holdControls) {
+        LaunchedEffect(controlsVisible, playing, touches, held) {
+            if (controlsVisible && playing && !held) {
                 delay(ControlsAutoHideMs)
                 controlsVisible = false
             }
@@ -306,98 +323,62 @@ internal fun FullscreenVideoContent(
             chip = null
         }
 
-        Box(modifier = Modifier.fillMaxSize()) {
+        val gestures = rememberVideoGestureState(initialSwipe, initialTap)
+        val vertical = remember(volume, brightness) {
+            object : VerticalSwipe {
+                var axis = SwipeTarget.Volume
+                var startVolume = 0
+                var startBrightness = 0f
+
+                override fun start(x: Float, width: Float) {
+                    axis = FullscreenGestures.swipeTarget(x, width)
+                    startVolume = volume?.current() ?: 0
+                    startBrightness = brightness?.current() ?: 0f
+                }
+
+                override fun drag(dragUpPx: Float, height: Float) {
+                    if (axis == SwipeTarget.Volume) {
+                        volume?.let { stream ->
+                            val level = SwipeVolumeMath.volumeAfterDrag(startVolume, stream.max, dragUpPx, height)
+                            if (level != stream.current()) stream.set(level)
+                            showChip(FullscreenChip.Volume(level, stream.max))
+                        }
+                    } else if (swipeBrightness) {
+                        brightness?.let { window ->
+                            val level = BrightnessMath.afterDrag(startBrightness, dragUpPx, height)
+                            window.set(level)
+                            showChip(FullscreenChip.Brightness(level))
+                        }
+                    }
+                }
+
+                override fun end() = Unit
+            }
+        }
+        // Read by the pointer loop at each step; the player never reads the gesture state.
+        val actions by rememberUpdatedState(
+            VideoSurfaceActions(
+                positionMs = { current.positionMs },
+                durationMs = { current.durationMs },
+                onToggleControls = {
+                    controlsVisible = !controlsVisible
+                    touches++
+                },
+                onSeek = onSeek,
+                onRequestPreview = extras.onRequestPreview,
+                vertical = vertical,
+            ),
+        )
+
+        Box(modifier = Modifier.fillMaxSize().onPlaced { scrub.placedRoot(it) }) {
             surface()
             // Above the picture, so the video view never takes a touch.
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .pointerInput(Unit) {
-                        detectTapGestures(
-                            onTap = {
-                                controlsVisible = !controlsVisible
-                                touches++
-                            },
-                            onDoubleTap = { offset ->
-                                val delta = FullscreenGestures.doubleTapSeekMs(offset.x, size.width.toFloat())
-                                if (delta != 0L) {
-                                    val video = current
-                                    val target = (video.positionMs + delta).coerceIn(
-                                        0L,
-                                        video.durationMs.takeIf { it > 0L } ?: Long.MAX_VALUE,
-                                    )
-                                    onSeek(target)
-                                    showChip(FullscreenChip.Seek(target, delta))
-                                }
-                            },
-                        )
-                    }
-                    .pointerInput(volume, brightness) {
-                        var startX = 0f
-                        var total = Offset.Zero
-                        var axis: DragAxis? = null
-                        var startVolume = 0
-                        var startBrightness = 0f
-                        var startPosition = 0L
-                        var seekTarget = 0L
-                        detectDragGestures(
-                            onDragStart = { offset ->
-                                startX = offset.x
-                                total = Offset.Zero
-                                axis = null
-                                startVolume = volume?.current() ?: 0
-                                startBrightness = brightness?.current() ?: 0f
-                                startPosition = current.positionMs
-                                seekTarget = startPosition
-                            },
-                            onDrag = { change, amount ->
-                                change.consume()
-                                total += amount
-                                val width = size.width.toFloat()
-                                val height = size.height.toFloat()
-                                // Decided once, from the direction that crossed the touch slop.
-                                val dragAxis = axis ?: when {
-                                    FullscreenGestures.isHorizontal(amount.x, amount.y) -> DragAxis.Seek
-                                    FullscreenGestures.swipeTarget(startX, width) == SwipeTarget.Volume -> DragAxis.Volume
-                                    else -> DragAxis.Brightness
-                                }.also { axis = it }
-                                when (dragAxis) {
-                                    DragAxis.Seek -> {
-                                        seekTarget = FullscreenGestures.seekPreview(
-                                            startPosition,
-                                            current.durationMs,
-                                            total.x,
-                                            width,
-                                        )
-                                        showChip(FullscreenChip.Seek(seekTarget, seekTarget - startPosition))
-                                    }
-                                    DragAxis.Volume -> volume?.let { stream ->
-                                        val level = SwipeVolumeMath.volumeAfterDrag(
-                                            startVolume,
-                                            stream.max,
-                                            -total.y,
-                                            height,
-                                        )
-                                        if (level != stream.current()) stream.set(level)
-                                        showChip(FullscreenChip.Volume(level, stream.max))
-                                    }
-                                    DragAxis.Brightness -> if (swipeBrightness) {
-                                        brightness?.let { window ->
-                                            val level = BrightnessMath.afterDrag(startBrightness, -total.y, height)
-                                            window.set(level)
-                                            showChip(FullscreenChip.Brightness(level))
-                                        }
-                                    }
-                                }
-                            },
-                            onDragEnd = {
-                                if (axis == DragAxis.Seek && seekTarget != startPosition) onSeek(seekTarget)
-                                axis = null
-                            },
-                            onDragCancel = { axis = null },
-                        )
-                    },
+                    .videoSurfaceGestures(gestures, gestureEdges) { actions },
             )
+            DoubleTapRipple(gestures)
             if (state.status == VideoStatus.Buffering) {
                 CircularProgressIndicator(
                     color = OnVideo,
@@ -436,6 +417,10 @@ internal fun FullscreenVideoContent(
                             open()
                         }
                     },
+                    scrub = scrub,
+                    extras = extras,
+                    initialSpeedMenuOpen = initialSpeedMenuOpen,
+                    onSpeedMenuOpenChange = { speedMenuOpen = it },
                 )
             }
             ChipSlot(
@@ -453,11 +438,12 @@ internal fun FullscreenVideoContent(
                     .windowInsetsPadding(WindowInsets.displayCutout)
                     .padding(start = 16.dp, bottom = 88.dp),
             )
+            // Last, outside the animated controls: clipped to the player, free of the bar's padding.
+            SeekPreviewOverlay(scrub, state.durationMs, extras.previewFrame)
+            SwipeSeekOverlay(gestures, extras.previewFrame, FullscreenSwipeBubbleWidth)
         }
     }
 }
-
-private enum class DragAxis { Seek, Volume, Brightness }
 
 /** Fades the chip out with its last content, so the text does not vanish before the pill. */
 @Composable
@@ -514,6 +500,10 @@ private fun FullscreenControls(
     onCycleAspect: () -> Unit,
     onExit: () -> Unit,
     onOpenTracks: (() -> Unit)?,
+    scrub: ScrubState,
+    extras: PlayerExtras,
+    initialSpeedMenuOpen: Boolean,
+    onSpeedMenuOpenChange: (Boolean) -> Unit,
 ) {
     Box(
         modifier = Modifier
@@ -542,7 +532,8 @@ private fun FullscreenControls(
                 color = OnVideo,
                 modifier = Modifier
                     .weight(1f)
-                    .padding(horizontal = 8.dp),
+                    .padding(horizontal = 8.dp)
+                    .graphicsLayer { alpha = if (scrub.dragging) 0f else 1f },
             )
             if (onOpenTracks != null && state.status != VideoStatus.Error) {
                 IconButton(onClick = onOpenTracks) {
@@ -552,6 +543,17 @@ private fun FullscreenControls(
                         tint = OnVideo,
                     )
                 }
+            }
+            if (state.status != VideoStatus.Error) {
+                SpeedButton(
+                    speed = state.speed,
+                    onSetSpeed = {
+                        onInteract()
+                        extras.onSetSpeed(it)
+                    },
+                    initialOpen = initialSpeedMenuOpen,
+                    onMenuOpenChange = onSpeedMenuOpenChange,
+                )
             }
             IconButton(onClick = onCycleAspect) {
                 Icon(
@@ -578,13 +580,18 @@ private fun FullscreenControls(
                 onClick = onTogglePlayPause,
                 buttonSize = 80.dp,
                 iconSize = 52.dp,
-                modifier = Modifier.align(Alignment.Center),
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .graphicsLayer { alpha = if (scrub.dragging) 0f else 1f },
             )
         }
         if (state.status != VideoStatus.Error) {
             FullscreenSeekBar(
                 positionMs = state.positionMs,
                 durationMs = state.durationMs,
+                isPlaying = state.status == VideoStatus.Playing || state.status == VideoStatus.Buffering,
+                scrub = scrub,
+                extras = extras,
                 onSeek = onSeek,
                 onInteract = onInteract,
                 onExit = onExit,
@@ -602,31 +609,30 @@ private fun FullscreenControls(
 private fun FullscreenSeekBar(
     positionMs: Long,
     durationMs: Long,
+    isPlaying: Boolean,
+    scrub: ScrubState,
+    extras: PlayerExtras,
     onSeek: (Long) -> Unit,
     onInteract: () -> Unit,
     onExit: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var dragging by remember { mutableStateOf(false) }
-    var dragPosition by remember { mutableLongStateOf(0L) }
-    val shown = if (dragging) dragPosition else positionMs
+    val shown = if (scrub.dragging) scrub.positionMs else positionMs
     Column(modifier = modifier) {
         PositionSlider(
             shownMs = shown,
             durationMs = durationMs,
             onDrag = { value ->
-                dragging = true
-                dragPosition = value
-                onInteract()
+                // One interaction per drag, not per frame: a touch restarts the hide timer.
+                if (!scrub.dragging) onInteract()
+                scrub.onDrag(value, isPlaying, extras.onPause, extras.onRequestPreview)
             },
-            onDragEnd = {
-                onSeek(dragPosition)
-                dragging = false
-            },
+            onDragEnd = { scrub.onDragEnd(onSeek, extras.onPlay) },
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(end = 8.dp)
-                .height(28.dp),
+                .height(28.dp)
+                .onPlaced { scrub.placedSlider(it) },
         )
         Row(
             modifier = Modifier.fillMaxWidth(),

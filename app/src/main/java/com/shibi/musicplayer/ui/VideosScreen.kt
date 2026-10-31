@@ -1,6 +1,5 @@
 package com.shibi.musicplayer.ui
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -29,7 +28,6 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -87,7 +85,9 @@ import com.shibi.musicplayer.domain.Selection
 import com.shibi.musicplayer.domain.Video
 import com.shibi.musicplayer.domain.VideoAccess
 import com.shibi.musicplayer.domain.VideoFormat
+import com.shibi.musicplayer.domain.VideoListEntry
 import com.shibi.musicplayer.domain.VideoProgress
+import com.shibi.musicplayer.domain.VideoTimeline
 import com.shibi.musicplayer.library.VideoLibraryUiState
 import com.shibi.musicplayer.library.VideoLibraryViewModel
 import com.shibi.musicplayer.library.videoThumbnailRequest
@@ -97,6 +97,8 @@ import com.shibi.musicplayer.ui.background.toComposeColor
 import com.shibi.musicplayer.ui.theme.Spacing
 import com.shibi.musicplayer.video.VideoEngine
 import com.shibi.musicplayer.video.VideoUiState
+import java.time.ZoneId
+import java.util.Locale
 import kotlin.math.roundToInt
 
 private val ThumbnailShape = RoundedCornerShape(12.dp)
@@ -107,7 +109,7 @@ private val ThumbnailShape = RoundedCornerShape(12.dp)
  * Access is re-checked on every resume; the first visit asks once if access is denied.
  */
 @Composable
-fun VideosScreen(
+internal fun VideosScreen(
     onVideoClick: (Video) -> Unit,
     contentBottomPadding: Dp,
     modifier: Modifier = Modifier,
@@ -128,6 +130,7 @@ fun VideosScreen(
     // Called with the loaded list so stale history and saved positions can be pruned.
     onLibraryLoaded: (List<Video>) -> Unit = {},
     onTrashVideos: (List<Video>, Boolean) -> Unit = { _, _ -> },
+    videoExtras: PlayerExtras = NoPlayerExtras,
 ) {
     val context = LocalContext.current
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -179,6 +182,7 @@ fun VideosScreen(
                     onOpenTracks = onOpenTracks,
                     holdControls = holdControls,
                     onStartOver = onStartOver,
+                    extras = videoExtras,
                 )
             }
         } else {
@@ -203,11 +207,13 @@ internal fun VideosContent(
     player: (@Composable (maxHeight: Dp) -> Unit)? = null,
     onTrashVideos: (List<Video>, Boolean) -> Unit = { _, _ -> },
     initialSelection: Selection = Selection(),
+    /** Tests only: starts the fast-scroll thumb mid-drag at this fraction. */
+    fastScrollDragFraction: Float? = null,
 ) {
     var selection by remember { mutableStateOf(initialSelection) }
     val allIds = remember(state.videos) { state.videos.map { it.id } }
     LaunchedEffect(allIds) { selection = selection.retain(allIds.toSet()) }
-    BackHandler(enabled = selection.active) { selection = selection.clear() }
+    AppBackHandler(enabled = selection.active) { selection = selection.clear() }
     val selectionBar: (@Composable () -> Unit)? = if (selection.active) {
         {
             SelectionTopBar(
@@ -253,6 +259,7 @@ internal fun VideosContent(
                     selection = selection,
                     onSelectionChange = { selection = it },
                     topPadding = 8.dp,
+                    fastScrollDragFraction = fastScrollDragFraction,
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth(),
@@ -306,6 +313,7 @@ internal fun VideosContent(
                     listState = listState,
                     selection = selection,
                     onSelectionChange = { selection = it },
+                    fastScrollDragFraction = fastScrollDragFraction,
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth(),
@@ -327,6 +335,7 @@ private fun VideoList(
     onSelectionChange: (Selection) -> Unit,
     modifier: Modifier = Modifier,
     topPadding: Dp = 0.dp,
+    fastScrollDragFraction: Float? = null,
 ) {
     val videos = state.videos
     when {
@@ -343,36 +352,90 @@ private fun VideoList(
             message = stringResource(R.string.videos_empty),
             modifier = modifier.padding(bottom = contentBottomPadding),
         )
-        else -> LazyColumn(
-            modifier = modifier,
-            state = listState,
-            contentPadding = PaddingValues(top = topPadding, bottom = contentBottomPadding),
-        ) {
-            items(videos, key = { it.id }) { video ->
-                VideoRow(
-                    video = video,
-                    isPlaying = video.id == playingVideoId,
-                    saved = savedProgress[video.contentUri],
-                    onClick = {
-                        // While selecting, a tap toggles and never opens the video.
-                        if (selection.active) {
-                            onSelectionChange(selection.toggle(video.id))
-                        } else {
-                            onVideoClick(video)
+        else -> {
+            val zone = remember { ZoneId.systemDefault() }
+            val layout = remember(videos, zone) { VideoTimeline.layout(videos, zone) }
+            val unknownDate = stringResource(R.string.video_date_unknown)
+            Box(modifier = modifier) {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    state = listState,
+                    contentPadding = PaddingValues(top = topPadding, bottom = contentBottomPadding),
+                ) {
+                    layout.entries.forEach { entry ->
+                        when (entry) {
+                            is VideoListEntry.Header -> stickyHeader(
+                                key = entry.key,
+                                contentType = entry.contentType,
+                            ) {
+                                MonthHeader(
+                                    text = VideoTimeline.headerLabel(entry.section, Locale.getDefault())
+                                        ?: unknownDate,
+                                )
+                            }
+                            is VideoListEntry.Row -> {
+                                val video = entry.video
+                                item(key = video.id, contentType = "video") {
+                                    VideoRow(
+                                        video = video,
+                                        isPlaying = video.id == playingVideoId,
+                                        saved = savedProgress[video.contentUri],
+                                        onClick = {
+                                            // While selecting, a tap toggles and never opens the video.
+                                            if (selection.active) {
+                                                onSelectionChange(selection.toggle(video.id))
+                                            } else {
+                                                onVideoClick(video)
+                                            }
+                                        },
+                                        modifier = Modifier.animateItem(),
+                                        selectionMode = selection.active,
+                                        selected = video.id in selection.ids,
+                                        onLongClick = {
+                                            onSelectionChange(
+                                                if (selection.active) {
+                                                    selection.toggle(video.id)
+                                                } else {
+                                                    selection.start(video.id)
+                                                },
+                                            )
+                                        },
+                                    )
+                                }
+                            }
                         }
-                    },
-                    modifier = Modifier.animateItem(),
-                    selectionMode = selection.active,
-                    selected = video.id in selection.ids,
-                    onLongClick = {
-                        onSelectionChange(
-                            if (selection.active) selection.toggle(video.id) else selection.start(video.id),
-                        )
-                    },
+                    }
+                }
+                VideoFastScroller(
+                    listState = listState,
+                    layout = layout,
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(top = topPadding, bottom = contentBottomPadding),
+                    initialDragFraction = fastScrollDragFraction,
                 )
             }
         }
     }
+}
+
+/** Opaque page fill, so rows sliding under a stuck month header never show through. */
+@Composable
+private fun MonthHeader(text: String, modifier: Modifier = Modifier) {
+    val chrome = LocalBackgroundChrome.current
+    val roles = rememberSurfaceRoles(chrome.pageFill)
+    Text(
+        text = text,
+        modifier = modifier
+            .fillMaxWidth()
+            .background(chrome.pageFill)
+            .padding(start = 20.dp, top = 12.dp, bottom = 8.dp),
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.SemiBold,
+        color = roles.onSurfaceArgb.toComposeColor(),
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+    )
 }
 
 /**

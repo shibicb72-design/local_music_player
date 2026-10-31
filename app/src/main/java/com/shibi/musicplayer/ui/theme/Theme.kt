@@ -1,6 +1,7 @@
 package com.shibi.musicplayer.ui.theme
 
 import android.os.Build
+import androidx.activity.SystemBarStyle
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -11,7 +12,11 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import com.shibi.musicplayer.domain.AppBackground
+import com.shibi.musicplayer.domain.BackgroundContrast
+import com.shibi.musicplayer.domain.shownWith
 
 internal val MusicDarkColors = darkColorScheme(
     primary = Accent,
@@ -70,6 +75,31 @@ internal val MusicLightColors = lightColorScheme(
     surfaceContainerLow = Color(0xFFF3F2F8),
     surfaceContainerLowest = Color(0xFFFFFFFF),
 )
+
+/**
+ * True when the backdrop actually painted is light. Dark theme paints the dark
+ * default; with it off, the chosen backdrop decides (Default stays dark).
+ * Same sample as [com.shibi.musicplayer.ui.background.BackgroundContentTheme],
+ * so icons always agree with the page text and the chrome under the nav bar.
+ */
+fun backdropIsLight(
+    darkTheme: Boolean,
+    background: AppBackground,
+    customColors: Map<String, List<Long>>,
+): Boolean = BackgroundContrast.rolesFor(background.shownWith(darkTheme), customColors).isLight
+
+/**
+ * Transparent system bars whose icons follow the app's backdrop, never the
+ * system night mode: dark icons on a light pastel, light icons on dark.
+ */
+fun systemBarStyleFor(lightBackdrop: Boolean): SystemBarStyle {
+    val transparent = Color.Transparent.toArgb()
+    return if (lightBackdrop) {
+        SystemBarStyle.light(transparent, transparent)
+    } else {
+        SystemBarStyle.dark(transparent)
+    }
+}
 
 @Composable
 fun MusicPlayerTheme(

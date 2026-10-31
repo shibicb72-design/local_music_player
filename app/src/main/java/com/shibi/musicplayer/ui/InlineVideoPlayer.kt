@@ -6,17 +6,18 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemGestures
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
@@ -35,13 +36,14 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -49,11 +51,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -103,6 +107,12 @@ internal fun InlineVideoPlayer(
     holdControls: Boolean = false,
     initialControlsVisible: Boolean = false,
     onStartOver: () -> Unit = {},
+    extras: PlayerExtras = NoPlayerExtras,
+    initialScrubMs: Long? = null,
+    initialSpeedMenuOpen: Boolean = false,
+    gestureEdges: WindowInsets = WindowInsets.systemGestures,
+    initialSwipe: SwipePreview? = null,
+    initialTap: TapPreview? = null,
 ) {
     BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
         val targetHeightPx = with(LocalDensity.current) {
@@ -120,6 +130,12 @@ internal fun InlineVideoPlayer(
             holdControls = holdControls,
             initialControlsVisible = initialControlsVisible,
             onStartOver = onStartOver,
+            extras = extras,
+            initialScrubMs = initialScrubMs,
+            initialSpeedMenuOpen = initialSpeedMenuOpen,
+            gestureEdges = gestureEdges,
+            initialSwipe = initialSwipe,
+            initialTap = initialTap,
             modifier = Modifier
                 .fillMaxWidth()
                 .animatedHeight { height.value }
@@ -148,6 +164,17 @@ internal fun VideoPlayerBox(
     initialControlsVisible: Boolean = false,
     /** The resume chip's Start over. */
     onStartOver: () -> Unit = {},
+    extras: PlayerExtras = NoPlayerExtras,
+    /** Test-only: draws the preview bubble as if the thumb were being dragged to this position. */
+    initialScrubMs: Long? = null,
+    /** Test-only: draws the speed menu open. */
+    initialSpeedMenuOpen: Boolean = false,
+    /** Pointers that go down inside these edges are ignored (back gesture, edge panel). */
+    gestureEdges: WindowInsets = WindowInsets.systemGestures,
+    /** Test-only: draws the swipe-seek bubble as if a swipe were under way. */
+    initialSwipe: SwipePreview? = null,
+    /** Test-only: draws the double-tap ripple as if a chain were under way. */
+    initialTap: TapPreview? = null,
 ) {
     ContrastSurface(
         color = Color.Black,
@@ -155,25 +182,52 @@ internal fun VideoPlayerBox(
     ) {
         var controlsVisible by rememberSaveable { mutableStateOf(initialControlsVisible) }
         var touches by remember { mutableIntStateOf(0) }
+        var speedMenuOpen by remember { mutableStateOf(false) }
+        val scrub = rememberScrubState(initialScrubMs)
+        val resume by rememberUpdatedState(extras.onPlay)
+        DisposableEffect(scrub) { onDispose { scrub.abandon(resume) } }
         val playing = state.status == VideoStatus.Playing
-        LaunchedEffect(controlsVisible, playing, touches, holdControls) {
-            if (controlsVisible && playing && !holdControls) {
+        val held = holdControls || speedMenuOpen
+        LaunchedEffect(controlsVisible, playing, touches, held) {
+            if (controlsVisible && playing && !held) {
                 delay(ControlsAutoHideMs)
                 controlsVisible = false
             }
         }
-        Box(modifier = Modifier.fillMaxSize()) {
+        val gestures = rememberVideoGestureState(initialSwipe, initialTap)
+        val current by rememberUpdatedState(state)
+        val toggleControls: () -> Unit = {
+            controlsVisible = !controlsVisible
+            touches++
+        }
+        // Read by the pointer loop at each step; the player never reads the gesture state.
+        // No vertical swipe here: a vertical drag is left to the page or pane around the box.
+        val actions by rememberUpdatedState(
+            VideoSurfaceActions(
+                positionMs = { current.positionMs },
+                durationMs = { current.durationMs },
+                onToggleControls = toggleControls,
+                onSeek = onSeek,
+                onRequestPreview = extras.onRequestPreview,
+                vertical = null,
+            ),
+        )
+        Box(modifier = Modifier.fillMaxSize().onPlaced { scrub.placedRoot(it) }) {
             surface()
             PosterLayer(state)
             // Above the picture, so the video view never takes the tap.
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .clickable(interactionSource = null, indication = null) {
-                        controlsVisible = !controlsVisible
-                        touches++
+                    .videoSurfaceGestures(gestures, gestureEdges) { actions }
+                    .semantics {
+                        onClick {
+                            toggleControls()
+                            true
+                        }
                     },
             )
+            DoubleTapRipple(gestures)
             if (state.status == VideoStatus.Buffering) {
                 CircularProgressIndicator(
                     color = OnVideo,
@@ -209,6 +263,10 @@ internal fun VideoPlayerBox(
                             open()
                         }
                     },
+                    scrub = scrub,
+                    extras = extras,
+                    initialSpeedMenuOpen = initialSpeedMenuOpen,
+                    onSpeedMenuOpenChange = { speedMenuOpen = it },
                 )
             }
             // Over the title, clear of the tracks and close buttons; above the controls, so
@@ -220,6 +278,9 @@ internal fun VideoPlayerBox(
                     .align(Alignment.TopStart)
                     .padding(start = 8.dp, top = 6.dp, end = 104.dp),
             )
+            // Last, outside the animated controls: clipped to the player, free of the bar's padding.
+            SeekPreviewOverlay(scrub, state.durationMs, extras.previewFrame)
+            SwipeSeekOverlay(gestures, extras.previewFrame, InlineSwipeBubbleWidth)
         }
     }
 }
@@ -288,6 +349,10 @@ private fun InlineControls(
     onClose: () -> Unit,
     onFullscreen: () -> Unit,
     onOpenTracks: (() -> Unit)?,
+    scrub: ScrubState,
+    extras: PlayerExtras,
+    initialSpeedMenuOpen: Boolean,
+    onSpeedMenuOpenChange: (Boolean) -> Unit,
 ) {
     Box(
         modifier = Modifier
@@ -298,7 +363,8 @@ private fun InlineControls(
             modifier = Modifier
                 .align(Alignment.TopStart)
                 .fillMaxWidth()
-                .padding(start = 16.dp, top = 4.dp, end = 4.dp),
+                .padding(start = 16.dp, top = 4.dp, end = 4.dp)
+                .graphicsLayer { alpha = if (scrub.dragging) 0f else 1f },
             verticalAlignment = Alignment.CenterVertically,
         ) {
             TrackTitle(
@@ -340,13 +406,21 @@ private fun InlineControls(
             CenterButton(
                 status = state.status,
                 onClick = onTogglePlayPause,
-                modifier = Modifier.align(Alignment.Center),
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .graphicsLayer { alpha = if (scrub.dragging) 0f else 1f },
             )
         }
         if (state.status != VideoStatus.Error) {
             InlineSeekBar(
                 positionMs = state.positionMs,
                 durationMs = state.durationMs,
+                speed = state.speed,
+                isPlaying = state.status == VideoStatus.Playing || state.status == VideoStatus.Buffering,
+                scrub = scrub,
+                extras = extras,
+                initialSpeedMenuOpen = initialSpeedMenuOpen,
+                onSpeedMenuOpenChange = onSpeedMenuOpenChange,
                 onSeek = onSeek,
                 onInteract = onInteract,
                 onFullscreen = onFullscreen,
@@ -436,31 +510,33 @@ internal fun PositionSlider(
 private fun InlineSeekBar(
     positionMs: Long,
     durationMs: Long,
+    speed: Float,
+    isPlaying: Boolean,
+    scrub: ScrubState,
+    extras: PlayerExtras,
+    initialSpeedMenuOpen: Boolean,
+    onSpeedMenuOpenChange: (Boolean) -> Unit,
     onSeek: (Long) -> Unit,
     onInteract: () -> Unit,
     onFullscreen: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var dragging by remember { mutableStateOf(false) }
-    var dragPosition by remember { mutableLongStateOf(0L) }
-    val shown = if (dragging) dragPosition else positionMs
+    val shown = if (scrub.dragging) scrub.positionMs else positionMs
     Column(modifier = modifier.padding(start = 16.dp, end = 4.dp)) {
         PositionSlider(
             shownMs = shown,
             durationMs = durationMs,
             onDrag = { value ->
-                dragging = true
-                dragPosition = value
-                onInteract()
+                // One interaction per drag, not per frame: a touch restarts the hide timer.
+                if (!scrub.dragging) onInteract()
+                scrub.onDrag(value, isPlaying, extras.onPause, extras.onRequestPreview)
             },
-            onDragEnd = {
-                onSeek(dragPosition)
-                dragging = false
-            },
+            onDragEnd = { scrub.onDragEnd(onSeek, extras.onPlay) },
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(end = 12.dp)
-                .height(24.dp),
+                .height(24.dp)
+                .onPlaced { scrub.placedSlider(it) },
         )
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -472,12 +548,23 @@ private fun InlineSeekBar(
                 style = MaterialTheme.typography.labelMedium,
                 color = OnVideoMuted,
             )
-            IconButton(onClick = onFullscreen) {
-                Icon(
-                    imageVector = Icons.Rounded.Fullscreen,
-                    contentDescription = stringResource(R.string.video_fullscreen),
-                    tint = OnVideo,
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                SpeedButton(
+                    speed = speed,
+                    onSetSpeed = {
+                        onInteract()
+                        extras.onSetSpeed(it)
+                    },
+                    initialOpen = initialSpeedMenuOpen,
+                    onMenuOpenChange = onSpeedMenuOpenChange,
                 )
+                IconButton(onClick = onFullscreen) {
+                    Icon(
+                        imageVector = Icons.Rounded.Fullscreen,
+                        contentDescription = stringResource(R.string.video_fullscreen),
+                        tint = OnVideo,
+                    )
+                }
             }
         }
     }
