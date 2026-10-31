@@ -10,13 +10,11 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.shibi.musicplayer"
+        applicationId = "com.shibi.mediaplayer"
         minSdk = 26
         targetSdk = 36
-        // CI: every Actions run gets a higher number, so a newer CI APK always installs over an older one.
-        // Local builds use 1, so any CI build installs over them.
-        versionCode = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
-        versionName = "1.0"
+        versionCode = 1
+        versionName = "1.0.0"
         // The licences screen names the exact libVLC build; the catalog is the single source.
         resValue("string", "libvlc_version", libs.versions.libvlc.get())
     }
@@ -50,6 +48,22 @@ android {
             keyAlias = "androiddebugkey"
             keyPassword = "android"
         }
+        // Upload key for Play. Values come from ~/.gradle/gradle.properties or env vars, never the repo.
+        // Only configured when the store file is set, so CI without the key still builds.
+        val uploadStoreFile = providers.gradleProperty("MEDIAPLAYER_UPLOAD_STORE_FILE")
+            .orElse(providers.environmentVariable("MEDIAPLAYER_UPLOAD_STORE_FILE"))
+            .orNull
+        if (uploadStoreFile != null) {
+            create("release") {
+                storeFile = file(uploadStoreFile)
+                storePassword = providers.gradleProperty("MEDIAPLAYER_UPLOAD_STORE_PASSWORD")
+                    .orElse(providers.environmentVariable("MEDIAPLAYER_UPLOAD_STORE_PASSWORD")).orNull
+                keyAlias = providers.gradleProperty("MEDIAPLAYER_UPLOAD_KEY_ALIAS")
+                    .orElse(providers.environmentVariable("MEDIAPLAYER_UPLOAD_KEY_ALIAS")).orNull
+                keyPassword = providers.gradleProperty("MEDIAPLAYER_UPLOAD_KEY_PASSWORD")
+                    .orElse(providers.environmentVariable("MEDIAPLAYER_UPLOAD_KEY_PASSWORD")).orNull
+            }
+        }
     }
 
     buildTypes {
@@ -57,6 +71,8 @@ android {
             signingConfig = signingConfigs.getByName("debug")
         }
         release {
+            signingConfigs.findByName("release")?.let { signingConfig = it }
+            isDebuggable = false
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
