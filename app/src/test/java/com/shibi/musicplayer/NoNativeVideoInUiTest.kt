@@ -28,6 +28,14 @@ class NoNativeVideoInUiTest {
     }
 
     @Test
+    fun thePreviewSourceNeverTouchesThePlaybackEngine() {
+        val preview = File(sources, "video/PreviewFrames.kt")
+        assertTrue("run from the app module", preview.isFile)
+        val text = preview.readText()
+        assertTrue(!Regex("""VideoEngine|VlcVideoEngine|org\.videolan|LibVLC""").containsMatchIn(text))
+    }
+
+    @Test
     fun composablesNeverNameTheVlcEngine() {
         // The app path builds it in VideoViewModel's constructor lambda, nowhere else.
         assertEquals(

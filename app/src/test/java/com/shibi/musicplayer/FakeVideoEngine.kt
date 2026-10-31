@@ -87,6 +87,17 @@ class FakeVideoEngine(
         emit(VideoEngineEvent.Time(positionMs))
     }
 
+    /** The last rate set, and how many times [setRate] was called. */
+    var rate = 1f
+        private set
+    var rateCalls = 0
+        private set
+
+    override fun setRate(rate: Float) {
+        this.rate = rate
+        rateCalls++
+    }
+
     override fun setAspectMode(mode: AspectMode) {
         calls += "aspect:${mode.name}"
     }
