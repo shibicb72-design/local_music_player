@@ -5,14 +5,20 @@ import android.app.Application
 import android.content.Intent
 import android.net.Uri
 import android.os.Looper
+import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.lifecycle.ViewModelProvider
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.shibi.musicplayer.ui.FullscreenVideoTag
+import com.shibi.musicplayer.ui.VideoPaneTag
+import com.shibi.musicplayer.video.VideoEngineEvent
+import com.shibi.musicplayer.video.VideoStatus
 import com.shibi.musicplayer.video.VideoViewModel
 import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -89,6 +95,31 @@ class OpenWithTest {
         assertEngineLoaded("content://com.example.files/video/clip.mp4")
     }
 
+    /**
+     * Unfolded, a video from another app plays in fullscreen over the tab that was open. Its end
+     * lands on Videos, where the pane keeps it with "Play again", not on that tab's Now Playing.
+     */
+    @Test
+    @Config(qualifiers = Expanded)
+    fun theEndUnfoldedLandsOnVideosWithTheVideoInThePane() {
+        launch(viewIntent("content://com.example.files/video/clip.mp4", "video/mp4"))
+        awaitEngineLoad("content://com.example.files/video/clip.mp4")
+        settle()
+        assertTagShown(FullscreenVideoTag)
+        val engine = engines.single()
+        engine.emit(VideoEngineEvent.Playing)
+        engine.emit(VideoEngineEvent.Ended)
+        settle()
+
+        assertTagGone(FullscreenVideoTag)
+        assertTagShown(VideoPaneTag)
+        compose.onNode(hasContentDescription("Videos").and(IsTab)).assertIsSelected()
+        val playAgain = compose.onAllNodes(hasContentDescription("Play again")).fetchSemanticsNodes()
+        assertTrue("the pane shows \"Play again\"", playAgain.isNotEmpty())
+        assertFalse("the end released the video", engine.released)
+        assertEquals(VideoStatus.Ended, videoViewModel().uiState.value.status)
+    }
+
     private fun viewIntent(uri: String, type: String): Intent =
         Intent(Intent.ACTION_VIEW).setDataAndType(Uri.parse(uri), type)
 
@@ -154,3 +185,5 @@ class OpenWithTest {
         assertFalse("'$tag' is still on screen", found)
     }
 }
+
+private const val Expanded = "w900dp-h600dp-xhdpi"

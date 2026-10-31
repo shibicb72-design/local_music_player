@@ -441,7 +441,14 @@ fun MusicApp(
                 if (decision.resumeMusic && !playerViewModel.uiState.value.isPlaying) {
                     playerViewModel.togglePlayPause()
                 }
-                if (decision.exitFullscreen) exitFullscreen()
+                if (decision.exitFullscreen && navController.currentDestination?.route == VideoFullscreenRoute) {
+                    exitFullscreen()
+                    // Fullscreen was over another tab (a video from another app): the pane is on Videos.
+                    if (navController.currentDestination?.route != VideosRoute) {
+                        select(NavSection.Videos)
+                        navController.openSection(VideosRoute)
+                    }
+                }
             }
         }
 
