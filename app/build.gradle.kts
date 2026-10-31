@@ -10,7 +10,7 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.shibi.musicplayer"
+        applicationId = "com.shibi.mediaplayer"
         minSdk = 26
         targetSdk = 36
         // CI: every Actions run gets a higher number, so a newer CI APK always installs over an older one.
