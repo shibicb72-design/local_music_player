@@ -390,16 +390,6 @@ fun MusicApp(
         }
         val openTracks = { showTracks = true }
 
-        LaunchedEffect(videoState.status, wide) {
-            if (videoState.status == VideoStatus.Ended) {
-                val decision = PlaybackArbiter.onVideoEnded(musicPausedByVideo, twoPane = wide)
-                if (decision.resumeMusic && !playerViewModel.uiState.value.isPlaying) {
-                    playerViewModel.togglePlayPause()
-                }
-                // Two-pane: no auto-next; Now Playing comes back in the right pane.
-                if (decision.closeVideo) closeVideo()
-            }
-        }
         // Leaving Videos pauses the video in both layouts (the right pane follows the tab when unfolded).
         LaunchedEffect(route) {
             val from = previousRoute.value
@@ -441,6 +431,27 @@ fun MusicApp(
         LaunchedEffect(inPip) {
             if (wasInPip && !inPip && videoState.isActive) openFullscreen()
             wasInPip = inPip
+        }
+
+        // No auto-next: the ended video stays loaded with "Play again". Two-pane leaves fullscreen
+        // for the pane, which keeps the video; it never goes back to Now Playing on its own.
+        // Only the end itself counts: a later fold, unfold or rotation keeps fullscreen, as it
+        // does for a playing video, and a return from PiP is left to the effect above.
+        LaunchedEffect(videoState.status) {
+            if (videoState.status == VideoStatus.Ended) {
+                val decision = PlaybackArbiter.onVideoEnded(musicPausedByVideo, twoPane = wide)
+                if (decision.resumeMusic && !playerViewModel.uiState.value.isPlaying) {
+                    playerViewModel.togglePlayPause()
+                }
+                if (decision.exitFullscreen && navController.currentDestination?.route == VideoFullscreenRoute) {
+                    exitFullscreen()
+                    // Fullscreen was over another tab (a video from another app): the pane is on Videos.
+                    if (navController.currentDestination?.route != VideosRoute) {
+                        select(NavSection.Videos)
+                        navController.openSection(VideosRoute)
+                    }
+                }
+            }
         }
 
         fun playQueue(

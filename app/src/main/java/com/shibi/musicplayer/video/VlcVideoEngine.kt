@@ -259,12 +259,15 @@ internal class VlcVideoEngine(context: Context) : VideoEngine {
     override fun play() {
         val mediaPlayer = player ?: return
         when (_state.value.status) {
-            // After the end libVLC keeps the finished input; stop it to start over.
+            // After the end libVLC keeps the finished input; stop it and open the file again from
+            // the start. The old media still has its resume ":start-time" (and a reopen's
+            // ":start-paused"), which every input made from it would obey.
             VideoStatus.Ended -> {
+                val uri = currentUri ?: return
                 mediaPlayer.stop()
-                // Files loaded while it played lived on that input; the media gets them again.
-                externals.forEach { track -> mediaPlayer.addSlave(track.kind.slaveType(), track.location, false) }
-                startOrDefer(mediaPlayer)
+                restore = null
+                // Files loaded while it played lived on that input; openMedia gives them to the new one.
+                openMedia(mediaPlayer, uri)
             }
             VideoStatus.Error -> Unit
             else -> startOrDefer(mediaPlayer)

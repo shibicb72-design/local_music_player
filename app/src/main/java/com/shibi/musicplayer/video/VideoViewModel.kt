@@ -425,6 +425,8 @@ class VideoViewModel internal constructor(
         }
         pausedForTransientLoss = false
         audioFocus.acquire(::onAudioEvent)
+        // Play again (box, pane, fullscreen, the list or PiP) starts over from 0.
+        if (_uiState.value.status == VideoStatus.Ended) engine.seekTo(0L)
         engine.play()
     }
 

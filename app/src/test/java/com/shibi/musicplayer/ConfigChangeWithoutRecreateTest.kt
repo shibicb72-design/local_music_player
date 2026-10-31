@@ -111,6 +111,67 @@ class ConfigChangeWithoutRecreateTest {
         assertEquals("one engine for the whole session", 1, engines.size)
     }
 
+    /**
+     * A phone held sideways is the wide layout: the end leaves fullscreen for the pane, which
+     * keeps the video with "Play again"; upright again, the box keeps it too.
+     */
+    @Test
+    fun aVideoEndingSidewaysStaysInThePaneAndThenInTheBox() {
+        val activity = launch()
+        playVideo("Beach day")
+        val engine = engines.single()
+        engine.emit(VideoEngineEvent.Playing)
+        change(CompactLandscape)
+        assertTagShown(FullscreenVideoTag)
+
+        engine.emit(VideoEngineEvent.Ended)
+        settle()
+        assertTagGone(FullscreenVideoTag)
+        assertTagShown(VideoPaneTag)
+        assertEquals(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED, activity.requestedOrientation)
+        assertPlayAgainShown()
+
+        change(CompactPortrait)
+        assertSame(activity, controller!!.get())
+        assertTagShown(InlineVideoTag)
+        assertTagGone(FullscreenVideoTag)
+        assertPlayAgainShown()
+        assertEndedAndKept(engine)
+    }
+
+    /** Only the end itself leaves fullscreen: unfolding afterwards keeps it, as for a playing video. */
+    @Test
+    fun unfoldingWithAnEndedVideoInFullscreenKeepsFullscreen() {
+        val activity = launch()
+        playVideo("Beach day")
+        compose.onNode(hasContentDescription("Fullscreen")).performSemanticsAction(SemanticsActions.OnClick)
+        settle()
+        val engine = engines.single()
+        engine.emit(VideoEngineEvent.Playing)
+        engine.emit(VideoEngineEvent.Ended)
+        settle()
+        assertTagShown(FullscreenVideoTag)
+
+        change(Expanded)
+        assertSame(activity, controller!!.get())
+        assertTagShown(FullscreenVideoTag)
+        assertPlayAgainShown()
+        assertEndedAndKept(engine)
+    }
+
+    private fun assertPlayAgainShown() {
+        val found = compose.onAllNodes(hasContentDescription("Play again")).fetchSemanticsNodes().isNotEmpty()
+        assertTrue("\"Play again\" is not on screen", found)
+    }
+
+    private fun assertEndedAndKept(engine: FakeVideoEngine) {
+        val state = ViewModelProvider(controller!!.get())[VideoViewModel::class.java].uiState.value
+        assertEquals("Beach day", state.video?.title)
+        assertEquals(VideoStatus.Ended, state.status)
+        assertFalse("the end released the video", engine.released)
+        assertEquals(1, engine.calls.count { it.startsWith("load:") })
+    }
+
     private fun launch(): MainActivity {
         val created = Robolectric.buildActivity(MainActivity::class.java).setup()
         controller = created
