@@ -119,14 +119,6 @@ object VideoTimeline {
 
     fun headerLabel(section: VideoSection, locale: Locale): String? = format(section, "LLLL yyyy", locale)
 
-    fun bubbleLabel(section: VideoSection, locale: Locale): String? = format(section, "LLL yyyy", locale)
-
-    fun snapIndexForFraction(layout: VideoTimelineLayout, fraction: Float): Int {
-        if (layout.sections.isEmpty()) return 0
-        val entry = entryIndexForFraction(fraction, layout.entries.size)
-        return layout.sections[sectionIndexForEntry(layout, entry)].startIndex
-    }
-
     private fun format(section: VideoSection, pattern: String, locale: Locale): String? {
         val year = section.year ?: return null
         val month = section.month ?: return null

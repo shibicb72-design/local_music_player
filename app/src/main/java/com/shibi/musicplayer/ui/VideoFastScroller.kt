@@ -1,8 +1,12 @@
 package com.shibi.musicplayer.ui
 
+import android.os.Build
+import android.view.HapticFeedbackConstants
+import android.view.View
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -12,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -22,7 +27,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -30,10 +34,12 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -42,11 +48,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.shibi.musicplayer.R
+import com.shibi.musicplayer.domain.DotTickState
 import com.shibi.musicplayer.domain.FAST_SCROLL_HIDE_DELAY_MS
+import com.shibi.musicplayer.domain.MIN_VIDEOS_PER_WEEK_DOT
+import com.shibi.musicplayer.domain.MagneticSnap
 import com.shibi.musicplayer.domain.VideoTimeline
 import com.shibi.musicplayer.domain.VideoTimelineLayout
+import com.shibi.musicplayer.domain.magneticSnap
 import com.shibi.musicplayer.ui.background.LocalBackgroundChrome
 import com.shibi.musicplayer.ui.background.contentColorForContainer
+import java.time.ZoneId
 import java.util.Locale
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
@@ -64,28 +75,52 @@ private val TickGap = 4.dp
 private val BubbleGap = 104.dp
 private val ChipHalfHeight = 10.dp
 private val BubbleHalfHeight = 17.dp
+private val DotRadius = 2.5.dp
+private val DotRingWidth = 1.5.dp
+/** How far along the track a week dot reaches for the thumb. */
+private val DotSnapRadius = 16.dp
+/** Share of the gap to a dot the thumb closes right at the dot; the pull fades out at the radius. */
+private const val DOT_SNAP_STRENGTH = 0.6f
 
 /**
- * Month fast-scroll for the Videos list. Appears while the list scrolls or the thumb is
- * dragged and fades [FAST_SCROLL_HIDE_DELAY_MS] after the last activity. Dragging snaps to
- * the start of a month; a bubble names the month and year ticks mark the track.
- * [initialDragFraction] (tests only) starts mid-drag so screenshots are deterministic.
+ * Week fast-scroll for the Videos list. Appears while the list scrolls or the thumb is dragged
+ * and fades [FAST_SCROLL_HIDE_DELAY_MS] after the last activity. The list follows the thumb; each
+ * week with at least [MIN_VIDEOS_PER_WEEK_DOT] videos gets a dot that pulls the thumb in, holds the
+ * list at the start of that week and ticks once. A bubble names the week and year ticks mark the
+ * track. [zone] must be the one [layout] was built with. [initialDragFraction] (tests only) starts
+ * mid-drag so screenshots are deterministic.
  */
 @Composable
 internal fun VideoFastScroller(
     listState: LazyListState,
     layout: VideoTimelineLayout,
     modifier: Modifier = Modifier,
+    zone: ZoneId = ZoneId.systemDefault(),
     initialDragFraction: Float? = null,
 ) {
     val chrome = LocalBackgroundChrome.current
     val container = chrome.sheet
     val onContainer = contentColorForContainer(container)
     val scope = rememberCoroutineScope()
+    val view = LocalView.current
+    val locale = Locale.getDefault()
+    val weeks = remember(layout, zone, locale) { VideoTimeline.weeks(layout, zone, locale) }
+    val stops = remember(weeks) { VideoTimeline.weekStops(weeks) }
+    val dots = remember(stops, layout) { VideoTimeline.dotFractions(stops, layout.entries.size) }
+    // The pointer block outlives recompositions, so it reads these through updated state.
     val currentLayout by rememberUpdatedState(layout)
+    val currentStops by rememberUpdatedState(stops)
+    val currentDots by rememberUpdatedState(dots)
 
     var dragging by remember { mutableStateOf(initialDragFraction != null) }
-    var dragFraction by remember { mutableFloatStateOf(initialDragFraction ?: 0f) }
+    // The thumb while dragging: where it is drawn, the dot holding it and how near the next one is.
+    var thumb by remember { mutableStateOf(MagneticSnap(initialDragFraction ?: 0f)) }
+    // Changes only when the thumb crosses into another week, so the bubble does not recompose per frame.
+    val bubbleWeek by remember(weeks, stops, layout) {
+        derivedStateOf {
+            VideoTimeline.weekForEntry(weeks, VideoTimeline.dragTargetIndex(thumb, stops, layout.entries.size))
+        }
+    }
     val active = listState.isScrollInProgress || dragging
     var shown by remember { mutableStateOf(initialDragFraction != null) }
     LaunchedEffect(active) {
@@ -120,13 +155,12 @@ internal fun VideoFastScroller(
         fun listFraction(): Float = VideoTimeline.thumbFraction(
             listState.firstVisibleItemIndex,
             listState.layoutInfo.visibleItemsInfo.size,
-            layout.entries.size,
+            currentLayout.entries.size,
         )
 
         if (dragging) {
-            val entry = VideoTimeline.entryIndexForFraction(dragFraction, layout.entries.size)
-            val section = layout.sections.getOrNull(VideoTimeline.sectionIndexForEntry(layout, entry))
-            val label = section?.let { VideoTimeline.bubbleLabel(it, Locale.getDefault()) } ?: unknown
+            val weekStart = bubbleWeek?.let { VideoTimeline.weekLabel(it, locale) }
+            val label = if (weekStart != null) stringResource(R.string.video_week_of, weekStart) else unknown
             for ((year, fraction) in VideoTimeline.yearTicks(layout)) {
                 Chip(
                     text = year.toString(),
@@ -145,7 +179,7 @@ internal fun VideoFastScroller(
                         },
                 )
             }
-            // Drawn after the ticks, so the month bubble is never covered by a year label.
+            // Drawn after the ticks, so the week bubble is never covered by a year label.
             Chip(
                 text = label,
                 container = container,
@@ -158,7 +192,7 @@ internal fun VideoFastScroller(
                     .offset {
                         IntOffset(
                             x = -with(density) { BubbleGap.roundToPx() },
-                            y = (dragFraction * travelPx + touchHeightPx / 2f -
+                            y = (thumb.fraction * travelPx + touchHeightPx / 2f -
                                 with(density) { BubbleHalfHeight.toPx() }).roundToInt(),
                         )
                     },
@@ -169,7 +203,7 @@ internal fun VideoFastScroller(
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .offset {
-                    val f = if (dragging) dragFraction else listFraction()
+                    val f = if (dragging) thumb.fraction else listFraction()
                     IntOffset(0, (f * travelPx).roundToInt())
                 }
                 .size(width = TouchWidth, height = TouchHeight)
@@ -177,13 +211,17 @@ internal fun VideoFastScroller(
                 .semantics { contentDescription = description }
                 .systemGestureExclusion()
                 .pointerInput(travelPx) {
+                    val radius = DotSnapRadius.toPx() / travelPx
                     var lastTarget = -1
                     var dragY = 0f
+                    var ticks = DotTickState()
                     detectVerticalDragGestures(
                         onDragStart = {
-                            dragFraction = listFraction()
-                            dragY = dragFraction * travelPx
+                            val start = listFraction()
+                            thumb = MagneticSnap(start)
+                            dragY = start * travelPx
                             lastTarget = -1
+                            ticks = DotTickState()
                             dragging = true
                         },
                         onDragEnd = { dragging = false },
@@ -191,8 +229,11 @@ internal fun VideoFastScroller(
                     ) { change, amount ->
                         change.consume()
                         dragY = (dragY + amount).coerceIn(0f, travelPx)
-                        dragFraction = dragY / travelPx
-                        val target = VideoTimeline.snapIndexForFraction(currentLayout, dragFraction)
+                        val snapped = magneticSnap(dragY / travelPx, currentDots, radius, DOT_SNAP_STRENGTH)
+                        thumb = snapped
+                        ticks = ticks.next(snapped.lockedIndex)
+                        if (ticks.tick) view.performDotTick()
+                        val target = VideoTimeline.dragTargetIndex(snapped, currentStops, currentLayout.entries.size)
                         if (target != lastTarget) {
                             lastTarget = target
                             scope.launch { listState.scrollToItem(target) }
@@ -208,7 +249,62 @@ internal fun VideoFastScroller(
                     .border(1.dp, onContainer.copy(alpha = 0.55f), RoundedCornerShape(50)),
             )
         }
+
+        if (dragging && dots.isNotEmpty()) {
+            // Over the pill, so the dot holding the thumb shows on it. Draws only; touches pass through.
+            WeekDots(
+                fractions = dots,
+                thumb = { thumb },
+                travelPx = travelPx,
+                container = container,
+                content = onContainer,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .width(TouchWidth)
+                    .fillMaxHeight(),
+            )
+        }
     }
+}
+
+/**
+ * The busy-week dots along the thumb's track, drawn plain: an on-container dot in a container ring,
+ * so it shows on any backdrop, at full strength for the dot holding the thumb. [thumb] is read only
+ * while drawing, so a drag redraws without recomposing; its lockedIndex, nearestIndex and proximity
+ * (0..1) are the inputs for the glow and motion pass.
+ */
+@Composable
+private fun WeekDots(
+    fractions: List<Float>,
+    thumb: () -> MagneticSnap,
+    travelPx: Float,
+    container: Color,
+    content: Color,
+    modifier: Modifier = Modifier,
+) {
+    Canvas(modifier) {
+        val locked = thumb().lockedIndex
+        val x = size.width / 2f
+        val top = TouchHeight.toPx() / 2f
+        val dot = DotRadius.toPx()
+        val ring = dot + DotRingWidth.toPx()
+        fractions.forEachIndexed { index, fraction ->
+            val center = Offset(x, top + fraction * travelPx)
+            drawCircle(container, radius = ring, center = center)
+            drawCircle(if (index == locked) content else content.copy(alpha = 0.55f), radius = dot, center = center)
+        }
+    }
+}
+
+/** One light detent: SEGMENT_TICK where the platform has it (API 34), else CLOCK_TICK. */
+private fun View.performDotTick() {
+    performHapticFeedback(
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            HapticFeedbackConstants.SEGMENT_TICK
+        } else {
+            HapticFeedbackConstants.CLOCK_TICK
+        },
+    )
 }
 
 /** A small container chip whose text colour comes from the chip's own fill. */

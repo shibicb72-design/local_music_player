@@ -417,6 +417,7 @@ private fun VideoList(
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
                         .padding(top = topPadding, bottom = contentBottomPadding),
+                    zone = zone,
                     initialDragFraction = fastScrollDragFraction,
                 )
             }
