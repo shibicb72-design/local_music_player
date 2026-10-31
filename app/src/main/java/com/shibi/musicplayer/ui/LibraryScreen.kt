@@ -391,6 +391,13 @@ fun LibraryContent(
                     }
                 }
             }
+            if (tracks.isNotEmpty()) {
+                ListPlayAll(
+                    // The queue is the list as shown, from its first song.
+                    onPlayAll = { onTrackSelected(tracks, tracks.first().id) },
+                    enabled = !selection.active,
+                )
+            }
             SongColumn(
                 tracks = tracks,
                 nowPlaying = nowPlaying,
@@ -405,6 +412,8 @@ fun LibraryContent(
                 onSelectionChange = { selection = it },
                 fastScroll = sorted,
                 fastScrollDragFraction = fastScrollDragFraction,
+                listLayout = true,
+                onTrash = { track -> onTrashSongs(listOf(track), allIds == listOf(track.id)) },
                 modifier = Modifier.weight(1f),
             )
         }
@@ -460,6 +469,12 @@ internal fun SongColumn(
     fastScroll: SortedList<Track>? = null,
     /** Tests only: starts the fast-scroll thumb mid-drag at this fraction. */
     fastScrollDragFraction: Float? = null,
+    /**
+     * The Songs list: [SongListRow]s, whose ⋮ menu can also [onTrash] a song. Favorites, Recent
+     * and Search keep [TrackRow].
+     */
+    listLayout: Boolean = false,
+    onTrash: (Track) -> Unit = {},
 ) {
     if (tracks.isEmpty()) {
         MessagePane(
@@ -477,10 +492,12 @@ internal fun SongColumn(
                 onTrackSelected = onTrackSelected,
                 onToggleFavorite = onToggleFavorite,
                 onAddToPlaylist = onAddToPlaylist,
-                contentPadding = PaddingValues(end = SongScrollerGutter, bottom = contentBottomPadding),
+                contentPadding = PaddingValues(end = ListScrollerGutter, bottom = contentBottomPadding),
                 listState = listState,
                 onSelectionChange = onSelectionChange,
                 selection = selection,
+                listLayout = listLayout,
+                onTrash = onTrash,
                 modifier = Modifier.fillMaxSize(),
             )
             SongFastScroller(
@@ -504,19 +521,12 @@ internal fun SongColumn(
             listState = listState,
             onSelectionChange = onSelectionChange,
             selection = selection,
+            listLayout = listLayout,
+            onTrash = onTrash,
             modifier = modifier,
         )
     }
 }
-
-/**
- * Room the Songs rows leave at their end for the fast-scroll thumb: with the rows' own 12 dp,
- * the ♥ and ⋮ buttons end 4 dp left of the thumb's touch area. This is how the thumb never
- * covers them (`LibrarySortUiTest.theSongsScrollerNeverCoversARowsHeartOrMenu`). The room stays
- * while the thumb is hidden, so the rows never change width as it shows and fades; Favorites,
- * Recent and Search have no scroller and keep full-width rows.
- */
-internal val SongScrollerGutter = FastScrollTouchWidth - 8.dp
 
 /** Test tag of the Songs list's fast-scroll thumb. */
 internal const val SongFastScrollerTag = "song_fast_scroller"
@@ -612,6 +622,8 @@ private fun SongRows(
     listState: LazyListState,
     onSelectionChange: ((Selection) -> Unit)?,
     selection: Selection,
+    listLayout: Boolean,
+    onTrash: (Track) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val reduceMotion = rememberReduceMotion()
@@ -623,31 +635,118 @@ private fun SongRows(
         items(tracks, key = { it.id }, contentType = { "track" }) { track ->
             val change = onSelectionChange
             val selecting = change != null && selection.active
-            TrackRow(
-                track = track,
-                isPlaying = nowPlaying.currentMediaId == track.id.toString(),
-                isFavorite = track.id in favoriteIds,
-                onClick = {
-                    if (selecting) {
-                        change(selection.toggle(track.id))
-                    } else {
-                        // The queue is the list as shown: the Songs sort, or the screen's own order.
-                        onTrackSelected(tracks, track.id)
-                    }
-                },
-                onAddToPlaylist = { onAddToPlaylist(track) },
-                onToggleFavorite = { onToggleFavorite(track) },
-                modifier = if (reduceMotion) {
-                    Modifier.animateItem(fadeInSpec = null, placementSpec = null, fadeOutSpec = null)
+            val onClick = {
+                if (selecting) {
+                    change(selection.toggle(track.id))
                 } else {
-                    Modifier.animateItem()
+                    // The queue is the list as shown: the Songs sort, or the screen's own order.
+                    onTrackSelected(tracks, track.id)
+                }
+            }
+            val onLongClick = change?.let { apply ->
+                {
+                    apply(if (selection.active) selection.toggle(track.id) else selection.start(track.id))
+                }
+            }
+            val itemModifier = if (reduceMotion) {
+                Modifier.animateItem(fadeInSpec = null, placementSpec = null, fadeOutSpec = null)
+            } else {
+                Modifier.animateItem()
+            }
+            if (listLayout) {
+                SongListRow(
+                    track = track,
+                    isPlaying = nowPlaying.currentMediaId == track.id.toString(),
+                    isFavorite = track.id in favoriteIds,
+                    onClick = onClick,
+                    onAddToPlaylist = { onAddToPlaylist(track) },
+                    onToggleFavorite = { onToggleFavorite(track) },
+                    onTrash = { onTrash(track) },
+                    modifier = itemModifier,
+                    selectionMode = selecting,
+                    selected = selecting && track.id in selection.ids,
+                    onLongClick = onLongClick,
+                )
+            } else {
+                TrackRow(
+                    track = track,
+                    isPlaying = nowPlaying.currentMediaId == track.id.toString(),
+                    isFavorite = track.id in favoriteIds,
+                    onClick = onClick,
+                    onAddToPlaylist = { onAddToPlaylist(track) },
+                    onToggleFavorite = { onToggleFavorite(track) },
+                    modifier = itemModifier,
+                    selectionMode = selecting,
+                    selected = selecting && track.id in selection.ids,
+                    onLongClick = onLongClick,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * A Songs list row ([ListRow]): the album art, the title over the artist and length, then the
+ * ♥ and the ⋮ menu (add to a playlist, move to trash).
+ */
+@Composable
+internal fun SongListRow(
+    track: Track,
+    isPlaying: Boolean,
+    isFavorite: Boolean,
+    onClick: () -> Unit,
+    onAddToPlaylist: () -> Unit,
+    onToggleFavorite: () -> Unit,
+    onTrash: () -> Unit,
+    modifier: Modifier = Modifier,
+    selectionMode: Boolean = false,
+    selected: Boolean = false,
+    // Null keeps long-press = add to playlist.
+    onLongClick: (() -> Unit)? = null,
+) {
+    val chrome = LocalBackgroundChrome.current
+    ListRow(
+        title = TrackDisplay.title(track.title),
+        detail = TrackDisplay.subtitle(track.artist, track.album),
+        length = PlaybackTime.format(track.durationMs),
+        fill = if (isPlaying || selected) chrome.playingRowFill else chrome.rowFill,
+        isPlaying = isPlaying,
+        onClick = onClick,
+        onLongClick = onLongClick ?: onAddToPlaylist,
+        art = {
+            AlbumArtwork(
+                albumArtUri = track.albumArtUri,
+                modifier = Modifier.size(ListThumbnailSize),
+                shape = ListThumbnailShape,
+                title = track.title,
+            )
+        },
+        modifier = modifier,
+        selectionMode = selectionMode,
+        selected = selected,
+    ) { tint ->
+        IconButton(onClick = onToggleFavorite) {
+            Icon(
+                imageVector = if (isFavorite) Icons.Rounded.Favorite else Icons.Outlined.FavoriteBorder,
+                contentDescription = stringResource(
+                    if (isFavorite) R.string.unfavorite else R.string.favorite,
+                ),
+                tint = if (isFavorite) Secondary else chrome.iconMuted,
+            )
+        }
+        RowOverflowMenu(tint = tint) { dismiss ->
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.add_to_playlist)) },
+                onClick = {
+                    dismiss()
+                    onAddToPlaylist()
                 },
-                selectionMode = selecting,
-                selected = selecting && track.id in selection.ids,
-                onLongClick = change?.let { apply ->
-                    {
-                        apply(if (selection.active) selection.toggle(track.id) else selection.start(track.id))
-                    }
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.move_to_trash)) },
+                onClick = {
+                    dismiss()
+                    onTrash()
                 },
             )
         }

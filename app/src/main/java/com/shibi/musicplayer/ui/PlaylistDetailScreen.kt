@@ -31,11 +31,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.DragIndicator
 import androidx.compose.material.icons.rounded.MoreVert
-import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.PlaylistRemove
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -76,7 +74,6 @@ import com.shibi.musicplayer.domain.TrackDisplay
 import com.shibi.musicplayer.playlist.PlaylistViewModel
 import com.shibi.musicplayer.ui.background.LocalBackgroundChrome
 import com.shibi.musicplayer.ui.background.contentColorForContainer
-import com.shibi.musicplayer.ui.theme.Base0
 import com.shibi.musicplayer.ui.theme.Base3
 import com.shibi.musicplayer.ui.theme.Error
 import kotlin.math.abs
@@ -326,26 +323,11 @@ internal fun PlaylistDetailContent(
                 .padding(horizontal = 20.dp, vertical = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Button(
+            PlayAllButton(
                 onClick = onPlayAll,
                 enabled = canPlay,
                 modifier = Modifier.weight(1f),
-                shape = CircleShape,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color.White,
-                    contentColor = Base0,
-                    disabledContainerColor = Color.White.copy(alpha = 0.12f),
-                    disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                ),
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.PlayArrow,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp),
-                )
-                Spacer(Modifier.width(6.dp))
-                Text(stringResource(R.string.play_all), maxLines = 1)
-            }
+            )
             OutlinedButton(
                 onClick = onShuffle,
                 enabled = canPlay,
