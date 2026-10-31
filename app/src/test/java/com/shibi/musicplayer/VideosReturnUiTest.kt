@@ -54,7 +54,8 @@ class VideosReturnUiTest {
             }
         }
         compose.onNodeWithText("Videos").assertExists()
-        compose.onNodeWithText("9 videos").assertExists()
+        // The count, then the sort the list is in.
+        compose.onNodeWithText("9 videos · Newest first").assertExists()
         compose.onNodeWithText("Beach day").assertExists()
         compose.onNodeWithText("October 2025").assertExists()
         compose.onNodeWithTag(VideoFastScrollerTag).assertExists()

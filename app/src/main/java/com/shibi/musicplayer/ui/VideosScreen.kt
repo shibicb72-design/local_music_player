@@ -44,6 +44,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -80,8 +81,12 @@ import coil3.compose.SubcomposeAsyncImage
 import coil3.compose.SubcomposeAsyncImageContent
 import com.shibi.musicplayer.R
 import com.shibi.musicplayer.domain.ArtTile
+import com.shibi.musicplayer.domain.LibrarySorter
+import com.shibi.musicplayer.domain.LibrarySorts
 import com.shibi.musicplayer.domain.ResumePolicy
 import com.shibi.musicplayer.domain.Selection
+import com.shibi.musicplayer.domain.SortField
+import com.shibi.musicplayer.domain.SortSpec
 import com.shibi.musicplayer.domain.Video
 import com.shibi.musicplayer.domain.VideoAccess
 import com.shibi.musicplayer.domain.VideoFormat
@@ -97,8 +102,8 @@ import com.shibi.musicplayer.ui.background.toComposeColor
 import com.shibi.musicplayer.ui.theme.Spacing
 import com.shibi.musicplayer.video.VideoEngine
 import com.shibi.musicplayer.video.VideoUiState
+import java.text.Collator
 import java.time.ZoneId
-import java.util.Locale
 import kotlin.math.roundToInt
 
 private val ThumbnailShape = RoundedCornerShape(12.dp)
@@ -150,6 +155,8 @@ internal fun VideosScreen(
         checked = true
         onPauseOrDispose { }
     }
+    // The length sort uses the length a row shows, which can be libVLC's saved one.
+    LaunchedEffect(savedProgress) { viewModel.setSavedProgress(savedProgress) }
     LaunchedEffect(checked) {
         // Read the flow, not the collected state, which can still hold the initial Denied.
         if (checked && !asked && viewModel.uiState.value.access == VideoAccess.Denied) {
@@ -169,6 +176,7 @@ internal fun VideosScreen(
         playingVideoId = video.video?.id,
         savedProgress = savedProgress,
         onTrashVideos = onTrashVideos,
+        onSortChange = viewModel::setSort,
         player = if (video.isActive && showInlinePlayer) {
             { maxHeight ->
                 InlineVideoPlayer(
@@ -209,7 +217,25 @@ internal fun VideosContent(
     initialSelection: Selection = Selection(),
     /** Tests only: starts the fast-scroll thumb mid-drag at this fraction. */
     fastScrollDragFraction: Float? = null,
+    /** The user picked a new sort; [state] comes back sorted by it. */
+    onSortChange: (SortSpec) -> Unit = {},
+    /** Screenshots only: the sort menu starts open. */
+    initialSortMenuOpen: Boolean = false,
 ) {
+    // Set when the user picks a sort: the list goes to the top once it shows that sort. It is
+    // not saved, so a return from fullscreen (which recomposes this) leaves the list where it was.
+    var jumpToTopFor by remember { mutableStateOf<SortSpec?>(null) }
+    if (jumpToTopFor != null && jumpToTopFor == state.sort) {
+        SideEffect {
+            // Before the new order's first layout, so the list never shows the old position.
+            listState.requestScrollToItem(0)
+            jumpToTopFor = null
+        }
+    }
+    val pickSort: (SortSpec) -> Unit = { spec ->
+        jumpToTopFor = spec
+        onSortChange(spec)
+    }
     var selection by remember { mutableStateOf(initialSelection) }
     val allIds = remember(state.videos) { state.videos.map { it.id } }
     LaunchedEffect(allIds) { selection = selection.retain(allIds.toSet()) }
@@ -274,14 +300,28 @@ internal fun VideosContent(
     // ends, which is the blank gap under the title. A list already loaded stays up through
     // that gap and through a refresh; only a first visit with nothing loaded stays blank.
     val showLibrary = state.videos.isNotEmpty() || (checked && !denied)
+    val count = pluralStringResource(R.plurals.video_count, state.videos.size, state.videos.size)
     VideosFrame(
-        subtitle = if (showLibrary) {
-            pluralStringResource(R.plurals.video_count, state.videos.size, state.videos.size)
-        } else {
-            ""
+        subtitle = when {
+            !showLibrary -> ""
+            state.videos.isEmpty() -> count
+            else -> sortSubtitle(count, state.sort)
         },
         selectionBar = selectionBar,
         modifier = modifier,
+        // Hidden with the title row while selecting, and with nothing to sort.
+        sortButton = if (state.videos.isNotEmpty()) {
+            {
+                SortButton(
+                    sort = state.sort,
+                    options = LibrarySorts.VideoOptions,
+                    onSortChange = pickSort,
+                    initialOpen = initialSortMenuOpen,
+                )
+            }
+        } else {
+            null
+        },
     ) {
         when {
             showLibrary -> {
@@ -359,8 +399,20 @@ private fun VideoList(
         )
         else -> {
             val zone = remember { ZoneId.systemDefault() }
-            val layout = remember(videos, zone) { VideoTimeline.layout(videos, zone) }
-            val unknownDate = stringResource(R.string.video_date_unknown)
+            val sort = state.sort
+            // One place builds the rows, the headers and (in the scroller) the stops, from the
+            // sort's groups: one header per group, so no key repeats. A state built without
+            // groups (screenshots) gets month headers in the order given, or is sorted here.
+            val layout = remember(videos, state.runs, sort, zone) {
+                when {
+                    state.runs.isNotEmpty() -> VideoTimeline.layout(videos, state.runs)
+                    sort.field == SortField.Date -> VideoTimeline.layout(videos, zone)
+                    else -> VideoTimeline.layout(
+                        LibrarySorter.videos(videos, sort, Collator.getInstance(), zone, ""),
+                    )
+                }
+            }
+            val names = rememberSortGroupNames(music = false)
             Box(modifier = modifier) {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
@@ -373,10 +425,7 @@ private fun VideoList(
                                 key = entry.key,
                                 contentType = entry.contentType,
                             ) {
-                                MonthHeader(
-                                    text = VideoTimeline.headerLabel(entry.section, Locale.getDefault())
-                                        ?: unknownDate,
-                                )
+                                MonthHeader(text = names.name(entry.section.group, sort.field))
                             }
                             is VideoListEntry.Row -> {
                                 val video = entry.video
@@ -419,6 +468,7 @@ private fun VideoList(
                         .padding(top = topPadding, bottom = contentBottomPadding),
                     zone = zone,
                     initialDragFraction = fastScrollDragFraction,
+                    sort = sort,
                 )
             }
         }
@@ -653,6 +703,7 @@ private fun VideosFrame(
     subtitle: String,
     modifier: Modifier = Modifier,
     selectionBar: (@Composable () -> Unit)? = null,
+    sortButton: (@Composable () -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Column(
@@ -665,26 +716,31 @@ private fun VideosFrame(
         if (selectionBar != null) {
             Box(modifier = Modifier.statusBarsPadding()) { selectionBar() }
         } else {
-            Column(
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .statusBarsPadding()
-                    .padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 12.dp),
+                    // The icon button's own 12 dp inset lines its glyph up with the 20 dp margin.
+                    .padding(start = 20.dp, end = if (sortButton != null) 8.dp else 20.dp, top = 16.dp, bottom = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = stringResource(R.string.videos_title),
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = MaterialTheme.colorScheme.onBackground,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(R.string.videos_title),
+                        style = MaterialTheme.typography.headlineMedium,
+                        color = MaterialTheme.colorScheme.onBackground,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                sortButton?.invoke()
             }
         }
         content()
