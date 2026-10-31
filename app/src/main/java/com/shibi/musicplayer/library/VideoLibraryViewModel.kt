@@ -43,7 +43,10 @@ data class VideoLibraryUiState(
     val hasError: Boolean = false,
     /** The order [videos] are in; it changes only together with them. */
     val sort: SortSpec = LibrarySorts.VideoDefault,
-    /** The groups (headers) of [videos], made with the sort; empty when a state is built without them. */
+    /**
+     * The groups (headers) of [videos], made by the same sort. The screen shows only these runs,
+     * so a state with videos carries them; tests build both with `LibrarySorter.videos`.
+     */
     val runs: List<SortRun> = emptyList(),
 )
 

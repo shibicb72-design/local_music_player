@@ -13,8 +13,6 @@ import com.github.takahirom.roborazzi.captureRoboImage
 import com.shibi.musicplayer.domain.AppBackground
 import com.shibi.musicplayer.domain.InlineVideoBox
 import com.shibi.musicplayer.domain.Video
-import com.shibi.musicplayer.domain.VideoAccess
-import com.shibi.musicplayer.library.VideoLibraryUiState
 import com.shibi.musicplayer.ui.InlineVideoPlayer
 import com.shibi.musicplayer.ui.NavCarousel
 import com.shibi.musicplayer.ui.NavSection
@@ -134,7 +132,7 @@ class InlineVideoScreenshotTest {
     }
 
     private companion object {
-        val list = VideoLibraryUiState(access = VideoAccess.Full, videos = VideosScreenshotTest.videos)
+        val list = VideosScreenshotTest.full
         val concert: Video = VideosScreenshotTest.videos.first { it.id == 2L }
         val screenRecording: Video = VideosScreenshotTest.videos.first { it.id == 5L }
 

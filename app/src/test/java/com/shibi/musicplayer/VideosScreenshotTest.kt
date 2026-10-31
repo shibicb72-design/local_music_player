@@ -29,7 +29,10 @@ import coil3.request.ErrorResult
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.shibi.musicplayer.CarouselV2ScreenshotTest.Companion.playingState
 import com.shibi.musicplayer.domain.AppBackground
+import com.shibi.musicplayer.domain.LibrarySorter
+import com.shibi.musicplayer.domain.LibrarySorts
 import com.shibi.musicplayer.domain.RoutePresentation
+import com.shibi.musicplayer.domain.SortSpec
 import com.shibi.musicplayer.domain.Video
 import com.shibi.musicplayer.domain.VideoAccess
 import com.shibi.musicplayer.library.VideoLibraryUiState
@@ -47,6 +50,8 @@ import com.shibi.musicplayer.ui.SongListBottomPadding
 import com.shibi.musicplayer.ui.VideosContent
 import com.shibi.musicplayer.ui.background.AppBackgroundHost
 import com.shibi.musicplayer.ui.theme.MusicPlayerTheme
+import java.text.Collator
+import java.time.ZoneId
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
@@ -92,7 +97,7 @@ class VideosScreenshotTest {
     @Test
     fun partial() = captureCompact(
         AppBackground.Solid("blush"),
-        VideoLibraryUiState(access = VideoAccess.Partial, videos = videos.take(2)),
+        sortedState(videos.take(2), access = VideoAccess.Partial),
         "videos_partial.png",
     )
 
@@ -219,8 +224,21 @@ class VideosScreenshotTest {
             video(7L, "Drone over the lake", 312_000L, 1_020_000_000L, 2560, 1440, "DCIM"),
             video(8L, "Clip", 9_000L, null, null, null, "WhatsApp Video"),
             video(9L, "Recital", 2_640_000L, 3_300_000_000L, 1920, 1080, "Movies"),
-        )
-        val full = VideoLibraryUiState(access = VideoAccess.Full, videos = videos)
+        ).map {
+            // A second apart, newest first, so the default date sort keeps this order.
+            it.copy(dateAddedSeconds = it.dateAddedSeconds - it.id)
+        }
+        val full = sortedState(videos)
+
+        /** A Videos state as the view model publishes it: [videos] in [sort] order, with its groups. */
+        fun sortedState(
+            videos: List<Video>,
+            access: VideoAccess = VideoAccess.Full,
+            sort: SortSpec = LibrarySorts.VideoDefault,
+        ): VideoLibraryUiState {
+            val sorted = LibrarySorter.videos(videos, sort, Collator.getInstance(), ZoneId.systemDefault(), "Unknown title")
+            return VideoLibraryUiState(access = access, videos = sorted.items, sort = sorted.spec, runs = sorted.runs)
+        }
 
         /** Even ids load a frame; odd ids fail like a WMV with no thumbnail. */
         @OptIn(ExperimentalCoilApi::class)

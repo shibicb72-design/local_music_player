@@ -81,11 +81,9 @@ import coil3.compose.SubcomposeAsyncImage
 import coil3.compose.SubcomposeAsyncImageContent
 import com.shibi.musicplayer.R
 import com.shibi.musicplayer.domain.ArtTile
-import com.shibi.musicplayer.domain.LibrarySorter
 import com.shibi.musicplayer.domain.LibrarySorts
 import com.shibi.musicplayer.domain.ResumePolicy
 import com.shibi.musicplayer.domain.Selection
-import com.shibi.musicplayer.domain.SortField
 import com.shibi.musicplayer.domain.SortSpec
 import com.shibi.musicplayer.domain.Video
 import com.shibi.musicplayer.domain.VideoAccess
@@ -102,7 +100,6 @@ import com.shibi.musicplayer.ui.background.toComposeColor
 import com.shibi.musicplayer.ui.theme.Spacing
 import com.shibi.musicplayer.video.VideoEngine
 import com.shibi.musicplayer.video.VideoUiState
-import java.text.Collator
 import java.time.ZoneId
 import kotlin.math.roundToInt
 
@@ -402,17 +399,9 @@ private fun VideoList(
             val zone = remember { ZoneId.systemDefault() }
             val sort = state.sort
             // One place builds the rows, the headers and (in the scroller) the stops, from the
-            // sort's groups: one header per group, so no key repeats. A state built without
-            // groups (screenshots) gets month headers in the order given, or is sorted here.
-            val layout = remember(videos, state.runs, sort, zone) {
-                when {
-                    state.runs.isNotEmpty() -> VideoTimeline.layout(videos, state.runs)
-                    sort.field == SortField.Date -> VideoTimeline.layout(videos, zone)
-                    else -> VideoTimeline.layout(
-                        LibrarySorter.videos(videos, sort, Collator.getInstance(), zone, ""),
-                    )
-                }
-            }
+            // sort's groups: one header per group, so no key repeats. Nothing sorts here; the
+            // view model sorted off the main thread.
+            val layout = remember(videos, state.runs) { VideoTimeline.layout(videos, state.runs) }
             val names = rememberSortGroupNames(music = false)
             Box(modifier = modifier) {
                 LazyColumn(
