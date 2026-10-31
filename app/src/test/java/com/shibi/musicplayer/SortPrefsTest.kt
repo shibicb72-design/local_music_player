@@ -23,9 +23,12 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -64,6 +67,24 @@ class SortPrefsTest {
         assertEquals(listOf("Attic", "Beach", "Concert"), state.videos.map { it.title })
         // One header group per letter, made with the sort.
         assertEquals(listOf("letter_A", "letter_B", "letter_C"), state.runs.map { it.group.key })
+    }
+
+    @Test
+    fun theStoredSortIsWaitedForSoTheDefaultNeverShows() {
+        val prefs = SlowSortPrefs()
+        val viewModel = newViewModel(prefs)
+        viewModel.refresh()
+        idleMain()
+        // Scanned, but the store has not answered: still loading, nothing shown in any order yet.
+        assertTrue(viewModel.uiState.value.isLoading)
+        assertTrue(viewModel.uiState.value.videos.isEmpty())
+
+        prefs.video.value = SortSpec(SortField.Name, ascending = true)
+        idleMain()
+        val state = viewModel.uiState.value
+        assertFalse(state.isLoading)
+        assertEquals(SortSpec(SortField.Name, ascending = true), state.sort)
+        assertEquals(listOf("Attic", "Beach", "Concert"), state.videos.map { it.title })
     }
 
     @Test
@@ -188,4 +209,17 @@ class SortPrefsTest {
 
     private fun video(id: Long, title: String, duration: Long?, size: Long?, dateAdded: Long?): Array<Any?> =
         arrayOf(id, "$title.mp4", title, duration, size, 1920, 1080, "video/mp4", dateAdded, "Camera")
+
+    /** A store that has not answered yet; [video] stays null until the test sets it. */
+    private class SlowSortPrefs : SortPrefs {
+        val video = MutableStateFlow<SortSpec?>(null)
+        override val videoSort = video.filterNotNull()
+        override val musicSort = MutableStateFlow(LibrarySorts.MusicDefault)
+
+        override suspend fun setVideoSort(spec: SortSpec) {
+            video.value = spec
+        }
+
+        override suspend fun setMusicSort(spec: SortSpec) = Unit
+    }
 }

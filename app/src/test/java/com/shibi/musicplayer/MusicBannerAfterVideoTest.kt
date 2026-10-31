@@ -7,11 +7,14 @@ import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.lifecycle.ViewModelProvider
 import androidx.media3.common.Player
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.shibi.musicplayer.playback.PlayerViewModel
+import com.shibi.musicplayer.ui.InlineVideoTag
+import com.shibi.musicplayer.ui.VideoPaneTag
 import com.shibi.musicplayer.video.VideoEngineEvent
 import com.shibi.musicplayer.video.VideoStatus
 import com.shibi.musicplayer.video.VideoViewModel
@@ -29,8 +32,8 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 /**
- * The music mini player after a video ends, in the real activity: it comes back paused, never
- * starts the music on its own, and plays only when its play button is tapped. The fake player
+ * The music mini player after a video ends, in the real activity, folded and unfolded: it comes
+ * back paused, never starts the music on its own, and plays only when its play button is tapped. The fake player
  * stands in for the media session Robolectric cannot bind.
  */
 @RunWith(AndroidJUnit4::class)
@@ -46,7 +49,15 @@ class MusicBannerAfterVideoTest {
     val rules: TestRule = RuleChain.outerRule(MediaSetup(engines)).around(MusicPlayerSeam(music)).around(compose)
 
     @Test
-    fun theBannerComesBackPausedWhenTheVideoEndsAndPlaysOnlyWhenTapped() {
+    fun theBannerComesBackPausedWhenTheVideoEndsAndPlaysOnlyWhenTapped() = checkTheBannerAfterAVideo(twoPane = false)
+
+    /** Unfolded: the video plays in the right pane and the bar sits under the split. */
+    @Test
+    @Config(qualifiers = Expanded)
+    fun inTwoPaneTheBannerComesBackPausedWhenTheVideoEndsAndPlaysOnlyWhenTapped() =
+        checkTheBannerAfterAVideo(twoPane = true)
+
+    private fun checkTheBannerAfterAVideo(twoPane: Boolean) {
         compose.mainClock.autoAdvance = false
         settle()
         // A song plays (a real tap on its row).
@@ -56,10 +67,12 @@ class MusicBannerAfterVideoTest {
         assertTrue("the song plays", playerViewModel().uiState.value.isPlaying)
 
         // A video starts: it pauses the music and the bar goes, one play button at a time.
-        // The song tap put Now playing in front of the ring, and a tap reaches only a tile the
-        // ones in front leave uncovered (the ring takes the frontmost tile under the finger), so
-        // Videos, three tiles to the left, is reached by real taps one neighbour at a time.
-        for (tab in listOf("Playlists", "Songs", "Videos")) {
+        // Folded, the song tap put Now playing in front of the ring, and a tap reaches only a
+        // tile the ones in front leave uncovered (the ring takes the frontmost tile under the
+        // finger), so Videos, three tiles to the left, is reached one neighbour at a time.
+        // Unfolded, the song plays in the right pane: Songs stays in front, Videos beside it.
+        val tabs = if (twoPane) listOf("Videos") else listOf("Playlists", "Songs", "Videos")
+        for (tab in tabs) {
             compose.onNode(hasContentDescription(tab).and(IsTab)).performClick()
             settle()
             compose.onNode(hasContentDescription(tab).and(IsTab)).assertIsSelected()
@@ -70,6 +83,8 @@ class MusicBannerAfterVideoTest {
         val engine = engines.single()
         engine.emit(VideoEngineEvent.Playing)
         settle()
+        // In the box on Videos folded, in the right pane unfolded.
+        compose.onNodeWithTag(if (twoPane) VideoPaneTag else InlineVideoTag).assertExists()
         assertFalse("the video paused the music", playerViewModel().uiState.value.isPlaying)
         assertFalse("no mini player while the video plays", bannerShown())
         val requests = music.playRequests
@@ -145,3 +160,5 @@ internal class MusicPlayerSeam(private val player: Player) : TestRule {
         }
     }
 }
+
+private const val Expanded = "w900dp-h600dp-xhdpi"

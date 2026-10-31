@@ -176,6 +176,61 @@ class LibrarySortUiTest {
     }
 
     @Test
+    fun theSongsSortMenuIsHiddenWhileSelecting() {
+        val audio = audioProvider()
+        NatoNames.forEachIndexed { index, name -> audio.rows += song(index + 1L, name) }
+        setSongs(libraryViewModel(InMemorySortPrefs())) { _, _ -> }
+        compose.onNodeWithTag(SortButtonTag).assertIsDisplayed()
+        compose.onNodeWithText("Zulu").performTouchInput { longClick() }
+        settle()
+        compose.onNodeWithText("1 selected").assertIsDisplayed()
+        compose.onNodeWithTag(SortButtonTag).assertDoesNotExist()
+    }
+
+    @Test
+    fun aNewSortStartsTheSongsScrollerOver() {
+        val audio = audioProvider()
+        var id = 1L
+        for (word in listOf("Apple", "Mango", "Zest")) {
+            for (n in 1..10) audio.rows += song(id++, "$word $n")
+        }
+        setSongs(libraryViewModel(InMemorySortPrefs(music = SortSpec(SortField.Name, ascending = true)))) { _, _ -> }
+        compose.mainClock.autoAdvance = false
+        flingAndSettle { swipeUp(durationMillis = 300) }
+        flingAndSettle { swipeDown(durationMillis = 300) }
+
+        // A drag onto M's dot (entry 10 of 30), then the finger lifts: the thumb stays up for 2 s.
+        dragSongsThumbTo(10f / 29f, lift = true)
+        compose.mainClock.advanceTimeBy(200)
+        compose.onNodeWithTag(SongFastScrollerTag).assertIsDisplayed()
+
+        // Inside those 2 s, a new sort from the menu: the scroller starts over, so the thumb
+        // waits for the next scroll instead of lingering with the old order's drag.
+        compose.onNodeWithTag(SortButtonTag).performClick()
+        compose.mainClock.advanceTimeBy(300)
+        compose.onNodeWithTag(sortOptionTag(SortSpec(SortField.Name, ascending = false))).performClick()
+        shadowOf(Looper.getMainLooper()).idle()
+        compose.mainClock.advanceTimeBy(300)
+        compose.onNodeWithText("30 songs · Name Z–A").assertIsDisplayed()
+        compose.onNodeWithTag(SongFastScrollerTag).assertDoesNotExist()
+        // The menu's popup scrolls too; let it finish closing before the list is swiped.
+        compose.mainClock.advanceTimeBy(1_000)
+        compose.onNodeWithTag(sortOptionTag(SortSpec(SortField.Name, ascending = false))).assertDoesNotExist()
+
+        // The next scroll brings it back, working on the new order: in Z-A, M starts at entry 10
+        // too, with Mango 9 (the collator puts "Mango 10" right after "Mango 1").
+        flingAndSettle { swipeUp(durationMillis = 300) }
+        flingAndSettle { swipeDown(durationMillis = 300) }
+        compose.onNodeWithTag(SongFastScrollerTag).assertIsDisplayed()
+        dragSongsThumbTo(10f / 29f)
+        val listTop = compose.onNode(hasScrollAction()).fetchSemanticsNode().boundsInRoot.top
+        assertTrue("Mango 9 heads the list", top("Mango 9") - listTop < with(compose.density) { 72.dp.toPx() })
+        assertEquals(HapticFeedbackConstants.SEGMENT_TICK, shadowOf(view).lastHapticFeedbackPerformed())
+        compose.onNodeWithTag(SongFastScrollerTag).performTouchInput { up() }
+        compose.mainClock.advanceTimeBy(500)
+    }
+
+    @Test
     fun draggingTheSongsScrollerOntoALetterHoldsTheListThereNamesItAndTicks() {
         val audio = audioProvider()
         var id = 1L
@@ -351,6 +406,21 @@ class LibrarySortUiTest {
     private fun scrollDown() {
         repeat(2) { compose.onNode(hasScrollAction()).performTouchInput { swipeUp() } }
         settle()
+    }
+
+    /** Drags the Songs thumb from where it rests to [fraction] of its track, and holds it there unless [lift]. */
+    private fun dragSongsThumbTo(fraction: Float, lift: Boolean = false) {
+        val list = compose.onNode(hasScrollAction()).fetchSemanticsNode().boundsInRoot
+        val travel = list.height - with(compose.density) { 56.dp.toPx() }
+        val thumb = compose.onNodeWithTag(SongFastScrollerTag)
+        val start = (thumb.fetchSemanticsNode().boundsInRoot.top - list.top) / travel
+        thumb.performTouchInput {
+            down(center)
+            moveBy(Offset(0f, viewConfiguration.touchSlop))
+            moveBy(Offset(0f, (fraction - start) * travel))
+            if (lift) up()
+        }
+        compose.mainClock.advanceTimeBy(100)
     }
 
     /** A swipe on the list with the clock held, then 1.2 s for the fling: inside the thumb's 2 s. */
