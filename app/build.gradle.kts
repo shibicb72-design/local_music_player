@@ -14,9 +14,9 @@ android {
         minSdk = 26
         targetSdk = 36
         // CI: every Actions run gets a higher number, so a newer CI APK always installs over an older one.
-        // Local builds use 1, so any CI build installs over them.
-        versionCode = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
-        versionName = "1.0"
+        // Local builds use 2, so any CI build installs over them.
+        versionCode = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 2
+        versionName = "1.0.0"
         // The licences screen names the exact libVLC build; the catalog is the single source.
         resValue("string", "libvlc_version", libs.versions.libvlc.get())
     }
@@ -52,6 +52,25 @@ android {
         }
     }
 
+    // Release signing with the Play upload key, only when all four MEDIAPLAYER_UPLOAD_* Gradle
+    // properties are set and non-blank (~/.gradle/gradle.properties, -P or ORG_GRADLE_PROJECT_*;
+    // never committed). Otherwise there is no release signingConfig and release stays unsigned, as before.
+    fun uploadProperty(name: String) = providers.gradleProperty(name).orNull?.takeIf { it.isNotBlank() }
+    val uploadStoreFile = uploadProperty("MEDIAPLAYER_UPLOAD_STORE_FILE")
+    val uploadKeyAlias = uploadProperty("MEDIAPLAYER_UPLOAD_KEY_ALIAS")
+    val uploadStorePassword = uploadProperty("MEDIAPLAYER_UPLOAD_STORE_PASSWORD")
+    val uploadKeyPassword = uploadProperty("MEDIAPLAYER_UPLOAD_KEY_PASSWORD")
+    if (uploadStoreFile != null && uploadKeyAlias != null &&
+        uploadStorePassword != null && uploadKeyPassword != null
+    ) {
+        signingConfigs.create("release") {
+            storeFile = file(uploadStoreFile)
+            storePassword = uploadStorePassword
+            keyAlias = uploadKeyAlias
+            keyPassword = uploadKeyPassword
+        }
+    }
+
     buildTypes {
         debug {
             signingConfig = signingConfigs.getByName("debug")
@@ -62,6 +81,8 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+            // Only present when the upload key properties are set (see above).
+            signingConfigs.findByName("release")?.let { signingConfig = it }
         }
     }
 
