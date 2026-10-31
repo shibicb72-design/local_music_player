@@ -435,7 +435,9 @@ fun MusicApp(
 
         // No auto-next: the ended video stays loaded with "Play again". Two-pane leaves fullscreen
         // for the pane, which keeps the video; it never goes back to Now Playing on its own.
-        LaunchedEffect(videoState.status, wide) {
+        // Only the end itself counts: a later fold, unfold or rotation keeps fullscreen, as it
+        // does for a playing video, and a return from PiP is left to the effect above.
+        LaunchedEffect(videoState.status) {
             if (videoState.status == VideoStatus.Ended) {
                 val decision = PlaybackArbiter.onVideoEnded(musicPausedByVideo, twoPane = wide)
                 if (decision.resumeMusic && !playerViewModel.uiState.value.isPlaying) {

@@ -477,6 +477,20 @@ class VideoViewModelTest {
     }
 
     @Test
+    fun theSameEndedVideoTappedAgainStartsOverFromZero() {
+        viewModel.open(beach)
+        val engine = engines.single()
+        engine.emit(VideoEngineEvent.Playing)
+        engine.emit(VideoEngineEvent.Ended)
+        idle()
+        viewModel.open(beach)
+        idle()
+        assertEquals(listOf("seek:0", "play"), engine.calls.takeLast(2))
+        assertEquals("no reload", 1, engine.calls.count { it.startsWith("load:") })
+        assertEquals(2, focus.acquired)
+    }
+
+    @Test
     fun audioFocusLossPausesAndTransientLossResumes() {
         viewModel.open(beach)
         val engine = engines.single()

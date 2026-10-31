@@ -297,6 +297,13 @@ class TwoPaneNavigationTest {
         val state = videoViewModel().uiState.value
         assertEquals("Beach day", state.video?.title)
         assertEquals(VideoStatus.Ended, state.status)
+
+        // Back still closes it, and only then does Now Playing come back.
+        pressBack()
+        assertPane(video = false)
+        assertShown("Now Playing pane", NothingPlaying)
+        assertTrue(engine.released)
+        tab("Videos").assertIsSelected()
     }
 
     private fun playVideo(title: String) {

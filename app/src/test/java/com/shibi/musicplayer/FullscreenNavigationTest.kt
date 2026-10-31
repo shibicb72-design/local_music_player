@@ -159,6 +159,8 @@ class FullscreenNavigationTest {
         assertEquals(VideoStatus.Ended, ended.status)
         assertFalse("the end released the video", engine.released)
         assertNotNull("the pane took the picture back", engine.attachedView)
+        // The list beside the pane is still there (the blank-on-return fix).
+        assertTextShown("Recital")
 
         tapDescription("Play again")
         assertEquals(listOf("seek:0", "play"), engine.calls.takeLast(2))
@@ -169,6 +171,18 @@ class FullscreenNavigationTest {
         assertEquals(0L, replaying.positionMs)
         assertTagShown(VideoPaneTag)
         assertTagGone(FullscreenVideoTag)
+
+        // Paused (the controls come back), fullscreen again: the second end leaves it too.
+        engine.emit(VideoEngineEvent.Paused)
+        settle()
+        tapFullscreen()
+        assertTagShown(FullscreenVideoTag)
+        engine.emit(VideoEngineEvent.Playing)
+        engine.emit(VideoEngineEvent.Ended)
+        settle()
+        assertTagGone(FullscreenVideoTag)
+        assertTagShown(VideoPaneTag)
+        assertFalse(engine.released)
     }
 
     /** Folded, fullscreen stays at the end with its own "Play again", which starts over from 0. */
