@@ -3,12 +3,11 @@ package com.shibi.musicplayer.ui
 import android.os.Build
 import android.view.HapticFeedbackConstants
 import android.view.View
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -34,8 +33,11 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
@@ -60,6 +62,7 @@ import com.shibi.musicplayer.ui.background.contentColorForContainer
 import java.time.ZoneId
 import java.util.Locale
 import kotlin.math.roundToInt
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -68,8 +71,7 @@ internal const val VideoFastScrollerTag = "video_fast_scroller"
 
 private val TouchWidth = 48.dp
 private val TouchHeight = 56.dp
-private val PillWidth = 6.dp
-private val PillHeight = 44.dp
+private val HaloSize = 36.dp
 private val TickGap = 4.dp
 /** Right edge of the bubble: left of the thumb and of the year-tick column. */
 private val BubbleGap = 104.dp
@@ -102,6 +104,9 @@ internal fun VideoFastScroller(
     val container = chrome.sheet
     val onContainer = contentColorForContainer(container)
     val scope = rememberCoroutineScope()
+    val reduceMotion = rememberReduceMotion()
+    val currentReduceMotion by rememberUpdatedState(reduceMotion)
+    val latchPulse = remember { Animatable(0f) }
     val view = LocalView.current
     val locale = Locale.getDefault()
     val weeks = remember(layout, zone, locale) { VideoTimeline.weeks(layout, zone, locale) }
@@ -122,6 +127,11 @@ internal fun VideoFastScroller(
         }
     }
     val active = listState.isScrollInProgress || dragging
+    val haloPresence = animateFloatAsState(
+        targetValue = if (dragging) 1f else if (active) 0.6f else 0f,
+        animationSpec = if (reduceMotion) snap() else tween(durationMillis = 220),
+        label = "videoFastScrollHaloPresence",
+    )
     var shown by remember { mutableStateOf(initialDragFraction != null) }
     LaunchedEffect(active) {
         if (active) {
@@ -133,7 +143,7 @@ internal fun VideoFastScroller(
     }
     val alpha = animateFloatAsState(
         targetValue = if (shown) 1f else 0f,
-        animationSpec = if (rememberReduceMotion()) snap() else tween(durationMillis = 200),
+        animationSpec = if (reduceMotion) snap() else tween(durationMillis = 200),
         label = "videoFastScrollAlpha",
     )
     val present by remember { derivedStateOf { shown || alpha.value > 0f } }
@@ -232,7 +242,17 @@ internal fun VideoFastScroller(
                         val snapped = magneticSnap(dragY / travelPx, currentDots, radius, DOT_SNAP_STRENGTH)
                         thumb = snapped
                         ticks = ticks.next(snapped.lockedIndex)
-                        if (ticks.tick) view.performDotTick()
+                        if (ticks.tick) {
+                            view.performDotTick()
+                            // Start the decoration in this event, alongside the existing haptic.
+                            // Animatable cancels an earlier pulse if another detent arrives.
+                            scope.launch(start = CoroutineStart.UNDISPATCHED) {
+                                latchPulse.snapTo(if (currentReduceMotion) 0f else 1f)
+                                if (!currentReduceMotion) {
+                                    latchPulse.animateTo(0f, tween(durationMillis = 180))
+                                }
+                            }
+                        }
                         val target = VideoTimeline.dragTargetIndex(snapped, currentStops, currentLayout.entries.size)
                         if (target != lastTarget) {
                             lastTarget = target
@@ -242,22 +262,23 @@ internal fun VideoFastScroller(
                 },
             contentAlignment = Alignment.Center,
         ) {
-            Box(
-                modifier = Modifier
-                    .size(width = PillWidth, height = PillHeight)
-                    .background(container, RoundedCornerShape(50))
-                    .border(1.dp, onContainer.copy(alpha = 0.55f), RoundedCornerShape(50)),
+            ThumbHalo(
+                presence = { haloPresence.value },
+                pulse = { latchPulse.value },
+                container = container,
+                content = onContainer,
             )
         }
 
         if (dragging && dots.isNotEmpty()) {
-            // Over the pill, so the dot holding the thumb shows on it. Draws only; touches pass through.
+            // Over the halo, so the dot holding the thumb shows on it. Touches pass through.
             WeekDots(
                 fractions = dots,
                 thumb = { thumb },
                 travelPx = travelPx,
                 container = container,
                 content = onContainer,
+                pulse = { latchPulse.value },
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .width(TouchWidth)
@@ -267,12 +288,50 @@ internal fun VideoFastScroller(
     }
 }
 
-/**
- * The busy-week dots along the thumb's track, drawn plain: an on-container dot in a container ring,
- * so it shows on any backdrop, at full strength for the dot holding the thumb. [thumb] is read only
- * while drawing, so a drag redraws without recomposing; its lockedIndex, nearestIndex and proximity
- * (0..1) are the inputs for the glow and motion pass.
- */
+/** The layer deforms around its centre; its position belongs entirely to the thumb's offset. */
+@Composable
+private fun ThumbHalo(
+    presence: () -> Float,
+    pulse: () -> Float,
+    container: Color,
+    content: Color,
+) {
+    Box(
+        Modifier
+            .size(HaloSize)
+            .graphicsLayer {
+                val kick = pulse()
+                alpha = presence()
+                scaleX = 1f + 0.22f * kick
+                scaleY = 1.35f - 0.18f * kick
+            }
+            .drawWithCache {
+                val haloCenter = Offset(size.width / 2f, size.height / 2f)
+                val radius = size.minDimension / 2f
+                val rimRadius = radius * 0.48f
+                val rim = Stroke(width = 1.25.dp.toPx())
+                val softRim = Stroke(width = 3.dp.toPx())
+                val glow = Brush.radialGradient(
+                    0f to Color.Transparent,
+                    0.3f to content.copy(alpha = 0.04f),
+                    0.48f to content.copy(alpha = 0.4f),
+                    0.7f to content.copy(alpha = 0.12f),
+                    1f to Color.Transparent,
+                    center = haloCenter,
+                    radius = radius,
+                )
+                onDrawBehind {
+                    val kick = pulse()
+                    drawCircle(glow, radius, haloCenter, alpha = 0.55f + 0.45f * kick)
+                    drawCircle(container, rimRadius, haloCenter, alpha = 0.55f)
+                    drawCircle(content, rimRadius, haloCenter, alpha = 0.12f + 0.16f * kick, style = softRim)
+                    drawCircle(content, rimRadius, haloCenter, alpha = 0.7f + 0.3f * kick, style = rim)
+                }
+            },
+    )
+}
+
+/** Cached lights; only nearest/locked changes retarget animations, proximity is read in draw. */
 @Composable
 private fun WeekDots(
     fractions: List<Float>,
@@ -280,20 +339,63 @@ private fun WeekDots(
     travelPx: Float,
     container: Color,
     content: Color,
+    pulse: () -> Float,
     modifier: Modifier = Modifier,
 ) {
-    Canvas(modifier) {
-        val locked = thumb().lockedIndex
-        val x = size.width / 2f
-        val top = TouchHeight.toPx() / 2f
-        val dot = DotRadius.toPx()
-        val ring = dot + DotRingWidth.toPx()
-        fractions.forEachIndexed { index, fraction ->
-            val center = Offset(x, top + fraction * travelPx)
-            drawCircle(container, radius = ring, center = center)
-            drawCircle(if (index == locked) content else content.copy(alpha = 0.55f), radius = dot, center = center)
+    val reduceMotion = rememberReduceMotion()
+    val currentThumb by rememberUpdatedState(thumb)
+    val illumination = fractions.indices.map { index ->
+        val target by remember(index) {
+            derivedStateOf {
+                val state = currentThumb()
+                when {
+                    state.lockedIndex == index -> 1f
+                    state.nearestIndex == index && state.proximity > 0f -> 0.45f
+                    else -> 0f
+                }
+            }
         }
+        animateFloatAsState(
+            targetValue = target,
+            animationSpec = if (reduceMotion) snap() else tween(durationMillis = 100),
+            label = "videoWeekDotLight",
+        )
     }
+    Box(
+        modifier.drawWithCache {
+            val x = size.width / 2f
+            val top = TouchHeight.toPx() / 2f
+            val dot = DotRadius.toPx()
+            val ring = dot + DotRingWidth.toPx()
+            val glowRadius = ring * 3f
+            val centers = fractions.map { fraction -> Offset(x, top + fraction * travelPx) }
+            val glows = centers.map { dotCenter ->
+                Brush.radialGradient(
+                    0f to content.copy(alpha = 0.65f),
+                    0.35f to content.copy(alpha = 0.3f),
+                    1f to Color.Transparent,
+                    center = dotCenter,
+                    radius = glowRadius,
+                )
+            }
+            onDrawBehind {
+                val state = thumb()
+                val kick = pulse()
+                for (index in centers.indices) {
+                    val light = illumination[index].value
+                    val proximity = if (state.nearestIndex == index) state.proximity else 0f
+                    val lockPulse = if (state.lockedIndex == index) kick else 0f
+                    val dotCenter = centers[index]
+                    drawCircle(
+                        glows[index], glowRadius, dotCenter,
+                        alpha = (0.12f + 0.5f * light + 0.18f * proximity + 0.2f * lockPulse).coerceAtMost(1f),
+                    )
+                    drawCircle(container, ring, dotCenter)
+                    drawCircle(content, dot, dotCenter, alpha = 0.55f + 0.45f * light)
+                }
+            }
+        },
+    )
 }
 
 /** One light detent: SEGMENT_TICK where the platform has it (API 34), else CLOCK_TICK. */
