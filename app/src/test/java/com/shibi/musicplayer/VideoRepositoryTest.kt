@@ -14,6 +14,8 @@ import com.shibi.musicplayer.domain.Video
 import com.shibi.musicplayer.domain.VideoAccess
 import com.shibi.musicplayer.library.VideoLibraryViewModel
 import com.shibi.musicplayer.library.VideoRepository
+import kotlin.coroutines.CoroutineContext
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -212,6 +214,39 @@ class VideoRepositoryTest {
     }
 
     @Test
+    fun refreshKeepsTheLoadedListAndDoesNotReturnToLoading() {
+        shadowOf(application).grantPermissions(Manifest.permission.READ_MEDIA_VIDEO)
+        provider.rows += row(id = 1L, displayName = "a.mp4")
+        val io = HoldingDispatcher()
+        val viewModel = VideoLibraryViewModel(
+            application = application,
+            repository = VideoRepository(application),
+            ioDispatcher = io,
+        )
+        viewModel.refresh()
+        idleMain()
+        assertEquals(listOf("a"), viewModel.uiState.value.videos.map { it.title })
+        assertFalse(viewModel.uiState.value.isLoading)
+
+        // A second scan is in flight (resume, a MediaStore change). The list the screen
+        // already showed must stay, and the state must not flip back to loading.
+        provider.rows += row(id = 2L, displayName = "b.mp4")
+        io.hold()
+        viewModel.refresh()
+        idleMain()
+        val mid = viewModel.uiState.value
+        assertEquals(listOf("a"), mid.videos.map { it.title })
+        assertFalse(mid.isLoading)
+        assertFalse(mid.hasError)
+        assertEquals(VideoAccess.Full, mid.access)
+
+        io.release()
+        idleMain()
+        assertEquals(listOf("b", "a"), viewModel.uiState.value.videos.map { it.title })
+        assertFalse(viewModel.uiState.value.isLoading)
+    }
+
+    @Test
     fun viewModelReportsAQueryFailureWithoutCrashing() {
         shadowOf(application).grantPermissions(Manifest.permission.READ_MEDIA_VIDEO)
         provider.failure = SecurityException("revoked")
@@ -262,6 +297,25 @@ class VideoRepositoryTest {
 
     private fun idleMain() {
         shadowOf(Looper.getMainLooper()).idle()
+    }
+
+    /** Runs work inline until [hold]; [release] runs what was queued, in order. */
+    private class HoldingDispatcher : CoroutineDispatcher() {
+        private val queued = ArrayDeque<Runnable>()
+        private var holding = false
+
+        override fun dispatch(context: CoroutineContext, block: Runnable) {
+            if (holding) queued.addLast(block) else block.run()
+        }
+
+        fun hold() {
+            holding = true
+        }
+
+        fun release() {
+            holding = false
+            while (queued.isNotEmpty()) queued.removeFirst().run()
+        }
     }
 
     private fun row(
