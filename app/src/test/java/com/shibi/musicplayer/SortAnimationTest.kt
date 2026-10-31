@@ -6,6 +6,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -46,8 +47,13 @@ import org.robolectric.annotation.Config
 @Config(sdk = [35], qualifiers = "w411dp-h891dp-xxhdpi")
 class SortAnimationTest {
 
+    /** What animator scale 0 gives Compose on a device; the Robolectric recomposer has none of its own. */
+    private val motionDurationScale = object : MotionDurationScale {
+        override var scaleFactor: Float = 1f
+    }
+
     @get:Rule
-    val compose = createComposeRule()
+    val compose = createComposeRule(effectContext = motionDurationScale)
 
     private val resolver = RuntimeEnvironment.getApplication().contentResolver
 
@@ -84,7 +90,9 @@ class SortAnimationTest {
         setMenu(reduced)
         compose.mainClock.autoAdvance = false
         compose.onNodeWithTag(SortButtonTag).performClick()
-        compose.mainClock.advanceTimeBy(64)
+        compose.mainClock.advanceTimeByFrame() // composes the Popup
+        compose.waitForIdle() // attaches and lays out its window; the clock does not move
+        compose.mainClock.advanceTimeBy(48) // only now do the open animation's frames run
         val row = compose.onNodeWithTag(sortOptionTag(Ascending))
         val earlyWidth = row.fetchSemanticsNode().boundsInRoot.width
         compose.mainClock.advanceTimeBy(2_000)
@@ -117,6 +125,8 @@ class SortAnimationTest {
 
     private fun setMenu(reduced: Boolean) {
         setMotion(reduced)
+        // Menu tests only; the row tests keep scale 1, so they still test the app's rememberReduceMotion() branch.
+        motionDurationScale.scaleFactor = if (reduced) 0f else 1f
         compose.setContent {
             MusicPlayerTheme {
                 SortButton(
