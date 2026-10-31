@@ -383,6 +383,7 @@ private fun VideoList(
     fastScrollDragFraction: Float? = null,
 ) {
     val videos = state.videos
+    val reduceMotion = rememberReduceMotion()
     when {
         videos.isEmpty() && state.isLoading -> Box(modifier, contentAlignment = Alignment.Center) {
             CircularProgressIndicator()
@@ -442,7 +443,11 @@ private fun VideoList(
                                                 onVideoClick(video)
                                             }
                                         },
-                                        modifier = Modifier.animateItem(),
+                                        modifier = if (reduceMotion) {
+                                            Modifier.animateItem(fadeInSpec = null, placementSpec = null, fadeOutSpec = null)
+                                        } else {
+                                            Modifier.animateItem()
+                                        },
                                         selectionMode = selection.active,
                                         selected = video.id in selection.ids,
                                         onLongClick = {

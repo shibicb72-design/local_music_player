@@ -609,6 +609,7 @@ private fun SongRows(
     selection: Selection,
     modifier: Modifier = Modifier,
 ) {
+    val reduceMotion = rememberReduceMotion()
     LazyColumn(
         modifier = modifier,
         state = listState,
@@ -631,7 +632,11 @@ private fun SongRows(
                 },
                 onAddToPlaylist = { onAddToPlaylist(track) },
                 onToggleFavorite = { onToggleFavorite(track) },
-                modifier = Modifier.animateItem(),
+                modifier = if (reduceMotion) {
+                    Modifier.animateItem(fadeInSpec = null, placementSpec = null, fadeOutSpec = null)
+                } else {
+                    Modifier.animateItem()
+                },
                 selectionMode = selecting,
                 selected = selecting && track.id in selection.ids,
                 onLongClick = change?.let { apply ->
