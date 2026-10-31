@@ -511,7 +511,10 @@ internal fun SongColumn(
 
 /**
  * Room the Songs rows leave at their end for the fast-scroll thumb: with the rows' own 12 dp,
- * the ♥ and ⋮ buttons end 4 dp left of the thumb's touch area.
+ * the ♥ and ⋮ buttons end 4 dp left of the thumb's touch area. This is how the thumb never
+ * covers them (`LibrarySortUiTest.theSongsScrollerNeverCoversARowsHeartOrMenu`). The room stays
+ * while the thumb is hidden, so the rows never change width as it shows and fades; Favorites,
+ * Recent and Search have no scroller and keep full-width rows.
  */
 internal val SongScrollerGutter = FastScrollTouchWidth - 8.dp
 
