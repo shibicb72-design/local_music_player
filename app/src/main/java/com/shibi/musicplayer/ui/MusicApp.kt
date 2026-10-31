@@ -390,16 +390,6 @@ fun MusicApp(
         }
         val openTracks = { showTracks = true }
 
-        LaunchedEffect(videoState.status, wide) {
-            if (videoState.status == VideoStatus.Ended) {
-                val decision = PlaybackArbiter.onVideoEnded(musicPausedByVideo, twoPane = wide)
-                if (decision.resumeMusic && !playerViewModel.uiState.value.isPlaying) {
-                    playerViewModel.togglePlayPause()
-                }
-                // Two-pane: no auto-next; Now Playing comes back in the right pane.
-                if (decision.closeVideo) closeVideo()
-            }
-        }
         // Leaving Videos pauses the video in both layouts (the right pane follows the tab when unfolded).
         LaunchedEffect(route) {
             val from = previousRoute.value
@@ -441,6 +431,18 @@ fun MusicApp(
         LaunchedEffect(inPip) {
             if (wasInPip && !inPip && videoState.isActive) openFullscreen()
             wasInPip = inPip
+        }
+
+        // No auto-next: the ended video stays loaded with "Play again". Two-pane leaves fullscreen
+        // for the pane, which keeps the video; it never goes back to Now Playing on its own.
+        LaunchedEffect(videoState.status, wide) {
+            if (videoState.status == VideoStatus.Ended) {
+                val decision = PlaybackArbiter.onVideoEnded(musicPausedByVideo, twoPane = wide)
+                if (decision.resumeMusic && !playerViewModel.uiState.value.isPlaying) {
+                    playerViewModel.togglePlayPause()
+                }
+                if (decision.exitFullscreen) exitFullscreen()
+            }
         }
 
         fun playQueue(

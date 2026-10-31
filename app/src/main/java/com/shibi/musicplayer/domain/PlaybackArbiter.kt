@@ -17,6 +17,7 @@ object PlaybackArbiter {
         val closeVideo: Boolean = false,
         val resumeMusic: Boolean = false,
         val pauseVideo: Boolean = false,
+        val exitFullscreen: Boolean = false,
     )
 
     private val None = Decision()
@@ -35,11 +36,12 @@ object PlaybackArbiter {
         if (!wasPlaying && isPlaying) onMusicStart(videoActive) else None
 
     /**
-     * The video reached its end; there is no auto-next and, by default, no music. In two-pane
-     * the video pane closes so Now Playing returns; the compact box stays with "Play again".
+     * The video reached its end; there is no auto-next and, by default, no music. The video
+     * stays loaded at its end with "Play again", in the box and in the pane. In two-pane,
+     * fullscreen gives way to the pane; folded, fullscreen keeps its own "Play again".
      */
     fun onVideoEnded(musicPausedByVideo: Boolean, twoPane: Boolean = false): Decision =
-        Decision(resumeMusic = ResumeMusicAfterVideo && musicPausedByVideo, closeVideo = twoPane)
+        Decision(resumeMusic = ResumeMusicAfterVideo && musicPausedByVideo, exitFullscreen = twoPane)
 
     /** Back in two-pane closes the video pane before it navigates anywhere. */
     fun onBack(videoActive: Boolean, twoPane: Boolean): Decision =

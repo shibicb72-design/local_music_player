@@ -133,6 +133,61 @@ class FullscreenNavigationTest {
         assertTagShown(InlineVideoTag)
     }
 
+    /**
+     * Unfolded, the end leaves fullscreen on its own, and the pane keeps the video at its end
+     * with "Play again" instead of going back to Now Playing; Play again starts over from 0.
+     */
+    @Test
+    @Config(qualifiers = Expanded)
+    fun theEndUnfoldedLeavesFullscreenAndThePaneKeepsTheVideo() {
+        start()
+        playVideo("Beach day")
+        tapFullscreen()
+        assertTagShown(FullscreenVideoTag)
+        val engine = engines.single()
+        engine.emit(VideoEngineEvent.Length(754_000L))
+        engine.emit(VideoEngineEvent.Playing)
+        engine.emit(VideoEngineEvent.Ended)
+        settle()
+
+        assertTagGone(FullscreenVideoTag)
+        assertTagShown(VideoPaneTag)
+        assertTextGone("Nothing playing")
+        assertEquals(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED, requestedOrientation())
+        val ended = videoViewModel().uiState.value
+        assertEquals("Beach day", ended.video?.title)
+        assertEquals(VideoStatus.Ended, ended.status)
+        assertFalse("the end released the video", engine.released)
+        assertNotNull("the pane took the picture back", engine.attachedView)
+
+        tapDescription("Play again")
+        assertEquals(listOf("seek:0", "play"), engine.calls.takeLast(2))
+        engine.emit(VideoEngineEvent.Playing)
+        settle()
+        val replaying = videoViewModel().uiState.value
+        assertEquals(VideoStatus.Playing, replaying.status)
+        assertEquals(0L, replaying.positionMs)
+        assertTagShown(VideoPaneTag)
+        assertTagGone(FullscreenVideoTag)
+    }
+
+    /** Folded, fullscreen stays at the end with its own "Play again", which starts over from 0. */
+    @Test
+    fun theEndFoldedKeepsFullscreenWithPlayAgain() {
+        openPlayingFullscreen()
+        val engine = engines.single()
+        engine.emit(VideoEngineEvent.Length(754_000L))
+        engine.emit(VideoEngineEvent.Ended)
+        settle()
+        assertTagShown(FullscreenVideoTag)
+        assertEquals(VideoStatus.Ended, videoViewModel().uiState.value.status)
+
+        tapDescription("Play again")
+        assertEquals(listOf("seek:0", "play"), engine.calls.takeLast(2))
+        assertTagShown(FullscreenVideoTag)
+        assertFalse(engine.released)
+    }
+
     /** Music started from the notification closes the video; fullscreen goes with it. */
     @Test
     fun closingTheVideoLeavesFullscreen() {
@@ -345,6 +400,11 @@ class FullscreenNavigationTest {
             }
         }.isSuccess
         assertTrue("\"$text\" is not on screen", found)
+    }
+
+    private fun assertTextGone(text: String) {
+        val found = compose.onAllNodesWithText(text, substring = true).fetchSemanticsNodes().isNotEmpty()
+        assertFalse("\"$text\" is still on screen", found)
     }
 
     private fun assertTagShown(tag: String) {

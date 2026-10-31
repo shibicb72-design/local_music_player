@@ -279,19 +279,24 @@ class TwoPaneNavigationTest {
         assertTrue(engines.single().released)
     }
 
-    /** No auto-next and no music: the end of the video returns the pane to Now Playing. */
+    /** No auto-next and no music: the pane keeps the ended video with "Play again", not Now Playing. */
     @Test
     @WithMedia
-    fun endOfVideoReturnsToNowPlaying() {
+    fun endOfVideoKeepsItInThePaneWithPlayAgain() {
         start()
         playVideo("Beach day")
         val engine = engines.single()
         engine.emit(VideoEngineEvent.Playing)
         engine.emit(VideoEngineEvent.Ended)
         settle()
-        assertPane(video = false)
-        assertShown("Now Playing pane", NothingPlaying)
-        assertTrue(engine.released)
+        assertPane(video = true)
+        assertGone(NothingPlaying)
+        val found = compose.onAllNodes(hasContentDescription(PlayAgain)).fetchSemanticsNodes().isNotEmpty()
+        assertTrue("the pane shows \"$PlayAgain\"", found)
+        assertFalse("the end released the video", engine.released)
+        val state = videoViewModel().uiState.value
+        assertEquals("Beach day", state.video?.title)
+        assertEquals(VideoStatus.Ended, state.status)
     }
 
     private fun playVideo(title: String) {
@@ -407,6 +412,7 @@ class TwoPaneNavigationTest {
 
     private companion object {
         const val NothingPlaying = "Nothing playing"
+        const val PlayAgain = "Play again"
         val IsTab = SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Tab)
 
         /** One string per section that only that section's screen draws. */

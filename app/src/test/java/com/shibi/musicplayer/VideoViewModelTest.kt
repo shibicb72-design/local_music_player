@@ -440,6 +440,42 @@ class VideoViewModelTest {
         assertEquals(2, focus.acquired)
     }
 
+    /**
+     * Two-pane: the end leaves fullscreen (MusicApp pops the route) and the pane shows the same
+     * video, still loaded and at its end; its Play again starts over from 0.
+     */
+    @Test
+    fun aVideoThatEndsInFullscreenStaysLoadedAndPlayAgainStartsOverFromZero() {
+        viewModel.open(beach)
+        val engine = engines.single()
+        viewModel.setFullscreen(true)
+        engine.emit(VideoEngineEvent.Length(754_000L))
+        engine.emit(VideoEngineEvent.Playing)
+        engine.emit(VideoEngineEvent.Time(700_000L))
+        engine.emit(VideoEngineEvent.Ended)
+        idle()
+        viewModel.setFullscreen(false)
+        with(viewModel.uiState.value) {
+            assertSame("the ended video is still the selected one", beach, video)
+            assertTrue(isActive)
+            assertEquals(VideoStatus.Ended, status)
+            assertEquals(754_000L, positionMs)
+        }
+        assertSame(engine, viewModel.engine.value)
+        assertFalse("the end released the engine", engine.released)
+        assertEquals("the pane is back at fit", "aspect:Fit", engine.calls.last())
+
+        viewModel.togglePlayPause()
+        idle()
+        assertEquals(listOf("seek:0", "play"), engine.calls.takeLast(2))
+        assertEquals(0L, viewModel.uiState.value.positionMs)
+        assertEquals("Play again asks for focus again", 2, focus.acquired)
+        engine.emit(VideoEngineEvent.Playing)
+        idle()
+        assertEquals(VideoStatus.Playing, viewModel.uiState.value.status)
+        assertEquals("the same load plays again", 1, engine.calls.count { it.startsWith("load:") })
+    }
+
     @Test
     fun audioFocusLossPausesAndTransientLossResumes() {
         viewModel.open(beach)
