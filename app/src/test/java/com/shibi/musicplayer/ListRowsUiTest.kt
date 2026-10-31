@@ -52,7 +52,6 @@ import com.shibi.musicplayer.ui.ListThumbnailTag
 import com.shibi.musicplayer.ui.PlaylistDetailContent
 import com.shibi.musicplayer.ui.PlaylistSongRow
 import com.shibi.musicplayer.ui.SongFastScrollerTag
-import com.shibi.musicplayer.ui.VideoFastScrollerTag
 import com.shibi.musicplayer.ui.VideosContent
 import com.shibi.musicplayer.ui.theme.MusicPlayerTheme
 import org.junit.Assert.assertEquals
@@ -113,28 +112,29 @@ class ListRowsUiTest {
     }
 
     @Test
-    fun besideTheScrollerTheSongMenuGlyphStillEndsSixteenDpFromTheRowsEnd() {
-        // As shipped: sorted, so the rows end 48 dp (the fast-scroll gutter) short of the list.
+    fun withTheScrollerTheSongMenuGlyphStillEndsSixteenDpFromTheListEnd() {
+        // As shipped: sorted, so with the fast scroller; the rows still reach the list's end.
         songs()
-        val rowsEnd = list().right - px(48.dp)
+        val listEnd = list().right
         val menus = menuButtons()
         assertEquals(tracks.size, menus.size)
         for (menu in menus) {
-            assertDp("glyph to the row's end", 16.dp, rowsEnd - (menu.center.x + px(12.dp)))
+            assertDp("glyph to the list's end", 16.dp, listEnd - (menu.center.x + px(12.dp)))
         }
     }
 
     @Test
-    fun songMenuTouchTargetsEndLeftOfTheScroller() {
-        // The thumb only exists while it shows; the tests-only drag holds it on screen.
+    fun songHeartTouchTargetsEndLeftOfTheScroller() {
+        // The thumb only exists while it shows; the tests-only drag holds it on screen. It may
+        // show over a ⋮ (rows keep the full width, as on Videos), never over a heart.
         songs(dragFraction = 0f)
         val thumb = compose.onNodeWithTag(SongFastScrollerTag).fetchSemanticsNode().boundsInRoot
-        val buttons = menuButtons() + compose.onAllNodesWithContentDescription("Favorite")
+        val hearts = compose.onAllNodesWithContentDescription("Favorite")
             .fetchSemanticsNodes()
             .map { it.boundsInRoot }
-        assertEquals(tracks.size * 2, buttons.size)
-        for (button in buttons) {
-            val touchRight = button.center.x + px(24.dp)
+        assertEquals(tracks.size, hearts.size)
+        for (heart in hearts) {
+            val touchRight = heart.center.x + px(24.dp)
             assertTrue("touch target ends at $touchRight, thumb starts at ${thumb.left}", touchRight <= thumb.left)
         }
     }
@@ -286,27 +286,24 @@ class ListRowsUiTest {
     }
 
     @Test
-    fun videoMenuTouchTargetsAreFortyEightDpAndEndLeftOfTheScroller() {
-        videos(dragFraction = 0f)
-        val thumb = compose.onNodeWithTag(VideoFastScrollerTag).fetchSemanticsNode().boundsInRoot
+    fun videoMenuTouchTargetsAreFortyEightDp() {
+        videos()
         val menus = menuButtons()
         assertTrue("rows on screen", menus.size >= 4)
         for (index in menus.indices) {
             menuButton(index).assertTouchWidthIsEqualTo(48.dp).assertTouchHeightIsEqualTo(48.dp)
-            val touchRight = menus[index].center.x + px(24.dp)
-            assertTrue("touch target ends at $touchRight, thumb starts at ${thumb.left}", touchRight <= thumb.left)
         }
     }
 
     @Test
-    fun besideTheScrollerTheVideoMenuGlyphEndsSixteenDpFromTheRowsEnd() {
-        // Videos always have the fast scroller: the rows end 48 dp short of the list.
+    fun videoMenuGlyphEndsSixteenDpFromTheListEnd() {
+        // Videos always have the fast scroller; the rows still reach the list's end.
         videos()
-        val rowsEnd = list().right - px(48.dp)
+        val listEnd = list().right
         val menus = menuButtons()
         assertEquals("a menu on every row", thumbnails().size, menus.size)
         for (menu in menus) {
-            assertDp("glyph to the row's end", 16.dp, rowsEnd - (menu.center.x + px(12.dp)))
+            assertDp("glyph to the list's end", 16.dp, listEnd - (menu.center.x + px(12.dp)))
         }
     }
 

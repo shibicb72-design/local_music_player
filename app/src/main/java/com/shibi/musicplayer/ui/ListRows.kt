@@ -54,8 +54,8 @@ import com.shibi.musicplayer.ui.theme.Spacing
 
 /**
  * Inset of a Songs or Videos row's content from the row's outer edges (its fill sits 4 dp inside
- * them): the art's start and the ⋮ glyph's end. The rows end [ListScrollerGutter] short of the
- * list's end, so on screen the ⋮ glyph sits 48 + 16 = 64 dp from the list's end.
+ * them): the art's start and the ⋮ glyph's end. Rows keep the list's full width on both lists,
+ * so this is also the content's margin from the screen's edges.
  */
 internal val ListRowSideMargin = 16.dp
 
@@ -75,15 +75,6 @@ private val ListRowButtonTouchSize = 48.dp
 
 /** Minimum height of the Play all pill at the top of the Songs and Videos lists. */
 private val PlayAllPillHeight = 48.dp
-
-/**
- * Room the Songs and Videos rows leave at their end for the fast-scroll thumb: with the rows'
- * own [ListRowFillInset], the ♥ and ⋮ touch targets end 4 dp left of the thumb's touch area, so
- * it never covers them (`LibrarySortUiTest.theSongsScrollerNeverCoversARowsHeartOrMenu`,
- * `ListRowsUiTest`). The room stays while the thumb is hidden, so the rows never change width as
- * it shows and fades.
- */
-internal val ListScrollerGutter = FastScrollTouchWidth
 
 /** Test tag of a row's art. */
 internal const val ListThumbnailTag = "list_thumbnail"

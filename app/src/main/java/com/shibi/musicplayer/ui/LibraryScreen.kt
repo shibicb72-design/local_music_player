@@ -470,8 +470,9 @@ internal fun SongColumn(
     onSelectionChange: ((Selection) -> Unit)? = null,
     selection: Selection = Selection(),
     /**
-     * Opt-in fast scroll, the Songs list only: [tracks] with their sort and groups. The rows end
-     * short of the thumb, so it never covers a row's heart or menu button.
+     * Opt-in fast scroll, the Songs list only: [tracks] with their sort and groups. The rows keep
+     * the full width, as on Videos; the thumb shows over their ends only while it is up (a scroll,
+     * a drag and the 2 s after), and a row's heart always ends left of it.
      */
     fastScroll: SortedList<Track>? = null,
     /** Tests only: starts the fast-scroll thumb mid-drag at this fraction. */
@@ -497,7 +498,7 @@ internal fun SongColumn(
                 onTrackSelected = onTrackSelected,
                 onToggleFavorite = onToggleFavorite,
                 onAddToPlaylist = onAddToPlaylist,
-                contentPadding = PaddingValues(end = ListScrollerGutter, bottom = contentBottomPadding),
+                contentPadding = PaddingValues(bottom = contentBottomPadding),
                 listState = listState,
                 onSelectionChange = onSelectionChange,
                 selection = selection,

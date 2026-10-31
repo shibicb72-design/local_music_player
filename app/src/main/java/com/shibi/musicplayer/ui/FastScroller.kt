@@ -69,7 +69,7 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-/** The thumb's touch area: the handle the list rows must leave room for. */
+/** The thumb's touch area, over the list's end while the thumb shows (rows keep the full width). */
 internal val FastScrollTouchWidth = 48.dp
 private val TouchHeight = 56.dp
 private val HaloSize = 36.dp

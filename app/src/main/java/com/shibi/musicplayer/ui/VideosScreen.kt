@@ -433,11 +433,6 @@ private fun VideoList(
                             is VideoListEntry.Row -> {
                                 val video = entry.video
                                 item(key = video.id, contentType = "video") {
-                                    val itemModifier = if (reduceMotion) {
-                                        Modifier.animateItem(fadeInSpec = null, placementSpec = null, fadeOutSpec = null)
-                                    } else {
-                                        Modifier.animateItem()
-                                    }
                                     VideoRow(
                                         video = video,
                                         isPlaying = video.id == playingVideoId,
@@ -450,8 +445,11 @@ private fun VideoList(
                                                 onVideoClick(video)
                                             }
                                         },
-                                        // Rows end short of the fast-scroll thumb; the month headers keep the full width.
-                                        modifier = itemModifier.padding(end = ListScrollerGutter),
+                                        modifier = if (reduceMotion) {
+                                            Modifier.animateItem(fadeInSpec = null, placementSpec = null, fadeOutSpec = null)
+                                        } else {
+                                            Modifier.animateItem()
+                                        },
                                         selectionMode = selection.active,
                                         selected = video.id in selection.ids,
                                         onLongClick = {
