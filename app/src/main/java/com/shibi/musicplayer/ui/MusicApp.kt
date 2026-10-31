@@ -3,7 +3,6 @@ package com.shibi.musicplayer.ui
 import android.app.Activity
 import android.content.res.Configuration
 import android.graphics.Rect
-import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.SnackbarDuration
@@ -793,7 +792,7 @@ fun MusicApp(
 
         // Composed after the NavHost, so its callback is newer and wins: Back closes the
         // two-pane video before it pops the left pane. Fullscreen's own handler comes later.
-        BackHandler(
+        AppBackHandler(
             enabled = !fullscreen && PlaybackArbiter.onBack(videoState.isActive, twoPane = wide).closeVideo,
         ) {
             closeVideo()

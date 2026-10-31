@@ -1,7 +1,6 @@
 package com.shibi.musicplayer.ui
 
 import androidx.compose.foundation.BorderStroke
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -215,7 +214,7 @@ internal fun PlaylistDetailContent(
     var selection by remember { mutableStateOf(initialSelection) }
     val songIds = songs.map { it.trackId }
     LaunchedEffect(songIds) { selection = selection.retain(songIds.toSet()) }
-    BackHandler(enabled = selection.active) { selection = selection.clear() }
+    AppBackHandler(enabled = selection.active) { selection = selection.clear() }
     var localIds by remember(songs.map { it.trackId }) { mutableStateOf(songs.map { it.trackId }) }
     var draggingId by remember { mutableStateOf<Long?>(null) }
     var dragDy by remember { mutableFloatStateOf(0f) }
@@ -387,7 +386,7 @@ internal fun PlaylistDetailContent(
                 modifier = Modifier.weight(1f),
                 contentPadding = PaddingValues(bottom = contentBottomPadding),
             ) {
-                items(shown, key = { it.trackId }) { song ->
+                items(shown, key = { it.trackId }, contentType = { "playlist_song" }) { song ->
                     val dragging = draggingId == song.trackId
                     PlaylistSongLine(
                         song = song,

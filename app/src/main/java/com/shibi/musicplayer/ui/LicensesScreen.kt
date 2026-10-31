@@ -42,6 +42,9 @@ import com.shibi.musicplayer.R
 import com.shibi.musicplayer.domain.OpenSourceNotices
 import com.shibi.musicplayer.ui.background.ContrastSurface
 
+private const val NoticeType = "notice"
+private const val LicenseTextType = "license_text"
+
 /**
  * Settings > About > Open-source licences. libVLC's LGPL-2.1 notice with its
  * source links, the font credits, and the full licence texts. Every card is a
@@ -103,7 +106,7 @@ fun LicensesScreen(
             ),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            item {
+            item(key = "libvlc", contentType = NoticeType) {
                 NoticeCard(
                     title = stringResource(R.string.licenses_libvlc_title, libVlcVersion),
                     body = stringResource(R.string.licenses_libvlc_body),
@@ -128,13 +131,13 @@ fun LicensesScreen(
                     )
                 }
             }
-            item {
+            item(key = "fonts", contentType = NoticeType) {
                 NoticeCard(
                     title = stringResource(R.string.licenses_fonts_title),
                     body = stringResource(R.string.licenses_fonts_body),
                 )
             }
-            item {
+            item(key = "libraries", contentType = NoticeType) {
                 NoticeCard(
                     title = stringResource(R.string.licenses_libraries_title),
                     body = stringResource(R.string.licenses_libraries_body),
@@ -145,13 +148,13 @@ fun LicensesScreen(
                     )
                 }
             }
-            item {
+            item(key = "lgpl", contentType = LicenseTextType) {
                 LicenseTextCard(
                     title = stringResource(R.string.licenses_lgpl_title),
                     textRes = R.raw.lgpl_2_1,
                 )
             }
-            item {
+            item(key = "ofl", contentType = LicenseTextType) {
                 LicenseTextCard(
                     title = stringResource(R.string.licenses_ofl_title),
                     textRes = R.raw.ofl_1_1,
