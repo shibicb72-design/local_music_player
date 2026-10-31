@@ -41,6 +41,7 @@ import java.util.Locale
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -175,7 +176,23 @@ class VideoFastScrollerTest {
         assertEquals(stop.startIndex, listState.firstVisibleItemIndex)
         compose.onNodeWithText("Week of " + VideoTimeline.weekLabel(stop, Locale.getDefault())).assertIsDisplayed()
         assertEquals(HapticFeedbackConstants.SEGMENT_TICK, shadowOf(view).lastHapticFeedbackPerformed())
+        // The list remains latched, but the halo must still follow small finger movements.
+        val before = compose.onNodeWithTag(VideoFastScrollerTag).fetchSemanticsNode().boundsInRoot.top
+        compose.onNodeWithTag(VideoFastScrollerTag).performTouchInput {
+            moveBy(Offset(0f, with(compose.density) { 4.dp.toPx() }))
+        }
+        compose.mainClock.advanceTimeByFrame()
+        val after = compose.onNodeWithTag(VideoFastScrollerTag).fetchSemanticsNode().boundsInRoot.top
+        assertTrue("Halo moves continuously while the list is latched", after > before)
+        assertEquals(stop.startIndex, listState.firstVisibleItemIndex)
+
         compose.onNodeWithTag(VideoFastScrollerTag).performTouchInput { up() }
+        compose.mainClock.advanceTimeByFrame()
+        compose.onNodeWithText("Week of " + VideoTimeline.weekLabel(stop, Locale.getDefault())).assertExists()
+        val released = compose.onNodeWithTag(VideoFastScrollerTag).fetchSemanticsNode().boundsInRoot.top
+        assertEquals("Release fade holds the halo at the finger", after, released, 1f)
+        compose.mainClock.advanceTimeBy(300)
+        compose.onNodeWithText("Week of " + VideoTimeline.weekLabel(stop, Locale.getDefault())).assertDoesNotExist()
     }
 
     @Test

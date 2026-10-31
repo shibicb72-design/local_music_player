@@ -26,6 +26,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -61,6 +62,7 @@ import com.shibi.musicplayer.ui.background.LocalBackgroundChrome
 import com.shibi.musicplayer.ui.background.contentColorForContainer
 import java.time.ZoneId
 import java.util.Locale
+import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.delay
@@ -118,8 +120,9 @@ internal fun VideoFastScroller(
     val currentDots by rememberUpdatedState(dots)
 
     var dragging by remember { mutableStateOf(initialDragFraction != null) }
-    // The thumb while dragging: where it is drawn, the dot holding it and how near the next one is.
+    // The list/text detent is independent of the raw finger position used by the halo.
     var thumb by remember { mutableStateOf(MagneticSnap(initialDragFraction ?: 0f)) }
+    var fingerFraction by remember { mutableFloatStateOf(initialDragFraction ?: 0f) }
     // Changes only when the thumb crosses into another week, so the bubble does not recompose per frame.
     val bubbleWeek by remember(weeks, stops, layout) {
         derivedStateOf {
@@ -127,6 +130,12 @@ internal fun VideoFastScroller(
         }
     }
     val active = listState.isScrollInProgress || dragging
+    val dragPresence = animateFloatAsState(
+        targetValue = if (dragging) 1f else 0f,
+        animationSpec = if (reduceMotion) snap() else tween(durationMillis = 220),
+        label = "videoFastScrollDragPresence",
+    )
+    val dragDecorationsPresent by remember { derivedStateOf { dragging || dragPresence.value > 0f } }
     val haloPresence = animateFloatAsState(
         targetValue = if (dragging) 1f else if (active) 0.6f else 0f,
         animationSpec = if (reduceMotion) snap() else tween(durationMillis = 220),
@@ -168,7 +177,26 @@ internal fun VideoFastScroller(
             currentLayout.entries.size,
         )
 
-        if (dragging) {
+        // Read only from layout/draw: position follows every pointer event, never an animation or
+        // the list's snapped target. The pull fades continuously to zero at the capture radius.
+        fun haloFraction(): Float {
+            val raw = fingerFraction
+            val radius = with(density) { DotSnapRadius.toPx() } / travelPx
+            var nearest = raw
+            var distance = radius
+            for (index in currentDots.indices) {
+                val dot = currentDots[index]
+                val gap = abs(raw - dot)
+                if (gap < distance) {
+                    nearest = dot
+                    distance = gap
+                }
+            }
+            val pull = DOT_SNAP_STRENGTH * (1f - distance / radius)
+            return raw + (nearest - raw) * pull
+        }
+
+        if (dragDecorationsPresent) {
             val weekStart = bubbleWeek?.let { VideoTimeline.weekLabel(it, locale) }
             val label = if (weekStart != null) stringResource(R.string.video_week_of, weekStart) else unknown
             for ((year, fraction) in VideoTimeline.yearTicks(layout)) {
@@ -186,7 +214,8 @@ internal fun VideoFastScroller(
                                 y = (fraction * travelPx + touchHeightPx / 2f -
                                     with(density) { ChipHalfHeight.toPx() }).roundToInt(),
                             )
-                        },
+                        }
+                        .graphicsLayer { this.alpha = dragPresence.value },
                 )
             }
             // Drawn after the ticks, so the week bubble is never covered by a year label.
@@ -202,9 +231,15 @@ internal fun VideoFastScroller(
                     .offset {
                         IntOffset(
                             x = -with(density) { BubbleGap.roundToPx() },
-                            y = (thumb.fraction * travelPx + touchHeightPx / 2f -
+                            y = (haloFraction() * travelPx + touchHeightPx / 2f -
                                 with(density) { BubbleHalfHeight.toPx() }).roundToInt(),
                         )
+                    }
+                    .graphicsLayer {
+                        val presence = dragPresence.value
+                        this.alpha = presence
+                        scaleX = 0.92f + 0.08f * presence
+                        scaleY = 0.92f + 0.08f * presence
                     },
             )
         }
@@ -213,7 +248,8 @@ internal fun VideoFastScroller(
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .offset {
-                    val f = if (dragging) thumb.fraction else listFraction()
+                    // Hold the last finger position throughout release instead of jumping to the list.
+                    val f = if (dragging || dragPresence.value > 0f) haloFraction() else listFraction()
                     IntOffset(0, (f * travelPx).roundToInt())
                 }
                 .size(width = TouchWidth, height = TouchHeight)
@@ -229,6 +265,7 @@ internal fun VideoFastScroller(
                         onDragStart = {
                             val start = listFraction()
                             thumb = MagneticSnap(start)
+                            fingerFraction = start
                             dragY = start * travelPx
                             lastTarget = -1
                             ticks = DotTickState()
@@ -239,6 +276,7 @@ internal fun VideoFastScroller(
                     ) { change, amount ->
                         change.consume()
                         dragY = (dragY + amount).coerceIn(0f, travelPx)
+                        fingerFraction = dragY / travelPx
                         val snapped = magneticSnap(dragY / travelPx, currentDots, radius, DOT_SNAP_STRENGTH)
                         thumb = snapped
                         ticks = ticks.next(snapped.lockedIndex)
@@ -249,7 +287,7 @@ internal fun VideoFastScroller(
                             scope.launch(start = CoroutineStart.UNDISPATCHED) {
                                 latchPulse.snapTo(if (currentReduceMotion) 0f else 1f)
                                 if (!currentReduceMotion) {
-                                    latchPulse.animateTo(0f, tween(durationMillis = 180))
+                                    latchPulse.animateTo(0f, tween(durationMillis = 100))
                                 }
                             }
                         }
@@ -265,16 +303,16 @@ internal fun VideoFastScroller(
             ThumbHalo(
                 presence = { haloPresence.value },
                 pulse = { latchPulse.value },
-                container = container,
                 content = onContainer,
             )
         }
 
-        if (dragging && dots.isNotEmpty()) {
+        if (dragDecorationsPresent && dots.isNotEmpty()) {
             // Over the halo, so the dot holding the thumb shows on it. Touches pass through.
             WeekDots(
                 fractions = dots,
                 thumb = { thumb },
+                haloFraction = { haloFraction() },
                 travelPx = travelPx,
                 container = container,
                 content = onContainer,
@@ -282,7 +320,8 @@ internal fun VideoFastScroller(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .width(TouchWidth)
-                    .fillMaxHeight(),
+                    .fillMaxHeight()
+                    .graphicsLayer { this.alpha = dragPresence.value },
             )
         }
     }
@@ -293,7 +332,6 @@ internal fun VideoFastScroller(
 private fun ThumbHalo(
     presence: () -> Float,
     pulse: () -> Float,
-    container: Color,
     content: Color,
 ) {
     Box(
@@ -302,8 +340,8 @@ private fun ThumbHalo(
             .graphicsLayer {
                 val kick = pulse()
                 alpha = presence()
-                scaleX = 1f + 0.22f * kick
-                scaleY = 1.35f - 0.18f * kick
+                scaleX = 1f - 0.16f * kick
+                scaleY = 1f + 0.28f * kick
             }
             .drawWithCache {
                 val haloCenter = Offset(size.width / 2f, size.height / 2f)
@@ -323,44 +361,25 @@ private fun ThumbHalo(
                 onDrawBehind {
                     val kick = pulse()
                     drawCircle(glow, radius, haloCenter, alpha = 0.55f + 0.45f * kick)
-                    drawCircle(container, rimRadius, haloCenter, alpha = 0.55f)
                     drawCircle(content, rimRadius, haloCenter, alpha = 0.12f + 0.16f * kick, style = softRim)
-                    drawCircle(content, rimRadius, haloCenter, alpha = 0.7f + 0.3f * kick, style = rim)
+                    drawCircle(content, rimRadius, haloCenter, alpha = 0.4f + 0.4f * kick, style = rim)
                 }
             },
     )
 }
 
-/** Cached lights; only nearest/locked changes retarget animations, proximity is read in draw. */
+/** Cached lights; finger proximity and the shared haptic-frame bloom are read only in draw. */
 @Composable
 private fun WeekDots(
     fractions: List<Float>,
     thumb: () -> MagneticSnap,
+    haloFraction: () -> Float,
     travelPx: Float,
     container: Color,
     content: Color,
     pulse: () -> Float,
     modifier: Modifier = Modifier,
 ) {
-    val reduceMotion = rememberReduceMotion()
-    val currentThumb by rememberUpdatedState(thumb)
-    val illumination = fractions.indices.map { index ->
-        val target by remember(index) {
-            derivedStateOf {
-                val state = currentThumb()
-                when {
-                    state.lockedIndex == index -> 1f
-                    state.nearestIndex == index && state.proximity > 0f -> 0.45f
-                    else -> 0f
-                }
-            }
-        }
-        animateFloatAsState(
-            targetValue = target,
-            animationSpec = if (reduceMotion) snap() else tween(durationMillis = 100),
-            label = "videoWeekDotLight",
-        )
-    }
     Box(
         modifier.drawWithCache {
             val x = size.width / 2f
@@ -368,6 +387,7 @@ private fun WeekDots(
             val dot = DotRadius.toPx()
             val ring = dot + DotRingWidth.toPx()
             val glowRadius = ring * 3f
+            val reach = DotSnapRadius.toPx() * 2f
             val centers = fractions.map { fraction -> Offset(x, top + fraction * travelPx) }
             val glows = centers.map { dotCenter ->
                 Brush.radialGradient(
@@ -381,14 +401,14 @@ private fun WeekDots(
             onDrawBehind {
                 val state = thumb()
                 val kick = pulse()
+                val haloY = top + haloFraction() * travelPx
                 for (index in centers.indices) {
-                    val light = illumination[index].value
-                    val proximity = if (state.nearestIndex == index) state.proximity else 0f
+                    val light = (1f - abs(centers[index].y - haloY) / reach).coerceIn(0f, 1f)
                     val lockPulse = if (state.lockedIndex == index) kick else 0f
                     val dotCenter = centers[index]
                     drawCircle(
                         glows[index], glowRadius, dotCenter,
-                        alpha = (0.12f + 0.5f * light + 0.18f * proximity + 0.2f * lockPulse).coerceAtMost(1f),
+                        alpha = (0.12f + 0.68f * light + 0.2f * lockPulse).coerceAtMost(1f),
                     )
                     drawCircle(container, ring, dotCenter)
                     drawCircle(content, dot, dotCenter, alpha = 0.55f + 0.45f * light)
