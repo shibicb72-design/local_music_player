@@ -232,7 +232,8 @@ class TwoPaneVideoScreenshotTest {
     @Composable
     private fun Songs() {
         LibraryContent(
-            tracks = tracks,
+            tracks = songs.items,
+            sorted = songs,
             nowPlaying = trackState,
             showMiniPlayer = false,
             onTrackSelected = { _, _ -> },
@@ -268,6 +269,9 @@ class TwoPaneVideoScreenshotTest {
             Track(6L, "Static Bloom", "Hollow Coast", "Static Bloom", 202_000L, "content://tracks/6", null),
             Track(7L, "Slow Tide", "June & The Current", "Slow Tide", 176_000L, "content://tracks/7", null),
         )
+
+        /** [tracks] as the Songs screen ships them, with the sort. */
+        val songs = shippedSongs(tracks)
 
         val trackState = PlayerUiState(
             currentMediaId = "2",

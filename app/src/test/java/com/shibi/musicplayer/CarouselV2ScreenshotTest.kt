@@ -208,7 +208,8 @@ class CarouselV2ScreenshotTest {
     @Composable
     private fun Songs(bottom: Dp) {
         LibraryContent(
-            tracks = tracks,
+            tracks = songs.items,
+            sorted = songs,
             nowPlaying = playingState,
             showMiniPlayer = false,
             onTrackSelected = { _, _ -> },
@@ -234,6 +235,9 @@ class CarouselV2ScreenshotTest {
             Track(10L, "Northern Lights", "Avery Lune", "Aurora", 251_000L, "content://tracks/10", null),
             Track(11L, "Velvet Rain", "The Quiet Hours", "Velvet", 190_000L, "content://tracks/11", null),
         )
+
+        /** [tracks] as the Songs screen ships them, with the sort. */
+        val songs = shippedSongs(tracks)
 
         val playingState = PlayerUiState(
             currentMediaId = "2",

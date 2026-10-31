@@ -22,6 +22,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -275,7 +276,8 @@ class ScreenshotTest {
                     Column(modifier = Modifier.weight(0.42f).fillMaxSize()) {
                         ListViewport(modifier = Modifier.weight(1f).fillMaxSize()) {
                             LibraryContent(
-                                tracks = midTracks,
+                                tracks = midSongs.items,
+                                sorted = midSongs,
                                 nowPlaying = playingState,
                                 showMiniPlayer = false,
                                 onTrackSelected = { _, _ -> },
@@ -668,7 +670,8 @@ class ScreenshotTest {
                                 .fillMaxHeight(),
                         ) {
                             LibraryContent(
-                                tracks = tracks,
+                                tracks = songs.items,
+                                sorted = songs,
                                 nowPlaying = longState,
                                 showMiniPlayer = false,
                                 onTrackSelected = { _, _ -> },
@@ -920,7 +923,8 @@ class ScreenshotTest {
                         Column(modifier = Modifier.weight(0.42f).fillMaxSize()) {
                             ListViewport(modifier = Modifier.weight(1f).fillMaxSize()) {
                                 LibraryContent(
-                                    tracks = midTracks,
+                                    tracks = midSongs.items,
+                                    sorted = midSongs,
                                     nowPlaying = playingState,
                                     showMiniPlayer = false,
                                     onTrackSelected = { _, _ -> },
@@ -1026,8 +1030,12 @@ class ScreenshotTest {
                 NavCarousel(selected = selected, onSelect = {})
             },
         ) { bottom ->
+            // An empty library never reaches LibraryContent in the app (LibraryScreen shows its
+            // message instead), so only a list with songs gets the shipped sort.
+            val shipped = remember(library) { library.takeIf { it.isNotEmpty() }?.let { shippedSongs(it) } }
             LibraryContent(
-                tracks = library,
+                tracks = shipped?.items ?: library,
+                sorted = shipped,
                 nowPlaying = nowPlaying,
                 showMiniPlayer = false,
                 onTrackSelected = { _, _ -> },
@@ -1143,6 +1151,10 @@ class ScreenshotTest {
                 null,
             )
         }
+
+        /** [tracks] and [midTracks] as the Songs screen ships them, with the sort. */
+        val songs = shippedSongs(tracks)
+        val midSongs = shippedSongs(midTracks)
 
         val playingState = PlayerUiState(
             currentMediaId = "2",

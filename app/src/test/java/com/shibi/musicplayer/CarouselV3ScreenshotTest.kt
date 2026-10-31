@@ -16,7 +16,7 @@ import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.shibi.musicplayer.CarouselV2ScreenshotTest.Companion.playingState
-import com.shibi.musicplayer.CarouselV2ScreenshotTest.Companion.tracks
+import com.shibi.musicplayer.CarouselV2ScreenshotTest.Companion.songs
 import com.shibi.musicplayer.domain.AppBackground
 import com.shibi.musicplayer.domain.BackgroundTab
 import com.shibi.musicplayer.domain.RoutePresentation
@@ -219,7 +219,8 @@ class CarouselV3ScreenshotTest {
     @Composable
     private fun Songs(bottom: Dp) {
         LibraryContent(
-            tracks = tracks,
+            tracks = songs.items,
+            sorted = songs,
             nowPlaying = playingState,
             showMiniPlayer = false,
             onTrackSelected = { _, _ -> },

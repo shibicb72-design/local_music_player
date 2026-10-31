@@ -61,8 +61,8 @@ import org.robolectric.annotation.GraphicsMode
 
 /**
  * The library sort, folded and unfolded: the sort menu open on Videos and on Songs (a popup, so
- * the whole screen is captured), and the fast scroller mid-drag by name and by size, with the
- * letter or range in the bubble and a dot per group.
+ * the whole screen is captured), over the dark default and over blush, and the fast scroller
+ * mid-drag by name and by size, with the letter or range in the bubble and a dot per group.
  */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -85,6 +85,22 @@ class SortScreenshotTest {
     @Test
     @Config(qualifiers = Unfolded)
     fun songsMenuUnfolded() = menu("sort_songs_menu_unfolded.png", music = true, expanded = true)
+
+    // The menu's fill is the background's sheet colour, so it is shot on a pastel too.
+
+    @Test
+    fun videosMenuBlushFolded() = menu("sort_videos_menu_blush_folded.png", music = false, expanded = false, Blush)
+
+    @Test
+    @Config(qualifiers = Unfolded)
+    fun videosMenuBlushUnfolded() = menu("sort_videos_menu_blush_unfolded.png", music = false, expanded = true, Blush)
+
+    @Test
+    fun songsMenuBlushFolded() = menu("sort_songs_menu_blush_folded.png", music = true, expanded = false, Blush)
+
+    @Test
+    @Config(qualifiers = Unfolded)
+    fun songsMenuBlushUnfolded() = menu("sort_songs_menu_blush_unfolded.png", music = true, expanded = true, Blush)
 
     @Test
     fun videosNameDragFolded() = drag("sort_videos_name_drag_folded.png", music = false, ByName, expanded = false)
@@ -114,8 +130,13 @@ class SortScreenshotTest {
     @Config(qualifiers = Unfolded)
     fun songsSizeDragUnfolded() = drag("sort_songs_size_drag_unfolded.png", music = true, BySize, expanded = true)
 
-    private fun menu(fileName: String, music: Boolean, expanded: Boolean) = shoot(fileName) {
-        Screen(music, expanded, if (music) ByArtist else ByName, menuOpen = true, dragFraction = null)
+    private fun menu(
+        fileName: String,
+        music: Boolean,
+        expanded: Boolean,
+        background: AppBackground = AppBackground.Default,
+    ) = shoot(fileName) {
+        Screen(music, expanded, if (music) ByArtist else ByName, menuOpen = true, dragFraction = null, background)
     }
 
     private fun drag(fileName: String, music: Boolean, sort: SortSpec, expanded: Boolean) = shoot(fileName) {
@@ -131,9 +152,16 @@ class SortScreenshotTest {
     }
 
     @Composable
-    private fun Screen(music: Boolean, expanded: Boolean, sort: SortSpec, menuOpen: Boolean, dragFraction: Float?) {
+    private fun Screen(
+        music: Boolean,
+        expanded: Boolean,
+        sort: SortSpec,
+        menuOpen: Boolean,
+        dragFraction: Float?,
+        background: AppBackground = AppBackground.Default,
+    ) {
         MusicPlayerTheme {
-            AppBackgroundHost(AppBackground.Default, emptyMap(), forceStatic = true) {
+            AppBackgroundHost(background, emptyMap(), forceStatic = true) {
                 val list: @Composable (Dp) -> Unit = { bottom ->
                     if (music) {
                         Songs(bottom, sort, menuOpen, dragFraction)
@@ -265,6 +293,7 @@ class SortScreenshotTest {
 
     private companion object {
         const val Unfolded = "w900dp-h600dp-xhdpi"
+        val Blush = AppBackground.Solid("blush")
         val ByName = SortSpec(SortField.Name, ascending = true)
         val ByArtist = SortSpec(SortField.Artist, ascending = true)
         val BySize = SortSpec(SortField.Size, ascending = false)
