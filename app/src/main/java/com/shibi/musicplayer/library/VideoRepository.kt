@@ -33,9 +33,10 @@ class VideoRepository(private val context: Context) {
             MediaStore.Video.Media.MIME_TYPE,
             MediaStore.Video.Media.DATE_ADDED,
             MediaStore.Video.Media.BUCKET_DISPLAY_NAME,
+            MediaStore.Video.Media.DATE_TAKEN,
         )
-        // Title order for now; a date sort comes with the list UI.
-        val sortOrder = "${MediaStore.Video.Media.TITLE} COLLATE NOCASE ASC"
+        // Newest first; the view model's in-memory sort (VideoTimeline) is the source of truth.
+        val sortOrder = "${MediaStore.Video.Media.DATE_TAKEN} DESC, ${MediaStore.Video.Media.DATE_ADDED} DESC"
 
         val videos = mutableListOf<Video>()
         context.contentResolver.query(collection, projection, null, null, sortOrder)?.use { cursor ->
@@ -49,6 +50,7 @@ class VideoRepository(private val context: Context) {
             val mimeColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.MIME_TYPE)
             val dateColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DATE_ADDED)
             val folderColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.BUCKET_DISPLAY_NAME)
+            val takenColumn = cursor.getColumnIndex(MediaStore.Video.Media.DATE_TAKEN)
             val unknownTitle = context.getString(R.string.unknown_title)
             while (cursor.moveToNext()) {
                 val id = cursor.getLong(idColumn)
@@ -65,6 +67,7 @@ class VideoRepository(private val context: Context) {
                     dateAddedSeconds = cursor.positiveLong(dateColumn) ?: 0L,
                     folder = cursor.textOrNull(folderColumn),
                     contentUri = ContentUris.withAppendedId(collection, id).toString(),
+                    dateTakenMs = if (takenColumn >= 0) cursor.positiveLong(takenColumn) ?: 0L else 0L,
                 )
             }
         }
