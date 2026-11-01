@@ -477,7 +477,7 @@ internal fun SongColumn(
     fastScroll: SortedList<Track>? = null,
     /** Tests only: starts the fast-scroll thumb mid-drag at this fraction. */
     fastScrollDragFraction: Float? = null,
-    /** The Songs list: [SongListRow]s. Favorites, Recent and Search keep [TrackRow]. */
+    /** [SongListRow]s, as on Songs, Favorites and Search; false keeps the older [TrackRow]. */
     listLayout: Boolean = false,
     /** With [listLayout], the ⋮ menu's Move to trash; null leaves it out. */
     onTrash: ((Track) -> Unit)? = null,
@@ -695,8 +695,9 @@ private fun SongRows(
 }
 
 /**
- * A Songs list row ([ListRow]): the album art, the title over the artist and length, then the
- * ♥ and the ⋮ menu (add to a playlist, and move to trash when [onTrash] is given).
+ * A song row ([ListRow]) on Songs, Favorites and Search: the album art, the title over the artist
+ * and length, then the ♥ and the ⋮ menu (add to a playlist, and move to trash when [onTrash] is
+ * given).
  */
 @Composable
 private fun SongListRow(

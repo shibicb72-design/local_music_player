@@ -117,6 +117,7 @@ internal fun FavoritesContent(
                 onAddToPlaylist = onAddToPlaylist,
                 contentBottomPadding = contentBottomPadding,
                 emptyMessage = stringResource(R.string.favorites_empty),
+                listLayout = true,
                 modifier = Modifier.weight(1f),
             )
         }
@@ -187,6 +188,7 @@ fun RecentScreen(
             onAddToPlaylist = onAddToPlaylist,
             contentBottomPadding = contentBottomPadding,
             emptyMessage = stringResource(R.string.recent_empty),
+            listLayout = true,
             modifier = Modifier.weight(1f),
         )
     }
@@ -307,6 +309,7 @@ internal fun SearchContent(
                     onAddToPlaylist = onAddToPlaylist,
                     contentBottomPadding = contentBottomPadding,
                     emptyMessage = stringResource(R.string.search_empty),
+                    listLayout = true,
                     modifier = Modifier.weight(1f),
                 )
             }

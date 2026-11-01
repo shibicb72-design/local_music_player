@@ -1,5 +1,7 @@
 package com.shibi.musicplayer
 
+import android.content.Context
+import android.text.format.DateFormat
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -35,9 +37,11 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import coil3.annotation.ExperimentalCoilApi
 import coil3.compose.LocalAsyncImagePreviewHandler
+import com.shibi.musicplayer.domain.HistoryType
 import com.shibi.musicplayer.domain.SortField
 import com.shibi.musicplayer.domain.SortSpec
 import com.shibi.musicplayer.domain.Track
@@ -47,13 +51,19 @@ import com.shibi.musicplayer.domain.VideoProgress
 import com.shibi.musicplayer.library.VideoLibraryUiState
 import com.shibi.musicplayer.playback.PlayerUiState
 import com.shibi.musicplayer.ui.FavoritesContent
+import com.shibi.musicplayer.ui.HistoryRow
 import com.shibi.musicplayer.ui.LibraryContent
 import com.shibi.musicplayer.ui.ListThumbnailTag
 import com.shibi.musicplayer.ui.PlaylistDetailContent
 import com.shibi.musicplayer.ui.PlaylistSongRow
+import com.shibi.musicplayer.ui.RecentHistoryScreen
+import com.shibi.musicplayer.ui.SearchContent
 import com.shibi.musicplayer.ui.SongFastScrollerTag
 import com.shibi.musicplayer.ui.VideosContent
 import com.shibi.musicplayer.ui.theme.MusicPlayerTheme
+import java.time.ZoneId
+import java.time.ZonedDateTime
+import java.util.Date
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -64,7 +74,8 @@ import org.robolectric.annotation.Config
 /**
  * The Songs and Videos list rows: content 16 dp in from the row's edges, 60 dp rows with 40 dp
  * art, a ⋮ menu with a 48 dp touch target, and a Play all pill (a real Button, 48 dp tall) at
- * the top of each list. The values are the spec's, written out rather than read from the code's
+ * the top of each list. Favorites, Search and Recent share the rows, in their own order and
+ * with no pill. The values are the spec's, written out rather than read from the code's
  * constants, so a change to either shows up here.
  */
 @RunWith(AndroidJUnit4::class)
@@ -82,6 +93,28 @@ class ListRowsUiTest {
     )
     private val shipped = shippedSongs(tracks)
     private val videoState = VideosScreenshotTest.full
+
+    private val zone = ZoneId.of("America/New_York")
+    private val now = at(17, 21, 30)
+
+    /** Today's song and video, newest first, then yesterday's song; the video loads a frame. */
+    private val history = listOf(
+        HistoryRow(1L, HistoryType.Song, 1L, "Alpha", "Artist One", null, null, at(17, 21, 6)),
+        HistoryRow(
+            key = 2L,
+            type = HistoryType.Video,
+            mediaId = 902L,
+            title = "Beach day",
+            subtitle = "",
+            artUri = null,
+            videoUri = "content://media/external/video/media/902",
+            playedAt = at(17, 19, 44),
+        ),
+        HistoryRow(3L, HistoryType.Song, 2L, "Bravo", "Artist Two", null, null, at(16, 9, 2)),
+    )
+
+    private fun at(day: Int, hour: Int, minute: Int): Long =
+        ZonedDateTime.of(2026, 10, day, hour, minute, 0, 0, zone).toInstant().toEpochMilli()
 
     // --- Songs ---
 
@@ -246,27 +279,109 @@ class ListRowsUiTest {
         compose.onNodeWithText("Move to trash").assertDoesNotExist()
     }
 
+    // --- Favorites, Search and Recent ---
+
     @Test
-    fun favoritesKeepTheirOwnRowsAndMenu() {
-        // Only the Songs list is restyled; Favorites, like Recent and Search, keeps TrackRow.
-        compose.setContent {
-            MusicPlayerTheme {
-                FavoritesContent(
-                    tracks = tracks,
-                    favoriteIds = tracks.map { it.id }.toSet(),
-                    nowPlaying = PlayerUiState(),
-                    onTrackSelected = { _, _ -> },
-                    onToggleFavorite = {},
-                    onAddToPlaylist = {},
-                    contentBottomPadding = 0.dp,
-                )
-            }
-        }
-        assertDp("TrackRow height", 68.dp, rowOf("Alpha").height)
+    fun favoriteRowsAreListRowsInTheirOwnOrder() {
+        // Favorites keep the order they come in (the library's), not the Songs sort.
+        val liked = listOf(tracks[2], tracks[0], tracks[3])
+        var played: Pair<List<Track>, Long>? = null
+        favorites(list = liked, onTrackSelected = { queue, startId -> played = queue to startId })
+        assertListRows(listOf("Charlie", "Alpha", "Delta"))
         playAll().assertDoesNotExist()
-        openMenuOf("Alpha")
-        compose.onNodeWithText("Add to playlist").assertExists()
+        compose.onNodeWithText("Alpha").performClick()
+        assertEquals(liked to 1L, played)
+    }
+
+    @Test
+    fun favoriteMenuOnlyAddsToAPlaylistAndTheHeartStillToggles() {
+        val added = mutableListOf<Track>()
+        val toggled = mutableListOf<Track>()
+        favorites(onAddToPlaylist = { added += it }, onToggleFavorite = { toggled += it })
+        openMenuOf("Bravo")
         compose.onNodeWithText("Move to trash").assertDoesNotExist()
+        compose.onNodeWithText("Add to playlist").performClick()
+        assertEquals(listOf(tracks[1]), added)
+        compose.onAllNodesWithContentDescription("Remove favorite")[2].performClick()
+        assertEquals(listOf(tracks[2]), toggled)
+    }
+
+    @Test
+    fun aFavoriteLongPressStillAddsToAPlaylist() {
+        // Favorites, like Search, has no selection: a long press adds the song to a playlist.
+        val added = mutableListOf<Track>()
+        favorites(onAddToPlaylist = { added += it })
+        compose.onNodeWithText("Charlie").performTouchInput { longClick() }
+        assertEquals(listOf(tracks[2]), added)
+        compose.onNodeWithText("1 selected").assertDoesNotExist()
+        compose.onAllNodesWithContentDescription("More").assertCountEquals(tracks.size)
+    }
+
+    @Test
+    fun searchRowsAreListRowsInTheSearchOrder() {
+        // LibrarySearch keeps the library's order: "o" finds Delta, Bravo and Alpha (by artist).
+        val library = listOf(tracks[3], tracks[1], tracks[0], tracks[2])
+        var played: Pair<List<Track>, Long>? = null
+        search(library = library, query = "o", onTrackSelected = { queue, startId -> played = queue to startId })
+        assertListRows(listOf("Delta", "Bravo", "Alpha"))
+        compose.onNodeWithText("Charlie").assertDoesNotExist()
+        playAll().assertDoesNotExist()
+        compose.onNodeWithText("Bravo").performClick()
+        assertEquals(listOf(tracks[3], tracks[1], tracks[0]) to 2L, played)
+    }
+
+    @Test
+    fun searchMenuOnlyAddsToAPlaylist() {
+        val added = mutableListOf<Track>()
+        search(query = "a", onAddToPlaylist = { added += it })
+        openMenuOf("Charlie")
+        compose.onNodeWithText("Move to trash").assertDoesNotExist()
+        compose.onNodeWithText("Add to playlist").performClick()
+        assertEquals(listOf(tracks[2]), added)
+    }
+
+    @Test
+    fun recentRowsAreListRowsInTheirOrder() {
+        recent()
+        val titles = history.map { it.title }
+        assertEquals("rows top to bottom", titles, titles.sortedBy { rowOf(it).top })
+        val list = list()
+        for (title in titles) {
+            val row = rowOf(title)
+            assertDp("$title row height", 60.dp, row.height)
+            assertDp("$title row from the list's start", 4.dp, row.left - list.left)
+            assertDp("$title row to the list's end", 4.dp, list.right - row.right)
+            val art = artOf(row)
+            assertDp("$title art width", 40.dp, art.width)
+            assertDp("$title art height", 40.dp, art.height)
+            assertDp("$title art from the list's start", 16.dp, art.left - list.left)
+            assertDp("$title art centred in the row", 10.dp, art.top - row.top)
+        }
+    }
+
+    @Test
+    fun recentRowsKeepTheirBadgeAndTimeWithTheTimeOnTheSideMargin() {
+        recent()
+        compose.onNodeWithText("Alpha").assert(hasText("Song")).assert(hasText("Artist One"))
+        compose.onNodeWithText("Beach day").assert(hasText("Video"))
+        // As before, no ⋮: a history row only plays.
+        compose.onAllNodesWithContentDescription("More").assertCountEquals(0)
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val list = list()
+        for (row in history) {
+            val time = DateFormat.getTimeFormat(context).format(Date(row.playedAt))
+            val bounds = compose.onNodeWithText(time, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+            assertDp("${row.title}'s time to the list's end", 16.dp, list.right - bounds.right)
+        }
+    }
+
+    @Test
+    fun recentRowTapStillPlaysThatEntry() {
+        val played = mutableListOf<HistoryRow>()
+        recent(onPlay = { played += it })
+        compose.onNodeWithText("Beach day").performClick()
+        compose.onNodeWithText("Bravo").performClick()
+        assertEquals(listOf(history[1], history[2]), played)
     }
 
     // --- Videos ---
@@ -472,6 +587,97 @@ class ListRowsUiTest {
                     canTrash = canTrash,
                 )
             }
+        }
+    }
+
+    /** Every song in [list] is a favorite. */
+    private fun favorites(
+        list: List<Track> = tracks,
+        onTrackSelected: (List<Track>, Long) -> Unit = { _, _ -> },
+        onAddToPlaylist: (Track) -> Unit = {},
+        onToggleFavorite: (Track) -> Unit = {},
+    ) {
+        compose.setContent {
+            MusicPlayerTheme {
+                FavoritesContent(
+                    tracks = list,
+                    favoriteIds = list.map { it.id }.toSet(),
+                    nowPlaying = PlayerUiState(),
+                    onTrackSelected = onTrackSelected,
+                    onToggleFavorite = onToggleFavorite,
+                    onAddToPlaylist = onAddToPlaylist,
+                    contentBottomPadding = 0.dp,
+                )
+            }
+        }
+    }
+
+    private fun search(
+        query: String,
+        library: List<Track> = tracks,
+        onTrackSelected: (List<Track>, Long) -> Unit = { _, _ -> },
+        onAddToPlaylist: (Track) -> Unit = {},
+    ) {
+        compose.setContent {
+            MusicPlayerTheme {
+                SearchContent(
+                    tracks = library,
+                    query = query,
+                    onQueryChange = {},
+                    favoriteIds = emptySet(),
+                    nowPlaying = PlayerUiState(),
+                    onTrackSelected = onTrackSelected,
+                    onToggleFavorite = {},
+                    onAddToPlaylist = onAddToPlaylist,
+                    contentBottomPadding = 0.dp,
+                )
+            }
+        }
+    }
+
+    /** [history] at a fixed now; inspection mode, so the preview handler feeds the video frame. */
+    @OptIn(ExperimentalCoilApi::class)
+    private fun recent(onPlay: (HistoryRow) -> Unit = {}) {
+        compose.setContent {
+            MusicPlayerTheme {
+                CompositionLocalProvider(
+                    LocalInspectionMode provides true,
+                    LocalAsyncImagePreviewHandler provides VideosScreenshotTest.thumbnails,
+                ) {
+                    RecentHistoryScreen(
+                        rows = history,
+                        onPlay = onPlay,
+                        onClearHistory = {},
+                        contentBottomPadding = 0.dp,
+                        nowMs = now,
+                        zone = zone,
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * [titles] top to bottom as 60 dp list rows: 40 dp art on the side margin, centred, and a ⋮
+     * with a 48 dp touch target whose glyph ends 16 dp from the list's end.
+     */
+    private fun assertListRows(titles: List<String>) {
+        assertEquals("rows top to bottom", titles, titles.sortedBy { rowOf(it).top })
+        val list = list()
+        for (title in titles) {
+            val row = rowOf(title)
+            assertDp("$title row height", 60.dp, row.height)
+            val art = artOf(row)
+            assertDp("$title art width", 40.dp, art.width)
+            assertDp("$title art height", 40.dp, art.height)
+            assertDp("$title art from the list's start", 16.dp, art.left - list.left)
+            assertDp("$title art centred in the row", 10.dp, art.top - row.top)
+        }
+        val menus = menuButtons()
+        assertEquals("a ⋮ on every row", titles.size, menus.size)
+        for (index in menus.indices) {
+            menuButton(index).assertTouchWidthIsEqualTo(48.dp).assertTouchHeightIsEqualTo(48.dp)
+            assertDp("glyph to the list's end", 16.dp, list.right - (menus[index].center.x + px(12.dp)))
         }
     }
 
