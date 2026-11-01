@@ -1,8 +1,6 @@
 package com.shibi.musicplayer.ui
 
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -17,27 +15,24 @@ import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.VideoLibrary
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -54,7 +49,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -91,19 +85,20 @@ import com.shibi.musicplayer.domain.VideoFormat
 import com.shibi.musicplayer.domain.VideoListEntry
 import com.shibi.musicplayer.domain.VideoProgress
 import com.shibi.musicplayer.domain.VideoTimeline
+import com.shibi.musicplayer.library.MediaTrash
 import com.shibi.musicplayer.library.VideoLibraryUiState
 import com.shibi.musicplayer.library.VideoLibraryViewModel
 import com.shibi.musicplayer.library.videoThumbnailRequest
 import com.shibi.musicplayer.ui.background.LocalBackgroundChrome
 import com.shibi.musicplayer.ui.background.rememberSurfaceRoles
 import com.shibi.musicplayer.ui.background.toComposeColor
-import com.shibi.musicplayer.ui.theme.Spacing
 import com.shibi.musicplayer.video.VideoEngine
 import com.shibi.musicplayer.video.VideoUiState
 import java.time.ZoneId
 import kotlin.math.roundToInt
 
-private val ThumbnailShape = RoundedCornerShape(12.dp)
+/** The film glyph on a [ListThumbnailSize] tile with no frame. */
+private val FilmGlyphSize = 20.dp
 
 /**
  * The Videos section. The view model (and so the MediaStore query and the permission
@@ -218,6 +213,8 @@ internal fun VideosContent(
     onSortChange: (SortSpec) -> Unit = {},
     /** Screenshots only: the sort menu starts open. */
     initialSortMenuOpen: Boolean = false,
+    /** Whether rows get a ⋮ with Move to trash: the system trash needs Android 11. */
+    canTrash: Boolean = MediaTrash.isSupported(),
 ) {
     // Set when the user picks a sort: the list goes to the top once it shows that sort. It is
     // not saved, so a return from fullscreen (which recomposes this) leaves the list where it was.
@@ -235,6 +232,11 @@ internal fun VideosContent(
     }
     var selection by remember { mutableStateOf(initialSelection) }
     val allIds = remember(state.videos) { state.videos.map { it.id } }
+    val trashVideo: ((Video) -> Unit)? = if (canTrash) {
+        { video -> onTrashVideos(listOf(video), allIds == listOf(video.id)) }
+    } else {
+        null
+    }
     LaunchedEffect(allIds) { selection = selection.retain(allIds.toSet()) }
     AppBackHandler(enabled = selection.active) { selection = selection.clear() }
     val selectionBar: (@Composable () -> Unit)? = if (selection.active) {
@@ -275,6 +277,7 @@ internal fun VideosContent(
                 VideoList(
                     state = state,
                     onVideoClick = onVideoClick,
+                    onTrashVideo = trashVideo,
                     contentBottomPadding = contentBottomPadding,
                     playingVideoId = playingVideoId,
                     savedProgress = savedProgress,
@@ -331,9 +334,17 @@ internal fun VideosContent(
                             .padding(start = 8.dp, end = 8.dp, bottom = 8.dp),
                     )
                 }
+                if (state.videos.isNotEmpty()) {
+                    ListPlayAll(
+                        // Videos never auto-advance (see MusicApp), so this opens the first in the sort.
+                        onPlayAll = { onVideoClick(state.videos.first()) },
+                        enabled = !selection.active,
+                    )
+                }
                 VideoList(
                     state = state,
                     onVideoClick = onVideoClick,
+                    onTrashVideo = trashVideo,
                     contentBottomPadding = contentBottomPadding,
                     playingVideoId = playingVideoId,
                     savedProgress = savedProgress,
@@ -369,6 +380,8 @@ internal fun VideosContent(
 private fun VideoList(
     state: VideoLibraryUiState,
     onVideoClick: (Video) -> Unit,
+    /** A row's ⋮ Move to trash; null gives the rows no ⋮. */
+    onTrashVideo: ((Video) -> Unit)?,
     contentBottomPadding: Dp,
     playingVideoId: Long?,
     savedProgress: Map<String, VideoProgress>,
@@ -448,6 +461,7 @@ private fun VideoList(
                                                 },
                                             )
                                         },
+                                        onTrash = onTrashVideo?.let { trash -> { trash(video) } },
                                     )
                                 }
                             }
@@ -479,7 +493,8 @@ private fun MonthHeader(text: String, modifier: Modifier = Modifier) {
         modifier = modifier
             .fillMaxWidth()
             .background(chrome.pageFill)
-            .padding(start = 20.dp, top = 12.dp, bottom = 8.dp),
+            // On the rows' side margin, so the label lines up with the art below it.
+            .padding(start = ListRowSideMargin, top = 12.dp, bottom = 8.dp),
         style = MaterialTheme.typography.titleMedium,
         fontWeight = FontWeight.SemiBold,
         color = roles.onSurfaceArgb.toComposeColor(),
@@ -489,15 +504,17 @@ private fun MonthHeader(text: String, modifier: Modifier = Modifier) {
 }
 
 /**
- * The `TrackRow` pill with a 16:9 thumbnail; text colours come from the row's own fill. A
- * partly watched video ([saved] would resume) gets a hairline under its thumbnail, drawn in
- * the row's own text colour, so it reads on the dark row and on every pastel one.
+ * A Videos list row ([ListRow]): a square frame, the title over the length and details, then
+ * the ⋮ menu with move to trash ([onTrash]; null leaves the row without a ⋮). A partly watched
+ * video ([saved] would resume) gets a hairline under its frame, drawn in the row's own text
+ * colour, so it reads on the dark row and on every pastel one.
  */
 @Composable
 internal fun VideoRow(
     video: Video,
     isPlaying: Boolean,
     onClick: () -> Unit,
+    onTrash: (() -> Unit)?,
     modifier: Modifier = Modifier,
     saved: VideoProgress? = null,
     selectionMode: Boolean = false,
@@ -505,30 +522,24 @@ internal fun VideoRow(
     onLongClick: (() -> Unit)? = null,
 ) {
     val chrome = LocalBackgroundChrome.current
-    val fill by animateColorAsState(
-        if (isPlaying || selected) chrome.playingRowFill else chrome.rowFill,
-        highlightSpec(),
-        label = "videoRowFill",
-    )
+    val fill = if (isPlaying || selected) chrome.playingRowFill else chrome.rowFill
     val roles = rememberSurfaceRoles(fill)
     val watched = ResumePolicy.watchedFraction(saved, video.durationMs)
     val watchedText = watched?.let { stringResource(R.string.video_watched, (it * 100).roundToInt()) }
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 8.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(fill)
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-            .padding(start = 12.dp, top = 8.dp, bottom = 8.dp, end = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box {
+    // MediaStore often has no length for MKV/WMV; libVLC's from an earlier play is saved.
+    val length = ResumePolicy.displayDuration(video.durationMs, saved) ?: 0L
+    ListRow(
+        title = video.title,
+        detail = videoDetails(length, videoSubtitle(video)).ifEmpty { null },
+        fill = fill,
+        isPlaying = isPlaying,
+        onClick = onClick,
+        onLongClick = onLongClick,
+        art = {
             VideoThumbnail(
                 video = video,
-                durationMs = ResumePolicy.displayDuration(video.durationMs, saved),
                 modifier = Modifier
-                    .size(width = 96.dp, height = 54.dp)
+                    .size(ListThumbnailSize)
                     .then(
                         if (watched != null && watchedText != null) {
                             Modifier.watchedHairline(watched, roles.onSurfaceArgb.toComposeColor(), watchedText)
@@ -537,50 +548,24 @@ internal fun VideoRow(
                         },
                     ),
             )
-            if (selectionMode) {
-                SelectionCheck(
-                    selected = selected,
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .offset(x = (-4).dp, y = (-4).dp),
-                )
+        },
+        modifier = modifier,
+        selectionMode = selectionMode,
+        selected = selected,
+        actions = onTrash?.let { trash ->
+            { tint ->
+                RowOverflowMenu(tint = tint) { dismiss ->
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.move_to_trash)) },
+                        onClick = {
+                            dismiss()
+                            trash()
+                        },
+                    )
+                }
             }
-        }
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .padding(start = Spacing.md)
-                .clipToBounds(),
-        ) {
-            TrackTitle(
-                text = video.title,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = roles.onSurfaceArgb.toComposeColor(),
-                modifier = Modifier.fillMaxWidth(),
-            )
-            val subtitle = videoSubtitle(video)
-            if (subtitle.isNotEmpty()) {
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = roles.onVariantArgb.toComposeColor(),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-        }
-        if (isPlaying) {
-            Spacer(Modifier.width(Spacing.sm))
-            Icon(
-                imageVector = Icons.Filled.GraphicEq,
-                contentDescription = null,
-                tint = chrome.accentText,
-                modifier = Modifier.size(18.dp),
-            )
-        }
-    }
+        },
+    )
 }
 
 /** `1.4 GB · 1080p · Camera`; values MediaStore could not read are left out, not dashed. */
@@ -616,31 +601,24 @@ private fun Modifier.watchedHairline(fraction: Float, color: Color, description:
             )
         }
 
+/** The row's frame, cropped square; the length is on the row's second line. */
 @Composable
-private fun VideoThumbnail(video: Video, durationMs: Long?, modifier: Modifier = Modifier) {
+private fun VideoThumbnail(video: Video, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     // The request carries its own fetcher factory, so build it once per video.
     val request = remember(video.contentUri) { videoThumbnailRequest(context, video.contentUri) }
-    Box(modifier = modifier.clip(ThumbnailShape)) {
-        SubcomposeAsyncImage(
-            model = request,
-            contentDescription = null,
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Crop,
-        ) {
-            val imageState by painter.state.collectAsState()
-            if (imageState is AsyncImagePainter.State.Success) {
-                SubcomposeAsyncImageContent()
-            } else {
-                FilmTile(title = video.title, modifier = Modifier.fillMaxSize())
-            }
+    SubcomposeAsyncImage(
+        model = request,
+        contentDescription = null,
+        modifier = modifier.clip(ListThumbnailShape),
+        contentScale = ContentScale.Crop,
+    ) {
+        val imageState by painter.state.collectAsState()
+        if (imageState is AsyncImagePainter.State.Success) {
+            SubcomposeAsyncImageContent()
+        } else {
+            FilmTile(title = video.title, modifier = Modifier.fillMaxSize())
         }
-        DurationBadge(
-            text = VideoFormat.duration(durationMs),
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(4.dp),
-        )
     }
 }
 
@@ -672,24 +650,9 @@ private fun FilmTile(title: String, modifier: Modifier = Modifier) {
             imageVector = Icons.Rounded.Movie,
             contentDescription = null,
             tint = Color.White.copy(alpha = 0.92f),
-            modifier = Modifier.size(24.dp),
+            modifier = Modifier.size(FilmGlyphSize),
         )
     }
-}
-
-/** Fixed dark scrim and white text, so it reads the same over any frame or backdrop. */
-@Composable
-private fun DurationBadge(text: String, modifier: Modifier = Modifier) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.labelSmall,
-        fontWeight = FontWeight.SemiBold,
-        color = Color.White,
-        maxLines = 1,
-        modifier = modifier
-            .background(Color.Black.copy(alpha = 0.72f), RoundedCornerShape(50))
-            .padding(horizontal = 6.dp, vertical = 1.dp),
-    )
 }
 
 @Composable
