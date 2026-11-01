@@ -245,6 +245,10 @@
     <string name="tracks_error_audio">Couldn\'t load that audio file.</string>
     <string name="settings_error_log">Debugging / Error log</string>
     <string name="settings_error_log_body">What went wrong in playback, files and scans</string>
+    <string name="settings_feedback">Send feedback</string>
+    <string name="settings_feedback_body">Report a bug or suggest an idea by email</string>
+    <string name="settings_feedback_no_email">No email app found. Write to %1$s</string>
+    <string name="feedback_email_prompt">Please describe the issue below and attach a screenshot.</string>
     <string name="error_log_title">Debugging / Error log</string>
     <string name="error_log_empty_title">No errors</string>
     <string name="error_log_empty_body">Nothing has gone wrong so far. If a video, a file or a scan fails, the details are kept here so you can copy them.</string>

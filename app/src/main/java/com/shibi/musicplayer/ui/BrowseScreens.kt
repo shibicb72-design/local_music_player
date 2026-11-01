@@ -29,6 +29,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.MailOutline
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.SearchOff
 import androidx.compose.material3.Icon
@@ -44,6 +45,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -410,6 +412,7 @@ fun SettingsScreen(
     contentBottomPadding: Dp = 0.dp,
     modifier: Modifier = Modifier,
 ) {
+    val context = LocalContext.current
     SettingsContent(
         darkTheme = darkTheme,
         onDarkThemeChange = onDarkThemeChange,
@@ -419,6 +422,7 @@ fun SettingsScreen(
         brightnessSwipe = brightnessSwipe,
         onBrightnessSwipeChange = onBrightnessSwipeChange,
         onOpenErrorLog = onOpenErrorLog,
+        onSendFeedback = { sendFeedback(context) },
         contentBottomPadding = contentBottomPadding,
         modifier = modifier,
     )
@@ -434,6 +438,7 @@ internal fun SettingsContent(
     brightnessSwipe: Boolean = true,
     onBrightnessSwipeChange: (Boolean) -> Unit = {},
     onOpenErrorLog: () -> Unit = {},
+    onSendFeedback: () -> Unit = {},
     contentBottomPadding: Dp = 0.dp,
     modifier: Modifier = Modifier,
 ) {
@@ -458,6 +463,7 @@ internal fun SettingsContent(
                 brightnessSwipe = brightnessSwipe,
                 onBrightnessSwipeChange = onBrightnessSwipeChange,
                 onOpenErrorLog = onOpenErrorLog,
+                onSendFeedback = onSendFeedback,
             )
         }
     }
@@ -473,6 +479,7 @@ private fun SettingsCards(
     brightnessSwipe: Boolean,
     onBrightnessSwipeChange: (Boolean) -> Unit,
     onOpenErrorLog: () -> Unit,
+    onSendFeedback: () -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         ContrastSurface(
@@ -591,6 +598,40 @@ private fun SettingsCards(
                 }
                 Icon(
                     imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        Spacer(Modifier.height(16.dp))
+        // Leaves the app: the user's email app opens on a prefilled message.
+        ContrastSurface(
+            onClick = onSendFeedback,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp),
+            shape = MaterialTheme.shapes.large,
+            color = MaterialTheme.colorScheme.surfaceContainer,
+        ) {
+            Row(
+                modifier = Modifier.padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(R.string.settings_feedback),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = stringResource(R.string.settings_feedback_body),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Icon(
+                    imageVector = Icons.Rounded.MailOutline,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
