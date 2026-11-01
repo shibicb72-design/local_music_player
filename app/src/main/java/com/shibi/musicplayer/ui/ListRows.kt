@@ -53,13 +53,13 @@ import com.shibi.musicplayer.ui.theme.Base0
 import com.shibi.musicplayer.ui.theme.Spacing
 
 /**
- * Inset of a Songs or Videos row's content from the row's outer edges (its fill sits 4 dp inside
- * them): the art's start and the ⋮ glyph's end. Rows keep the list's full width on both lists,
- * so this is also the content's margin from the screen's edges.
+ * Inset of a list row's content from the row's outer edges (its fill sits 4 dp inside them):
+ * the art's start and the ⋮ glyph's end (on Recent, the time's end). Rows keep the list's full
+ * width on every list, so this is also the content's margin from the screen's edges.
  */
 internal val ListRowSideMargin = 16.dp
 
-/** Minimum height of a Songs or Videos row: what it is at the default font scale. */
+/** Minimum height of a list row: what it is at the default font scale. */
 private val ListRowHeight = 60.dp
 
 /** The row's square art: album art or a video frame. */
@@ -99,15 +99,23 @@ private val ListRowStartPadding = ListRowSideMargin - ListRowFillInset
 private val ListRowEndPadding =
     (ListRowStartPadding - (ListRowButtonTouchSize - ListRowGlyphSize) / 2).coerceAtLeast(0.dp)
 
+/**
+ * Space after a row's last item when that is not a ⋮ (no actions, selecting, or Recent's
+ * time): it puts that item's end on [ListRowSideMargin] too.
+ */
+internal val ListRowEndGap = ListRowStartPadding - ListRowEndPadding
+
 private val PlayAllGlyphSize = 18.dp
 private val PlayAllGlyphGap = 6.dp
 
 /**
- * One row of the Songs or Videos list: [art] ([ListThumbnailSize]), the title over a grey second
- * line ([detail], then [length], which always shows in full), the playing glyph and [actions]
- * (the ♥, the ⋮ menu) at the end. The row fades to [fill] (it snaps under reduce motion) in the
- * draw phase, and its text colours come from that fill. While [selectionMode] a check rides the
- * art's corner and, as with no [actions], the end keeps the side margin.
+ * One row of the Songs, Videos, Favorites, Search or Recent list: [art] ([ListThumbnailSize]),
+ * the title over a grey second line ([detail], then [length], which always shows in full), the
+ * playing glyph and [actions] (the ♥, the ⋮ menu; Recent's badge and time) at the end. The row
+ * fades to [fill] (it snaps under reduce motion) in the draw phase, and its text colours come
+ * from that fill. While [selectionMode] a check rides the art's corner and, as with no
+ * [actions], the end keeps the side margin. [actions] that do not end in a ⋮ end with a
+ * [ListRowEndGap] spacer, which keeps it too.
  */
 @Composable
 internal fun ListRow(
@@ -173,7 +181,7 @@ internal fun ListRow(
             )
         }
         if (selectionMode || actions == null) {
-            Spacer(Modifier.width(ListRowStartPadding - ListRowEndPadding))
+            Spacer(Modifier.width(ListRowEndGap))
         } else {
             actions(variant)
         }

@@ -3,7 +3,6 @@ package com.shibi.musicplayer.ui
 import android.text.format.DateFormat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -40,7 +39,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -232,7 +230,10 @@ private fun DayHeader(label: DayLabel, modifier: Modifier = Modifier) {
     )
 }
 
-/** The TrackRow pill with a 48dp song art or a 64x36 video thumbnail, a badge and the time. */
+/**
+ * A history row ([ListRow]): the song's art or the video's frame, then the Song or Video badge
+ * and the time it was played, ending on the side margin as a ⋮ would. A tap plays it again.
+ */
 @Composable
 private fun HistoryRowItem(
     row: HistoryRow,
@@ -240,58 +241,35 @@ private fun HistoryRowItem(
     modifier: Modifier = Modifier,
 ) {
     val chrome = LocalBackgroundChrome.current
-    val roles = rememberSurfaceRoles(chrome.rowFill)
-    val onSurface = roles.onSurfaceArgb.toComposeColor()
-    val onVariant = roles.onVariantArgb.toComposeColor()
+    val fill = chrome.rowFill
+    // The badge takes its colour from the row's own fill, as ListRow's text does.
+    val onSurface = rememberSurfaceRoles(fill).onSurfaceArgb.toComposeColor()
     val context = LocalContext.current
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 8.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(chrome.rowFill)
-            .clickable(onClick = { onPlay(row) })
-            .padding(start = 12.dp, top = 8.dp, bottom = 8.dp, end = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        if (row.type == HistoryType.Video) {
-            HistoryVideoThumbnail(
-                uri = row.videoUri.orEmpty(),
-                title = row.title,
-                modifier = Modifier.size(width = 64.dp, height = 36.dp),
-            )
-        } else {
-            AlbumArtwork(
-                albumArtUri = row.artUri,
-                shape = RoundedCornerShape(12.dp),
-                title = row.title,
-                modifier = Modifier.size(48.dp),
-            )
-        }
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .padding(horizontal = Spacing.md)
-                .clipToBounds(),
-        ) {
-            TrackTitle(
-                text = row.title,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = onSurface,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            if (row.subtitle.isNotEmpty()) {
-                Text(
-                    text = row.subtitle,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = onVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.fillMaxWidth(),
+    ListRow(
+        title = row.title,
+        detail = row.subtitle.ifEmpty { null },
+        fill = fill,
+        isPlaying = false,
+        onClick = { onPlay(row) },
+        onLongClick = null,
+        art = {
+            if (row.type == HistoryType.Video) {
+                HistoryVideoThumbnail(
+                    uri = row.videoUri.orEmpty(),
+                    title = row.title,
+                    modifier = Modifier.size(ListThumbnailSize),
+                )
+            } else {
+                AlbumArtwork(
+                    albumArtUri = row.artUri,
+                    shape = ListThumbnailShape,
+                    title = row.title,
+                    modifier = Modifier.size(ListThumbnailSize),
                 )
             }
-        }
+        },
+        modifier = modifier,
+    ) { tint ->
         Text(
             text = stringResource(
                 if (row.type == HistoryType.Video) R.string.history_badge_video else R.string.history_badge_song,
@@ -307,12 +285,13 @@ private fun HistoryRowItem(
         Text(
             text = DateFormat.getTimeFormat(context).format(Date(row.playedAt)),
             style = MaterialTheme.typography.labelMedium,
-            color = onVariant,
+            color = tint,
         )
+        Spacer(Modifier.width(ListRowEndGap))
     }
 }
 
-/** A replayed song; a 16:9 frame from MediaStore when one exists, otherwise the film tile. */
+/** A replayed video's frame from MediaStore, cropped square, or the film tile when it has none. */
 @Composable
 private fun HistoryVideoThumbnail(
     uri: String,
@@ -322,7 +301,7 @@ private fun HistoryVideoThumbnail(
     val context = LocalContext.current
     val request = remember(uri) { videoThumbnailRequest(context, uri) }
     Box(
-        modifier = modifier.clip(RoundedCornerShape(12.dp)),
+        modifier = modifier.clip(ListThumbnailShape),
     ) {
         SubcomposeAsyncImage(
             model = request,
