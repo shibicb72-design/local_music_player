@@ -54,8 +54,8 @@ import com.shibi.musicplayer.ui.theme.Spacing
 
 /**
  * Inset of a list row's content from the row's outer edges (its fill sits 4 dp inside them):
- * the art's start and the ⋮ glyph's end. Rows keep the list's full width on every list, so this
- * is also the content's margin from the screen's edges.
+ * the art's start and the ⋮ glyph's end (on Recent, the time's end). Rows keep the list's full
+ * width on every list, so this is also the content's margin from the screen's edges.
  */
 internal val ListRowSideMargin = 16.dp
 
@@ -114,7 +114,8 @@ private val PlayAllGlyphGap = 6.dp
  * playing glyph and [actions] (the ♥, the ⋮ menu; Recent's badge and time) at the end. The row
  * fades to [fill] (it snaps under reduce motion) in the draw phase, and its text colours come
  * from that fill. While [selectionMode] a check rides the art's corner and, as with no
- * [actions], the end keeps the side margin.
+ * [actions], the end keeps the side margin. [actions] that do not end in a ⋮ end with a
+ * [ListRowEndGap] spacer, which keeps it too.
  */
 @Composable
 internal fun ListRow(

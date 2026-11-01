@@ -241,12 +241,14 @@ private fun HistoryRowItem(
     modifier: Modifier = Modifier,
 ) {
     val chrome = LocalBackgroundChrome.current
-    val onSurface = rememberSurfaceRoles(chrome.rowFill).onSurfaceArgb.toComposeColor()
+    val fill = chrome.rowFill
+    // The badge takes its colour from the row's own fill, as ListRow's text does.
+    val onSurface = rememberSurfaceRoles(fill).onSurfaceArgb.toComposeColor()
     val context = LocalContext.current
     ListRow(
         title = row.title,
         detail = row.subtitle.ifEmpty { null },
-        fill = chrome.rowFill,
+        fill = fill,
         isPlaying = false,
         onClick = { onPlay(row) },
         onLongClick = null,

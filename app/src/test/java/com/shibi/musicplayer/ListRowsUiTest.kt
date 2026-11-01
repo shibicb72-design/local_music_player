@@ -97,7 +97,10 @@ class ListRowsUiTest {
     private val zone = ZoneId.of("America/New_York")
     private val now = at(17, 21, 30)
 
-    /** Today's song and video, newest first, then yesterday's song; the video loads a frame. */
+    /**
+     * Today's song and video, newest first, then yesterday's song and video. The first video
+     * loads a frame; the second has none, so it shows the film tile.
+     */
     private val history = listOf(
         HistoryRow(1L, HistoryType.Song, 1L, "Alpha", "Artist One", null, null, at(17, 21, 6)),
         HistoryRow(
@@ -111,6 +114,16 @@ class ListRowsUiTest {
             playedAt = at(17, 19, 44),
         ),
         HistoryRow(3L, HistoryType.Song, 2L, "Bravo", "Artist Two", null, null, at(16, 9, 2)),
+        HistoryRow(
+            key = 4L,
+            type = HistoryType.Video,
+            mediaId = 903L,
+            title = "Drone over the lake",
+            subtitle = "",
+            artUri = null,
+            videoUri = "content://media/external/video/media/903",
+            playedAt = at(16, 8, 15),
+        ),
     )
 
     private fun at(day: Int, hour: Int, minute: Int): Long =
@@ -302,7 +315,7 @@ class ListRowsUiTest {
         compose.onNodeWithText("Move to trash").assertDoesNotExist()
         compose.onNodeWithText("Add to playlist").performClick()
         assertEquals(listOf(tracks[1]), added)
-        compose.onAllNodesWithContentDescription("Remove favorite")[2].performClick()
+        tapHeartOf("Charlie", "Remove favorite")
         assertEquals(listOf(tracks[2]), toggled)
     }
 
@@ -313,13 +326,46 @@ class ListRowsUiTest {
         favorites(onAddToPlaylist = { added += it })
         compose.onNodeWithText("Charlie").performTouchInput { longClick() }
         assertEquals(listOf(tracks[2]), added)
-        compose.onNodeWithText("1 selected").assertDoesNotExist()
         compose.onAllNodesWithContentDescription("More").assertCountEquals(tracks.size)
     }
 
     @Test
+    fun aPlayingFavoriteRowKeepsTheListRowShape() {
+        // The playing glyph sits before the ♥: the row stays 60 dp and the ⋮ on the margin.
+        favorites(nowPlaying = PlayerUiState(currentMediaId = "2"))
+        assertListRows(listOf("Alpha", "Bravo", "Charlie", "Delta"))
+    }
+
+    @Test
+    fun aPlayingSearchRowKeepsTheListRowShape() {
+        search(query = "a", nowPlaying = PlayerUiState(currentMediaId = "2"))
+        assertListRows(listOf("Alpha", "Bravo", "Charlie", "Delta"))
+    }
+
+    @Test
+    fun aSearchLongPressStillAddsToAPlaylist() {
+        val added = mutableListOf<Track>()
+        search(query = "a", onAddToPlaylist = { added += it })
+        compose.onNodeWithText("Bravo").performTouchInput { longClick() }
+        assertEquals(listOf(tracks[1]), added)
+        compose.onAllNodesWithContentDescription("More").assertCountEquals(tracks.size)
+    }
+
+    @Test
+    fun aRecentLongPressStillJustPlaysTheEntry() {
+        // As with the old clickable row, there is no long-click action: a long press is a tap.
+        val played = mutableListOf<HistoryRow>()
+        recent(onPlay = { played += it })
+        compose.onNodeWithText("Bravo").performTouchInput { longClick() }
+        assertEquals(listOf(history[2]), played)
+        compose.onNodeWithText("Add to playlist").assertDoesNotExist()
+        compose.onAllNodesWithContentDescription("More").assertCountEquals(0)
+    }
+
+    @Test
     fun searchRowsAreListRowsInTheSearchOrder() {
-        // LibrarySearch keeps the library's order: "o" finds Delta, Bravo and Alpha (by artist).
+        // LibrarySearch keeps the library's order. "o" finds Delta and Alpha by artist, Bravo by
+        // title.
         val library = listOf(tracks[3], tracks[1], tracks[0], tracks[2])
         var played: Pair<List<Track>, Long>? = null
         search(library = library, query = "o", onTrackSelected = { queue, startId -> played = queue to startId })
@@ -596,13 +642,14 @@ class ListRowsUiTest {
         onTrackSelected: (List<Track>, Long) -> Unit = { _, _ -> },
         onAddToPlaylist: (Track) -> Unit = {},
         onToggleFavorite: (Track) -> Unit = {},
+        nowPlaying: PlayerUiState = PlayerUiState(),
     ) {
         compose.setContent {
             MusicPlayerTheme {
                 FavoritesContent(
                     tracks = list,
                     favoriteIds = list.map { it.id }.toSet(),
-                    nowPlaying = PlayerUiState(),
+                    nowPlaying = nowPlaying,
                     onTrackSelected = onTrackSelected,
                     onToggleFavorite = onToggleFavorite,
                     onAddToPlaylist = onAddToPlaylist,
@@ -617,6 +664,7 @@ class ListRowsUiTest {
         library: List<Track> = tracks,
         onTrackSelected: (List<Track>, Long) -> Unit = { _, _ -> },
         onAddToPlaylist: (Track) -> Unit = {},
+        nowPlaying: PlayerUiState = PlayerUiState(),
     ) {
         compose.setContent {
             MusicPlayerTheme {
@@ -625,7 +673,7 @@ class ListRowsUiTest {
                     query = query,
                     onQueryChange = {},
                     favoriteIds = emptySet(),
-                    nowPlaying = PlayerUiState(),
+                    nowPlaying = nowPlaying,
                     onTrackSelected = onTrackSelected,
                     onToggleFavorite = {},
                     onAddToPlaylist = onAddToPlaylist,
@@ -748,6 +796,15 @@ class ListRowsUiTest {
         assertTrue("$title has a menu", index >= 0)
         menuButton(index).performClick()
         compose.waitForIdle()
+    }
+
+    /** Taps the ♥ of the row that shows [title]; [description] is the heart's current label. */
+    private fun tapHeartOf(title: String, description: String) {
+        val row = rowOf(title)
+        val hearts = compose.onAllNodesWithContentDescription(description)
+        val index = hearts.fetchSemanticsNodes().indexOfFirst { it.boundsInRoot.center.y in row.top..row.bottom }
+        assertTrue("$title has a heart", index >= 0)
+        hearts[index].performClick()
     }
 
     private fun px(dp: Dp): Float = with(compose.density) { dp.toPx() }
