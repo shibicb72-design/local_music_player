@@ -31,6 +31,7 @@ import androidx.compose.ui.test.swipeDown
 import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.shibi.musicplayer.domain.FAST_SCROLL_HIDE_DELAY_MS
 import com.shibi.musicplayer.domain.ScrollSection
 import com.shibi.musicplayer.domain.SortField
 import com.shibi.musicplayer.domain.SortSpec
@@ -316,23 +317,31 @@ class LibrarySortUiTest {
     }
 
     @Test
-    fun theSongsScrollerNeverCoversARowsHeartOrMenu() {
+    fun theSongsScrollerNeverCoversAHeartAndClearsTheMenusOnceItFades() {
         val audio = audioProvider()
         NatoNames.forEachIndexed { index, name -> audio.rows += song(index + 1L, name) }
         setSongs(libraryViewModel(InMemorySortPrefs())) { _, _ -> }
         compose.mainClock.autoAdvance = false
         flingAndSettle { swipeUp(durationMillis = 300) }
+        // Rows keep the full width, as on Videos, so the thumb shows over their ends while it is
+        // up; the heart, 48 dp in from the end, always stays left of it.
         val thumb = compose.onNodeWithTag(SongFastScrollerTag).fetchSemanticsNode().boundsInRoot
-        val buttons = listOf(R.string.favorite, R.string.unfavorite, R.string.more_actions).flatMap { res ->
+        val hearts = listOf(R.string.favorite, R.string.unfavorite).flatMap { res ->
             compose.onAllNodes(hasContentDescription(application.getString(res)))
                 .fetchSemanticsNodes()
                 .map { it.boundsInRoot }
         }
-        assertTrue("rows on screen", buttons.size >= 4)
-        for (button in buttons) {
-            assertFalse("thumb $thumb covers a row button at $button", thumb.overlaps(button))
-            assertTrue("the button ends left of the thumb", button.right <= thumb.left)
+        assertTrue("rows on screen", hearts.size >= 4)
+        for (heart in hearts) {
+            assertFalse("thumb $thumb covers a heart at $heart", thumb.overlaps(heart))
+            assertTrue("the heart ends left of the thumb", heart.right <= thumb.left)
         }
+        // Once the list rests and the thumb fades, nothing covers a row's ⋮.
+        compose.mainClock.advanceTimeBy(FAST_SCROLL_HIDE_DELAY_MS + 1_000L)
+        compose.onNodeWithTag(SongFastScrollerTag).assertDoesNotExist()
+        val menus = compose.onAllNodes(hasContentDescription(application.getString(R.string.more_actions)))
+            .fetchSemanticsNodes()
+        assertTrue("menus on screen", menus.size >= 4)
     }
 
     // --- Helpers ---
