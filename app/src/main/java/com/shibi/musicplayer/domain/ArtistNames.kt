@@ -50,6 +50,9 @@ object ArtistNames {
         known(track.artist, unknown, album = false)?.let { split(it).primary }
             ?: libraryArtist(track, unknown)
 
+    /** The primary artist of a raw artist tag, or null when it is missing or the app's placeholder. */
+    fun artist(raw: String?, unknown: UnknownNames): String? = known(raw, unknown, album = false)?.let { split(it).primary }
+
     /** The album name, or null when it is missing or the app's placeholder. */
     fun album(raw: String?, unknown: UnknownNames): String? = known(raw, unknown, album = true)
 
