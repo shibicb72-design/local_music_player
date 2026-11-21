@@ -117,7 +117,7 @@ class TrashCleanupTest {
         assertEquals(before, playlistRows())
         assertEquals(recentBefore.toSet(), dao.recentPlaysFor(listOf(2, 3)).toSet())
         assertEquals(historyBefore.toSet(), (dao.historyFor("Song", listOf(2)) + dao.historyFor("Video", listOf(7, 2))).toSet())
-        assertEquals(VideoProgress(5_000L, 100_000L), progress.progress.value[videoUri])
+        assertEquals(VideoProgress(5_000L, 100_000L, database.videoProgressDao().find(videoUri)!!.updatedAt), progress.progress.value[videoUri])
         assertEquals(5_000L, database.videoProgressDao().find(videoUri)?.positionMs)
     }
 

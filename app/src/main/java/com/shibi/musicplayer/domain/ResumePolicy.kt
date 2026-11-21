@@ -2,9 +2,10 @@ package com.shibi.musicplayer.domain
 
 /**
  * A video's saved place. [durationMs] is libVLC's length when it was known (0 if not), so
- * rows whose MediaStore duration is missing can show it.
+ * rows whose MediaStore duration is missing can show it. [updatedAtMs] is when it was saved
+ * (0 if unknown); TV's Continue picks the latest.
  */
-data class VideoProgress(val positionMs: Long, val durationMs: Long)
+data class VideoProgress(val positionMs: Long, val durationMs: Long, val updatedAtMs: Long = 0L)
 
 /**
  * When a video resumes, what is saved, and how often. A video resumes only past the first
