@@ -197,7 +197,7 @@ class LibraryViewModel internal constructor(
                 catalog = catalog,
                 isReady = true,
                 // A rescan without the open artist closes the page.
-                openArtistKey = current.openArtistKey?.takeIf { catalog.artistPage(it.key) != null },
+                openArtistKey = current.openArtistKey?.takeIf { catalog.hasArtist(it.key) },
             )
         }
     }

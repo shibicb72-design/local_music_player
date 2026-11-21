@@ -7,9 +7,12 @@ import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onAllNodesWithText
@@ -17,6 +20,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.shibi.musicplayer.domain.MusicView
@@ -52,6 +56,7 @@ class ArtistsUiTest {
     @get:Rule
     val compose = createAndroidComposeRule<ComponentActivity>()
 
+    private lateinit var provider: FakeAudioProvider
     private lateinit var prefs: InMemorySortPrefs
     private lateinit var viewModel: LibraryViewModel
     private val played = mutableListOf<Pair<List<Long>, Long>>()
@@ -66,7 +71,7 @@ class ArtistsUiTest {
             Manifest.permission.POST_NOTIFICATIONS,
             Manifest.permission.BLUETOOTH_CONNECT,
         )
-        val provider = Robolectric.buildContentProvider(FakeAudioProvider::class.java)
+        provider = Robolectric.buildContentProvider(FakeAudioProvider::class.java)
             .create(MediaStore.AUTHORITY)
             .get()
         provider.rows += song(1L, "Revolver One", "The Beatles", "Revolver", "The Beatles", 1, 1966)
@@ -112,7 +117,7 @@ class ArtistsUiTest {
             listOf("The Beatles", "Daft Punk", "Various Artists", "Zedd", "Unknown artist"),
             shownTitles(listOf("Zedd", "Unknown artist", "Daft Punk", "The Beatles", "Various Artists")),
         )
-        compose.onNodeWithText("5 artists").assertIsDisplayed()
+        compose.onNodeWithText("4 artists").assertIsDisplayed()
         compose.onNodeWithText("2 albums · 3 songs").assertIsDisplayed()
         // Daft Punk and Various Artists.
         compose.onAllNodesWithText("1 album · 2 songs").assertCountEquals(2)
@@ -139,6 +144,40 @@ class ArtistsUiTest {
             listOf("Revolver One", "Revolver Two", "Abbey One"),
             shownTitles(listOf("Abbey One", "Revolver Two", "Revolver One")),
         )
+    }
+
+    @Test
+    fun anArtistPagesSongsShowTheirKeptAlbumAndNeverAFolderName() {
+        show()
+        openArtist("The Beatles")
+        // The album card and the two Revolver songs' detail lines; the artist is not repeated.
+        compose.onAllNodesWithText("Revolver").assertCountEquals(3)
+        compose.onAllNodesWithText("The Beatles").assertCountEquals(1)
+        compose.onNodeWithText("The Beatles · Revolver").assertDoesNotExist()
+
+        pressBack()
+        compose.onNodeWithText("Unknown artist").performClick()
+        settle()
+        compose.onNodeWithContentDescription("Back").assertIsDisplayed()
+        assertEquals(listOf("Alpha", "Zeta"), shownTitles(listOf("Zeta", "Alpha")))
+        // Their album is only their folder's name: the rows show just the length.
+        compose.onAllNodesWithText("TestSongs", substring = true).assertCountEquals(0)
+    }
+
+    @Test
+    fun switchingFromAScrolledSongsListShowsArtistsFromTheTop() {
+        // Thirty more artists with one song each, so both lists scroll.
+        for (n in 1..30) {
+            val name = "Artist %02d".format(n)
+            provider.rows += song(100L + n, "Filler $n", name, "Single $n", name, 1, 2020)
+        }
+        show()
+        repeat(3) { verticalList().performTouchInput { swipeUp() } }
+        settle()
+        chip("Artists").performClick()
+        settle()
+        compose.onNodeWithText("Artist 01").assertIsDisplayed()
+        compose.onNodeWithText("34 artists").assertIsDisplayed()
     }
 
     @Test
@@ -176,7 +215,7 @@ class ArtistsUiTest {
         openArtist("Zedd")
         pressBack()
         compose.onNodeWithContentDescription("Back").assertDoesNotExist()
-        compose.onNodeWithText("5 artists").assertIsDisplayed()
+        compose.onNodeWithText("4 artists").assertIsDisplayed()
         chip("Artists").assertIsSelected()
         assertEquals(0, outerBacks)
         pressBack()
@@ -193,7 +232,7 @@ class ArtistsUiTest {
         chip("Songs").assertIsSelected()
         chip("Artists").performClick()
         settle()
-        compose.onNodeWithText("5 artists").assertIsDisplayed()
+        compose.onNodeWithText("4 artists").assertIsDisplayed()
         compose.onNodeWithContentDescription("Back").assertDoesNotExist()
 
         val next = newViewModel()
@@ -231,6 +270,10 @@ class ArtistsUiTest {
     }
 
     private fun chip(label: String) = compose.onNodeWithContentDescription(label)
+
+    /** The chips scroll sideways: the list is the vertical one. */
+    private fun verticalList() =
+        compose.onNode(hasScrollAction() and !SemanticsMatcher.keyIsDefined(SemanticsProperties.HorizontalScrollAxisRange))
 
     private fun newViewModel() = LibraryViewModel(
         application = compose.activity.application,

@@ -34,7 +34,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -62,8 +61,8 @@ internal const val ArtistFastScrollerTag = "artist_fast_scroller"
 /** The unknown artist's list key: its catalog key is null, and no artist key starts with a NUL. */
 private const val UnknownArtistItemKey = "\u0000unknown"
 
-/** The cards in an artist page's album strips. */
-private val AlbumCardSize = 140.dp
+/** The cards in an artist page's album strips: square art this wide; at 2x font only the text grows. */
+private val AlbumCardSize = 120.dp
 
 @StringRes
 private fun labelRes(view: MusicView): Int = when (view) {
@@ -273,9 +272,13 @@ internal fun ArtistPageContent(
     }
 }
 
-/** Play all and Shuffle side by side, as on a playlist's page. */
+/**
+ * Play all and Shuffle side by side, as on a playlist's page. Shuffle's outline and text take
+ * the page's own content colour, so they read on a dark backdrop and on a pastel one alike.
+ */
 @Composable
 private fun ArtistButtons(enabled: Boolean, onPlayAll: () -> Unit, onShuffle: () -> Unit) {
+    val content = MaterialTheme.colorScheme.onBackground
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -288,9 +291,9 @@ private fun ArtistButtons(enabled: Boolean, onPlayAll: () -> Unit, onShuffle: ()
             enabled = enabled,
             modifier = Modifier.weight(1f),
             shape = CircleShape,
-            border = BorderStroke(1.5.dp, Color.White.copy(alpha = 0.72f)),
+            border = BorderStroke(1.5.dp, content.copy(alpha = if (enabled) 0.72f else 0.24f)),
             colors = ButtonDefaults.outlinedButtonColors(
-                contentColor = MaterialTheme.colorScheme.onBackground,
+                contentColor = content,
                 disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
             ),
         ) {

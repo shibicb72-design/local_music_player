@@ -84,6 +84,9 @@ class MusicCatalog private constructor(
      */
     fun albumOf(track: Track): AlbumEntry? = albumKeyByTrack[track.id]?.let(albumByKey::get)
 
+    /** Whether the catalog has an artist with [key] (null: the unknown entry). A map lookup. */
+    fun hasArtist(key: String?): Boolean = artistByKey.containsKey(key)
+
     /** The page of the artist with [key] (null: the unknown entry), or null when there is none. */
     fun artistPage(key: String?): ArtistPage? {
         val artist = artistByKey[key] ?: return null

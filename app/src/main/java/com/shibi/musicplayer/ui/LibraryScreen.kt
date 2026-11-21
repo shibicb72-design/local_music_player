@@ -431,7 +431,8 @@ fun LibraryContent(
                         )
                         val count = when {
                             shownView == MusicView.Artists && catalog != null -> {
-                                val artists = catalog.artists.size
+                                // Real artists only: the Unknown artist entry is not one.
+                                val artists = catalog.artists.count { it.key != null }
                                 pluralStringResource(R.plurals.artist_count, artists, artists)
                             }
                             shownView == MusicView.Albums && catalog != null -> {

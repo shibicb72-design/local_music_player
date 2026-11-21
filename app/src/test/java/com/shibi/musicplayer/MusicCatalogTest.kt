@@ -10,6 +10,7 @@ import com.shibi.musicplayer.domain.UnknownNames
 import java.text.Collator
 import java.util.Locale
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
@@ -73,6 +74,15 @@ class MusicCatalogTest {
         MusicView.entries.forEach { assertEquals(it, MusicView.fromKey(it.key)) }
         assertEquals(MusicView.Songs, MusicView.fromKey(null))
         assertEquals(MusicView.Songs, MusicView.fromKey("genres"))
+    }
+
+    @Test
+    fun hasArtistFindsEachEntryIncludingTheUnknownOne() {
+        val catalog = catalog()
+        assertTrue(catalog.hasArtist("beatles"))
+        assertTrue(catalog.hasArtist(null))
+        assertFalse(catalog.hasArtist("nobody"))
+        assertFalse(catalog(library().filter { it.artist != "Unknown artist" }).hasArtist(null))
     }
 
     @Test
