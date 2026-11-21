@@ -335,6 +335,7 @@ class MusicCatalog private constructor(
 
         /** `#` first, then letters by the collator; two letters it calls equal still differ. */
         private fun compareLetters(a: GroupLetter, b: GroupLetter): Int {
+            if (a === b) return 0
             val aHash = a.key == null
             val bHash = b.key == null
             if (aHash != bHash) return if (aHash) -1 else 1

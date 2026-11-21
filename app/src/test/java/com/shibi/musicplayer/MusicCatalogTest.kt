@@ -353,9 +353,21 @@ class MusicCatalogTest {
             track("J", "Metallica", "...And Justice", "Metallica"),
             track("Æ", "Tool", "Ænima", "Tool"),
             track("Ø", "Ølafur", "Arc", "Ølafur"),
+            // The collator puts the dots before "2pac" and "æther" between "abba" and "aztec".
+            track("Trail", "...And You Will Know Us", "Source Tags", "...And You Will Know Us"),
+            track("Ether", "Æther Realm", "Tarot", "Æther Realm"),
+            track("Oblivious", "Aztec Camera", "High Land", "Aztec Camera"),
             track("Real", "Unknown artist", "Real LP"),
         )
         val catalog = catalog(library() + extra)
+        val byArtist = catalog.albums(AlbumSort.Artist)
+        val artistRuns = catalog.albumRuns(AlbumSort.Artist)
+        assertEquals(SortRun(SortGroup.Letter("#"), 0, 1), artistRuns.first())
+        assertEquals("All Eyez", byArtist.first().title)
+        val aRun = artistRuns.single { it.group == SortGroup.Letter("A") }
+        val aTitles = byArtist.subList(aRun.start, aRun.start + aRun.count).map { it.title }
+        assertTrue(aTitles.toString(), aTitles.containsAll(listOf("Source Tags", "Greatest Hits", "High Land")))
+        assertEquals(SortGroup.Letter("Æ"), artistRuns[artistRuns.indexOf(aRun) + 1].group)
         val letterOf = mapOf<AlbumSort, (AlbumEntry) -> String?>(
             AlbumSort.Title to { SortLetters.of(ArtistNames.sortKey(it.title)) },
             AlbumSort.Artist to { it.artistKey?.let(SortLetters::of) },
