@@ -7,6 +7,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.ShuffleOrder
 import com.shibi.musicplayer.domain.LikeShuffleQueue
 import com.shibi.musicplayer.domain.QueueEdit
+import com.shibi.musicplayer.domain.SpreadKey
 import com.shibi.musicplayer.domain.UnknownNames
 import com.shibi.musicplayer.domain.spreadKey
 import kotlin.random.Random
@@ -96,9 +97,11 @@ internal class LikeShuffleDriver(
         if (index !in 0 until count) return
         val items = List(count) { player.getMediaItemAt(it) }
         val ids = items.map { it.mediaId.toLongOrNull() ?: return }
+        // Songs share artist and album strings, so each pair is normalised once, not per item.
+        val keysByTags = HashMap<Pair<String?, String?>, SpreadKey>()
         val spread = ids.zip(items).associate { (id, item) ->
-            val metadata = item.mediaMetadata
-            id to spreadKey(metadata.artist?.toString(), metadata.albumTitle?.toString(), unknown)
+            val tags = item.mediaMetadata.artist?.toString() to item.mediaMetadata.albumTitle?.toString()
+            id to keysByTags.getOrPut(tags) { spreadKey(tags.first, tags.second, unknown) }
         }
         val started = LikeShuffleQueue(ids, ids[index], liked, random, spread::get)
         pool = items

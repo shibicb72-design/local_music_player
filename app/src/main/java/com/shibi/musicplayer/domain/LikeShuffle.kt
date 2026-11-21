@@ -60,6 +60,18 @@ object LikeShuffleTuning {
     const val SAME_ALBUM_FACTOR = 0.3
 
     /**
+     * Floor of the balance factor `left / meanLeft`: an artist with few songs left (against the
+     * mean of the tagged artists that still have some) is drawn at no less than half weight.
+     */
+    const val BALANCE_MIN = 0.5
+
+    /**
+     * Ceiling of the balance factor, so one artist owning a big share of a library is drawn
+     * sooner but does not crowd the start of the pass.
+     */
+    const val BALANCE_MAX = 2.0
+
+    /**
      * Songs that must play between two plays of the same song:
      * `clamp(round(poolSize * GAP_POOL_FRACTION), MIN_GAP_FLOOR, MIN_GAP_CAP)`, then shrunk to at
      * most half the pool (and at least one) so small playlists keep variety and never repeat a
@@ -172,10 +184,22 @@ class LikeShufflePicker(
             val album = if (key.album != null && key.album == lastKey.album) LikeShuffleTuning.SAME_ALBUM_FACTOR else 1.0
             weight(id) * recency * album
         }
-        // Balance: an artist with more songs left is drawn sooner. Returns do not get it.
-        val freshWeight = { id: Long -> spreadWeight(id) * (left[spread.getValue(id).artist] ?: 1) }
+        val taggedLeft = left.entries.filter { it.key != null }
+        val meanLeft = if (taggedLeft.isEmpty()) 0.0 else taggedLeft.sumOf { it.value }.toDouble() / taggedLeft.size
+        // Balance: an artist with more songs left than the mean is drawn sooner, clamped so a big
+        // artist never crowds the pass. Untagged songs and returns skip it, and it only shapes
+        // the pick, so the share of liked returns stays as it was.
+        val pickWeight = { id: Long ->
+            val artist = spread.getValue(id).artist
+            val balance = if (artist == null || meanLeft == 0.0) {
+                1.0
+            } else {
+                (left.getValue(artist) / meanLeft).coerceIn(LikeShuffleTuning.BALANCE_MIN, LikeShuffleTuning.BALANCE_MAX)
+            }
+            spreadWeight(id) * balance
+        }
         if (returning.isNotEmpty()) {
-            val freshTotal = fresh.sumOf(freshWeight)
+            val freshTotal = fresh.sumOf(spreadWeight)
             val returnWeight = returning.sumOf(spreadWeight)
             val share = minOf(
                 LikeShuffleTuning.MAX_RETURN_SHARE,
@@ -183,7 +207,7 @@ class LikeShufflePicker(
             )
             if (random.nextDouble() < share) return returning[random.nextInt(returning.size)]
         }
-        return weightedPick(fresh, freshWeight)
+        return weightedPick(fresh, pickWeight)
     }
 
     /** Liked, already played, past the cooldown, and not the song that just played. */
