@@ -209,6 +209,16 @@ class LikeShuffleTest {
     }
 
     @Test
+    fun seed42PlaysTheOrderPinnedBeforeArtistSpread() {
+        // Captured on 859343a, before artist spread. With no spread keys the order must not move.
+        val pinned = listOf<Long>(
+            14, 37, 7, 9, 29, 5, 4, 27, 15, 17, 12, 40, 36, 11, 31, 25, 10, 38, 22, 18, 39, 24, 34, 23, 40, 28,
+            3, 35, 2, 19, 12, 20, 31, 36, 7, 18, 13, 30, 25, 6, 26, 40, 8, 16, 1, 33, 12, 3, 7, 32, 21,
+        )
+        assertEquals(pinned, playPass(library, liked, 42))
+    }
+
+    @Test
     fun aFreshPickerFavorsLikedStarts() {
         var likedStarts = 0
         repeat(2_000) { seed ->
