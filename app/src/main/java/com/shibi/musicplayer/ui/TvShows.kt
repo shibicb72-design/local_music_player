@@ -156,8 +156,9 @@ internal fun TvShowPage(
     topPadding: Dp = 0.dp,
 ) {
     val start = next ?: show.episodes.first()
+    val seasonFade = rememberFadeThrough(chosenSeason)
     // A rescan can drop the chosen season: fall back to the first.
-    val season = show.seasons.firstOrNull { it.number == chosenSeason } ?: show.seasons.first()
+    val season = show.seasons.firstOrNull { it.number == seasonFade.value } ?: show.seasons.first()
     LazyColumn(
         modifier = modifier,
         state = listState,
@@ -186,7 +187,7 @@ internal fun TvShowPage(
         }
         if (show.seasons.size > 1) {
             item(key = "seasons", contentType = "seasons") {
-                SeasonChips(seasons = show.seasons, chosen = season.number, onSelect = onChooseSeason)
+                SeasonChips(seasons = show.seasons, chosen = chosenSeason, onSelect = onChooseSeason)
             }
         }
         items(season.episodes, key = { it.video.id }, contentType = { "video" }) { episode ->
@@ -205,6 +206,7 @@ internal fun TvShowPage(
                 saved = savedProgress[video.contentUri],
                 title = episodeLabel(episode, untitled),
                 subtitle = videoSubtitle(video, tail = null),
+                modifier = Modifier.fadeThrough(seasonFade),
             )
         }
     }
