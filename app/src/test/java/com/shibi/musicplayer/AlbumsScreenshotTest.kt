@@ -74,7 +74,19 @@ class AlbumsScreenshotTest {
     @Test
     fun albumPageOnCream() = compact(abbaHits, "album_page_cream.png", AppBackground.Solid("cream"))
 
-    private fun compact(open: String?, fileName: String, background: AppBackground = AppBackground.Default) {
+    /** Track numbers of one, two and three digits at 2x font; the three-digit one is playing and must not clip. */
+    @Test
+    @Config(qualifiers = "w411dp-h891dp-xxhdpi", fontScale = 2.0f)
+    fun albumPageCompactBigFontNumbers() =
+        compact(numbersAlbum, "album_page_compact_font2x_numbers.png", library = numbersLibrary, playingId = "903")
+
+    private fun compact(
+        open: String?,
+        fileName: String,
+        background: AppBackground = AppBackground.Default,
+        library: List<Track> = tracks,
+        playingId: String = "3",
+    ) {
         captureRoboImage("build/outputs/roborazzi/$fileName") {
             MusicPlayerTheme {
                 AppBackgroundHost(background, emptyMap(), forceStatic = true) {
@@ -92,7 +104,7 @@ class AlbumsScreenshotTest {
                             )
                         },
                     ) { bottom ->
-                        Albums(open, bottom)
+                        Albums(open, bottom, library, playingId)
                     }
                 }
             }
@@ -142,10 +154,10 @@ class AlbumsScreenshotTest {
     }
 
     @Composable
-    private fun Albums(open: String?, bottom: Dp) {
+    private fun Albums(open: String?, bottom: Dp, library: List<Track> = tracks, playingId: String = "3") {
         LibraryContent(
-            tracks = tracks,
-            nowPlaying = PlayerUiState(currentMediaId = "3"),
+            tracks = library,
+            nowPlaying = PlayerUiState(currentMediaId = playingId),
             showMiniPlayer = false,
             onTrackSelected = { _, _ -> },
             onOpenPlayer = {},
@@ -154,7 +166,7 @@ class AlbumsScreenshotTest {
             contentBottomPadding = bottom,
             modifier = Modifier.fillMaxSize(),
             view = MusicView.Albums,
-            catalog = catalog,
+            catalog = if (library === tracks) catalog else numbersCatalog,
             albumSort = AlbumSort.Title,
             openAlbum = open,
         )
@@ -206,5 +218,22 @@ class AlbumsScreenshotTest {
 
         /** ABBA's Greatest Hits; the key holds a NUL, so it is looked up rather than spelled out. */
         val abbaHits: String = catalog.albums(AlbumSort.Title).first { it.artistName == "ABBA" }.key
+
+        /** One album whose tracks are numbered 9, 12 and 128; 128 (id 903) is the playing row. */
+        val numbersLibrary: List<Track> = listOf(9 to 901L, 12 to 902L, 128 to 903L).map { (number, id) ->
+            Track(
+                id = id, title = "Track $number", artist = "Long Box", album = "The Long Box", durationMs = 200_000L,
+                contentUri = "content://track$number", albumArtUri = null, albumArtist = "Long Box",
+                trackNumber = number, year = 1999,
+            )
+        }
+
+        val numbersCatalog: MusicCatalog = MusicCatalog.build(
+            numbersLibrary,
+            UnknownNames(title = "Unknown title", artist = "Unknown artist", album = "Unknown album"),
+            Collator.getInstance(Locale.US),
+        )
+
+        val numbersAlbum: String = numbersCatalog.albums(AlbumSort.Title).single().key
     }
 }
