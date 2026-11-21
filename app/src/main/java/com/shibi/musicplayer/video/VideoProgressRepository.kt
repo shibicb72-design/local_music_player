@@ -53,7 +53,7 @@ class VideoProgressRepository internal constructor(
     init {
         enqueue {
             try {
-                val stored = dao.getAll().associate { it.uri to VideoProgress(it.positionMs, it.durationMs) }
+                val stored = dao.getAll().associate { it.uri to VideoProgress(it.positionMs, it.durationMs, it.updatedAt) }
                 // Anything saved while the table was being read is newer than what it held.
                 _progress.update { newer -> stored + newer }
             } catch (error: Exception) {
@@ -122,7 +122,7 @@ class VideoProgressRepository internal constructor(
                 logOnce("Restore video positions", error, media = null)
             }
             _progress.update { current ->
-                current + rows.associate { it.uri to VideoProgress(it.positionMs, it.durationMs) }
+                current + rows.associate { it.uri to VideoProgress(it.positionMs, it.durationMs, it.updatedAt) }
             }
             done.complete(Unit)
         }
@@ -136,11 +136,14 @@ class VideoProgressRepository internal constructor(
         store(video, VideoProgress(positionMs = 0L, durationMs = keptDuration))
     }
 
-    private fun store(video: Video, entry: VideoProgress) {
+    /** [place] has no time yet; it is stamped here. The same place again is not saved again. */
+    private fun store(video: Video, place: VideoProgress) {
         val uri = video.contentUri
-        if (_progress.value[uri] == entry) return
+        val saved = _progress.value[uri]
+        if (saved != null && saved.positionMs == place.positionMs && saved.durationMs == place.durationMs) return
+        val entry = place.copy(updatedAtMs = clock())
         _progress.update { current -> current + (uri to entry) }
-        val row = VideoProgressEntity(uri, entry.positionMs, entry.durationMs, clock())
+        val row = VideoProgressEntity(uri, entry.positionMs, entry.durationMs, entry.updatedAtMs)
         enqueue {
             try {
                 dao.upsert(row)

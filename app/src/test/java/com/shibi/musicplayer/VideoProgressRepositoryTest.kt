@@ -54,8 +54,8 @@ class VideoProgressRepositoryTest {
         repository.awaitWrites()
         repository.onCheckpoint(beach, positionMs = 754_000L, durationMs = 3_600_000L)
         // Read synchronously by the next open, before the write lands.
-        assertEquals(VideoProgress(754_000L, 3_600_000L), repository.saved(beach))
-        assertEquals(VideoProgress(754_000L, 3_600_000L), repository.progress.value[beach.contentUri])
+        assertEquals(VideoProgress(754_000L, 3_600_000L, updatedAtMs = 1_000L), repository.saved(beach))
+        assertEquals(VideoProgress(754_000L, 3_600_000L, updatedAtMs = 1_000L), repository.progress.value[beach.contentUri])
         repository.awaitWrites()
         assertEquals(VideoProgressEntity(beach.contentUri, 754_000L, 3_600_000L, 1_000L), row(beach))
     }
@@ -77,7 +77,7 @@ class VideoProgressRepositoryTest {
         repository.onFinished(beach, durationMs = 0L)
         repository.awaitWrites()
         assertEquals(VideoProgressEntity(beach.contentUri, 0L, 3_600_000L, 2_000L), row(beach))
-        assertEquals(VideoProgress(0L, 3_600_000L), repository.saved(beach))
+        assertEquals(VideoProgress(0L, 3_600_000L, updatedAtMs = 2_000L), repository.saved(beach))
     }
 
     @Test
@@ -95,7 +95,7 @@ class VideoProgressRepositoryTest {
         repository.onCheckpoint(beach, positionMs = 60_000L, durationMs = 3_600_000L)
         repository.onCheckpoint(beach, positionMs = 90_000L, durationMs = 0L)
         repository.awaitWrites()
-        assertEquals(VideoProgress(90_000L, 3_600_000L), repository.saved(beach))
+        assertEquals(VideoProgress(90_000L, 3_600_000L, updatedAtMs = 1_000L), repository.saved(beach))
         assertEquals(3_600_000L, row(beach)?.durationMs)
     }
 
@@ -116,8 +116,28 @@ class VideoProgressRepositoryTest {
         database.videoProgressDao().upsert(VideoProgressEntity(beach.contentUri, 120_000L, 3_600_000L, 1L))
         val repository = repository()
         repository.awaitWrites()
-        assertEquals(VideoProgress(120_000L, 3_600_000L), repository.saved(beach))
+        assertEquals(VideoProgress(120_000L, 3_600_000L, updatedAtMs = 1L), repository.saved(beach))
         assertNull(repository.saved(clip))
+    }
+
+    @Test
+    fun eachSaveExposesItsTimeAndARepeatAtTheSameSpotIsNotWrittenAgain() = runBlocking {
+        val repository = repository()
+        repository.awaitWrites()
+        now = 5_000L
+        repository.onCheckpoint(beach, positionMs = 60_000L, durationMs = 3_600_000L)
+        assertEquals(5_000L, repository.saved(beach)?.updatedAtMs)
+
+        // Paused: the same place again keeps the first time, in memory and on disk.
+        now = 9_000L
+        repository.onCheckpoint(beach, positionMs = 60_000L, durationMs = 3_600_000L)
+        repository.awaitWrites()
+        assertEquals(5_000L, repository.saved(beach)?.updatedAtMs)
+        assertEquals(5_000L, row(beach)?.updatedAt)
+
+        now = 12_000L
+        repository.onCheckpoint(beach, positionMs = 65_000L, durationMs = 3_600_000L)
+        assertEquals(12_000L, repository.saved(beach)?.updatedAtMs)
     }
 
     @Test
