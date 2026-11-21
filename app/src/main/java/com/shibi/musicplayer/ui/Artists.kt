@@ -1,7 +1,6 @@
 package com.shibi.musicplayer.ui
 
 import androidx.annotation.StringRes
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -25,12 +24,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Shuffle
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -240,7 +234,7 @@ internal fun ArtistPageContent(
             )
         }
         item(key = "buttons", contentType = "buttons") {
-            ArtistButtons(
+            PlayShuffleButtons(
                 enabled = songs.isNotEmpty(),
                 onPlayAll = { songs.firstOrNull()?.let { onTrackSelected(songs, it.id) } },
                 onShuffle = { if (songs.isNotEmpty()) onShuffle(songs) },
@@ -271,42 +265,6 @@ internal fun ArtistPageContent(
                 onTrash = onTrash?.let { trash -> { trash(track) } },
                 detail = catalog.albumOf(track)?.title,
             )
-        }
-    }
-}
-
-/**
- * Play all and Shuffle side by side, as on a playlist's page. Shuffle's outline and text take
- * the page's own content colour, so they read on a dark backdrop and on a pastel one alike.
- */
-@Composable
-internal fun ArtistButtons(enabled: Boolean, onPlayAll: () -> Unit, onShuffle: () -> Unit) {
-    val content = MaterialTheme.colorScheme.onBackground
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = ListRowSideMargin, vertical = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        PlayAllButton(onClick = onPlayAll, enabled = enabled, modifier = Modifier.weight(1f))
-        OutlinedButton(
-            onClick = onShuffle,
-            enabled = enabled,
-            modifier = Modifier.weight(1f),
-            shape = CircleShape,
-            border = BorderStroke(1.5.dp, content.copy(alpha = if (enabled) 0.72f else 0.24f)),
-            colors = ButtonDefaults.outlinedButtonColors(
-                contentColor = content,
-                disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-            ),
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.Shuffle,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp),
-            )
-            Spacer(Modifier.width(6.dp))
-            Text(stringResource(R.string.shuffle), maxLines = 1)
         }
     }
 }

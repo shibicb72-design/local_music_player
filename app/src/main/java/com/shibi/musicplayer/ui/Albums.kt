@@ -199,7 +199,7 @@ internal fun AlbumPageContent(
             }
         }
         item(key = "buttons", contentType = "buttons") {
-            ArtistButtons(
+            PlayShuffleButtons(
                 enabled = tracks.isNotEmpty(),
                 onPlayAll = { tracks.firstOrNull()?.let { onTrackSelected(tracks, it.id) } },
                 onShuffle = { if (tracks.isNotEmpty()) onShuffle(tracks) },
