@@ -16,6 +16,7 @@ import com.shibi.musicplayer.domain.SortRun
 import com.shibi.musicplayer.domain.SortSpec
 import com.shibi.musicplayer.domain.SortedList
 import com.shibi.musicplayer.domain.TvEpisode
+import com.shibi.musicplayer.domain.TvFile
 import com.shibi.musicplayer.domain.TvShow
 import com.shibi.musicplayer.domain.Video
 import com.shibi.musicplayer.domain.VideoAccess
@@ -65,7 +66,15 @@ data class VideoLibraryUiState(
      * [shows] order and [runs] is empty: [shows] drives that screen.
      */
     val filter: VideoFilter = VideoFilter.All,
-    /** Files per filter, whatever [filter] is. */
+    /**
+     * False until the stored filter (and both sorts) loaded and a list was published with them,
+     * so filter chips never show All first and then jump.
+     */
+    val isReady: Boolean = false,
+    /**
+     * Files per filter, whatever [filter] is. Under All, [counts], [shows], [identities] and
+     * [continueByShow] follow the list in a second update, once the files are classified.
+     */
     val counts: VideoCounts = VideoCounts(),
     /** Every TV show in the library, whatever [filter] is. */
     val shows: List<TvShow> = emptyList(),
@@ -93,6 +102,8 @@ class VideoLibraryViewModel internal constructor(
     private val sortPrefs: SortPrefs = InMemorySortPrefs(),
     /** Sorting is CPU work; tests get the same inline dispatcher as [ioDispatcher]. */
     private val sortDispatcher: CoroutineDispatcher = ioDispatcher,
+    /** Parses each file name once for the view model's life. Used only on [sortDispatcher]. */
+    private val classifier: VideoClassifier = VideoClassifier(),
 ) : AndroidViewModel(application) {
     constructor(application: Application) : this(
         application,
@@ -125,9 +136,6 @@ class VideoLibraryViewModel internal constructor(
 
     /** Every saved resume entry, for Continue. Not part of [SortInput], so a save never re-sorts. */
     private val savedProgress = MutableStateFlow<Map<String, VideoProgress>>(emptyMap())
-
-    /** Parses each file name once for the view model's life. Used only on [sortDispatcher]. */
-    private val classifier = VideoClassifier()
 
     init {
         loadStored(requestedSort) { sortPrefs.videoSort.first() }
@@ -164,7 +172,9 @@ class VideoLibraryViewModel internal constructor(
         if (access == VideoAccess.Denied) {
             scan.value = null
             // The list empties; the chosen sort and filter stay for when access comes back.
-            _uiState.update { current -> VideoLibraryUiState(access = access, sort = current.sort, filter = current.filter) }
+            _uiState.update { current ->
+                VideoLibraryUiState(access = access, sort = current.sort, filter = current.filter, isReady = current.isReady)
+            }
             return
         }
         viewModelScope.launch {
@@ -255,64 +265,100 @@ class VideoLibraryViewModel internal constructor(
 
     private suspend fun publish(input: SortInput) {
         val unknownTitle = getApplication<Application>().getString(R.string.unknown_title)
+        val videos = input.scan.videos
+        if (input.filter == VideoFilter.All) {
+            // Today's work first: the list never waits for the files to be classified.
+            val list = withContext(sortDispatcher) { sortVideos(videos, input.videoSort, input.lengths, unknownTitle) }
+            show(input.filter, list, library = null)
+        }
         val progress = savedProgress.value
-        val view = withContext(sortDispatcher) { arrange(input, unknownTitle, progress) }
-        _uiState.update { current ->
-            // Access went away while this sorted: the denied state stays empty.
-            if (current.access == VideoAccess.Denied) {
-                current
-            } else {
-                current.copy(
-                    videos = view.list.items,
-                    sort = view.list.spec,
-                    runs = view.list.runs,
-                    filter = input.filter,
-                    counts = view.counts,
-                    shows = view.shows,
-                    identities = view.identities,
-                    continueByShow = view.continueByShow,
-                    isLoading = false,
-                    hasError = false,
-                )
+        if (input.filter == VideoFilter.All) {
+            val library = withContext(sortDispatcher) { classify(videos, progress) }
+            show(input.filter, list = null, library)
+        } else {
+            // The filtered list needs the classification, so both land together.
+            val (library, list) = withContext(sortDispatcher) {
+                val library = classify(videos, progress)
+                library to filteredList(input, library, unknownTitle)
             }
+            show(input.filter, list, library)
         }
         // A save landed while this ran: the progress collector worked it out for the old shows.
         if (savedProgress.value !== progress) refreshContinue(savedProgress.value)
     }
 
-    /** Classifies, groups and sorts one scan. CPU work: runs on [sortDispatcher] only. */
-    private fun arrange(input: SortInput, unknownTitle: String, progress: Map<String, VideoProgress>): Arranged {
-        val collator = Collator.getInstance()
-        val zone = ZoneId.systemDefault()
-        val videos = input.scan.videos
-        val identities = videos.associate { it.id to classifier.identityOf(it) }
-        val identityOf = { video: Video -> identities.getValue(video.id) }
-        val episodes = videos.mapNotNull { video -> (identityOf(video) as? VideoIdentity.Episode)?.let { video to it } }
-        val grouped = shows(episodes, collator)
-        val sort = { list: List<Video>, spec: SortSpec ->
-            // The length a row shows (ResumePolicy.displayDuration): MediaStore's, else libVLC's.
-            LibrarySorter.videos(list, spec, collator, zone, unknownTitle) { it.durationMs ?: input.lengths[it.contentUri] }
+    /** Publishes [list] (with [filter]) and/or [library]; a null part keeps what is shown. */
+    private fun show(filter: VideoFilter, list: SortedList<Video>?, library: Library?) {
+        _uiState.update { current ->
+            // Access went away while this sorted: the denied state stays empty.
+            if (current.access == VideoAccess.Denied) return@update current
+            var next = current
+            if (list != null) {
+                next = next.copy(
+                    videos = list.items,
+                    sort = list.spec,
+                    runs = list.runs,
+                    filter = filter,
+                    isReady = true,
+                    isLoading = false,
+                    hasError = false,
+                )
+            }
+            if (library != null) {
+                next = next.copy(
+                    counts = library.counts,
+                    shows = library.shows,
+                    identities = library.identities,
+                    continueByShow = library.continueByShow,
+                )
+            }
+            next
         }
-        val list = when (input.filter) {
-            VideoFilter.All -> sort(videos, input.videoSort)
-            VideoFilter.Movies -> sort(
+    }
+
+    /** Classifies one scan and groups its episodes. CPU work: runs on [sortDispatcher] only. */
+    private fun classify(videos: List<Video>, progress: Map<String, VideoProgress>): Library {
+        val classified = videos.map(classifier::classify)
+        classifier.retainOnly(videos)
+        val identities = HashMap<Long, VideoIdentity>(videos.size * 2)
+        videos.forEachIndexed { index, video -> identities[video.id] = classified[index].identity }
+        val files = videos.indices.mapNotNull { index -> TvFile.of(videos[index], classified[index]) }
+        val grouped = shows(files, Collator.getInstance())
+        return Library(countsOf(classified.map { it.identity }), grouped, identities, continueByShow(grouped, progress))
+    }
+
+    /** The list under Movies, Personal or Tv (All is just [sortVideos]). Runs on [sortDispatcher]. */
+    private fun filteredList(input: SortInput, library: Library, unknownTitle: String): SortedList<Video> {
+        val videos = input.scan.videos
+        val identityOf = { video: Video -> library.identities.getValue(video.id) }
+        return when (input.filter) {
+            VideoFilter.All -> sortVideos(videos, input.videoSort, input.lengths, unknownTitle)
+            VideoFilter.Movies -> sortVideos(
                 videos.mapNotNull { video ->
                     identityOf(video).takeIf { filterOf(it) == VideoFilter.Movies }?.let { displayVideo(video, it) }
                 },
                 input.movieSort,
+                input.lengths,
+                unknownTitle,
             )
-            VideoFilter.Personal -> sort(videos.filter { filterOf(identityOf(it)) == VideoFilter.Personal }, input.videoSort)
-            VideoFilter.Tv -> SortedList(input.videoSort, grouped.flatMap { show -> show.episodes.map { it.video } }, emptyList())
+            VideoFilter.Personal -> sortVideos(
+                videos.filter { filterOf(identityOf(it)) == VideoFilter.Personal },
+                input.videoSort,
+                input.lengths,
+                unknownTitle,
+            )
+            VideoFilter.Tv -> SortedList(input.videoSort, library.shows.flatMap { show -> show.episodes.map { it.video } }, emptyList())
         }
-        return Arranged(list, countsOf(videos.map(identityOf)), grouped, identities, continueByShow(grouped, progress))
     }
 
-    /** Works out Continue for the published shows; dropped if a newer publish replaced them meanwhile. */
+    /** Works out Continue for the published shows; dropped if a publish or a newer save came meanwhile. */
     private suspend fun refreshContinue(progress: Map<String, VideoProgress>) {
         val shows = _uiState.value.shows
         if (shows.isEmpty()) return
         val next = withContext(sortDispatcher) { continueByShow(shows, progress) }
-        _uiState.update { current -> if (current.shows === shows) current.copy(continueByShow = next) else current }
+        _uiState.update { current ->
+            if (current.shows === shows && savedProgress.value === progress) current.copy(continueByShow = next) else current
+        }
     }
 
     private fun currentAccess(): VideoAccess {
@@ -337,9 +383,8 @@ class VideoLibraryViewModel internal constructor(
         val sortInForce: SortSpec get() = if (filter == VideoFilter.Movies) movieSort else videoSort
     }
 
-    /** One publish's result, besides the access and loading flags. */
-    private class Arranged(
-        val list: SortedList<Video>,
+    /** One scan, classified: everything the state holds besides the list. */
+    private class Library(
         val counts: VideoCounts,
         val shows: List<TvShow>,
         val identities: Map<Long, VideoIdentity>,
@@ -348,6 +393,12 @@ class VideoLibraryViewModel internal constructor(
 
     private companion object {
         const val CHANGE_SETTLE_MS = 500L
+
+        /** The length a row shows (ResumePolicy.displayDuration): MediaStore's, else libVLC's. */
+        fun sortVideos(videos: List<Video>, spec: SortSpec, lengths: Map<String, Long>, unknownTitle: String): SortedList<Video> =
+            LibrarySorter.videos(videos, spec, Collator.getInstance(), ZoneId.systemDefault(), unknownTitle) {
+                it.durationMs ?: lengths[it.contentUri]
+            }
 
         fun continueByShow(shows: List<TvShow>, progress: Map<String, VideoProgress>): Map<String, TvEpisode> =
             buildMap { shows.forEach { show -> continueEpisode(show, progress)?.let { put(show.key, it) } } }

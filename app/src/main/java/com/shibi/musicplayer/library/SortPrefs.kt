@@ -15,7 +15,6 @@ import java.io.IOException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 
 /**
@@ -27,15 +26,13 @@ interface SortPrefs {
     val videoSort: Flow<SortSpec>
     val musicSort: Flow<SortSpec>
 
+    val videoFilter: Flow<VideoFilter>
+    val movieSort: Flow<SortSpec>
+
     suspend fun setVideoSort(spec: SortSpec)
     suspend fun setMusicSort(spec: SortSpec)
-
-    // Defaults only for test stores that keep just the two sorts; the app's stores keep these.
-    val videoFilter: Flow<VideoFilter> get() = flowOf(VideoFilter.All)
-    val movieSort: Flow<SortSpec> get() = flowOf(MovieSortDefault)
-
-    suspend fun setVideoFilter(filter: VideoFilter) = Unit
-    suspend fun setMovieSort(spec: SortSpec) = Unit
+    suspend fun setVideoFilter(filter: VideoFilter)
+    suspend fun setMovieSort(spec: SortSpec)
 
     companion object {
         /** The app's store, shared by both lists' view models. */

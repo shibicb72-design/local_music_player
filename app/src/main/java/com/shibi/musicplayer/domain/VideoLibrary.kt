@@ -26,6 +26,11 @@ fun filterOf(identity: VideoIdentity): VideoFilter = when (identity) {
     is VideoIdentity.Personal, is VideoIdentity.Other -> VideoFilter.Personal
 }
 
+/** What a file is, and for an episode its show's [ArtistNames.sortKey], worked out once. */
+class Classified(val identity: VideoIdentity) {
+    val showKey: String? = (identity as? VideoIdentity.Episode)?.let { ArtistNames.sortKey(it.show) }
+}
+
 /**
  * [VideoNameParser] behind a cache keyed by file and folder name, so a rescan of the same library
  * parses nothing again. Not thread-safe: use it from one background dispatcher at a time, never
@@ -34,10 +39,20 @@ fun filterOf(identity: VideoIdentity): VideoFilter = when (identity) {
 class VideoClassifier(
     private val parse: (String, String?) -> VideoIdentity = VideoNameParser::parse,
 ) {
-    private val cache = HashMap<Pair<String, String?>, VideoIdentity>()
+    private val cache = HashMap<Pair<String, String?>, Classified>()
 
-    fun identityOf(video: Video): VideoIdentity =
-        cache.getOrPut(video.displayName to video.folder) { parse(video.displayName, video.folder) }
+    fun classify(video: Video): Classified =
+        cache.getOrPut(keyOf(video)) { Classified(parse(video.displayName, video.folder)) }
+
+    fun identityOf(video: Video): VideoIdentity = classify(video).identity
+
+    /** Forgets every file not in [videos] (the current scan), so deleted files do not pile up. */
+    fun retainOnly(videos: Collection<Video>) {
+        val current = videos.mapTo(HashSet(videos.size), ::keyOf)
+        cache.keys.retainAll(current)
+    }
+
+    private fun keyOf(video: Video) = video.displayName to video.folder
 }
 
 /** Files per filter; [tv] counts episode files, not shows. */
@@ -62,6 +77,17 @@ fun displayVideo(video: Video, identity: VideoIdentity): Video = when (identity)
     else -> video
 }
 
+/** An episode file as [shows] takes it: the video, what it is, and its show key. */
+data class TvFile(val video: Video, val episode: VideoIdentity.Episode, val showKey: String) {
+    companion object {
+        /** The file as an episode, or null when [classified] is not one. */
+        fun of(video: Video, classified: Classified): TvFile? {
+            val episode = classified.identity as? VideoIdentity.Episode ?: return null
+            return TvFile(video, episode, checkNotNull(classified.showKey))
+        }
+    }
+}
+
 /** One episode file. [lastEpisode] is set for a multi-episode file (`S02E10E11`). */
 data class TvEpisode(
     val video: Video,
@@ -75,38 +101,39 @@ data class TvSeason(val number: Int, val episodes: List<TvEpisode>)
 
 /** A show's files, grouped by season. [key] is [ArtistNames.sortKey] of the name. */
 data class TvShow(val key: String, val name: String, val seasons: List<TvSeason>) {
-    /** Every episode file in show order: season, then episode. */
-    val episodes: List<TvEpisode> get() = seasons.flatMap { it.episodes }
+    /** Every episode file in show order: season, then episode. Built once. */
+    val episodes: List<TvEpisode> = seasons.flatMap { it.episodes }
 
     /** Episode files, so two copies of one episode count twice. */
-    val episodeCount: Int get() = seasons.sumOf { it.episodes.size }
+    val episodeCount: Int get() = episodes.size
 }
 
 /**
- * Groups episodes into shows. Spellings that share a [ArtistNames.sortKey] ("The Office",
- * "the office") are one show, named by its most common spelling (on a tie, the one that sorts
- * first). Shows go by key, seasons ascend, and episodes go by number, then title, then video id;
- * two files of one episode are both kept.
+ * Groups episode files into shows by [TvFile.showKey], so spellings that share a key ("The
+ * Office", "the office") are one show, named by its most common spelling (on a tie, the one that
+ * sorts first). Shows go by key, seasons ascend, and episodes go by number, then title, then
+ * video id; two files of one episode are both kept.
  */
-fun shows(episodes: List<Pair<Video, VideoIdentity.Episode>>, collator: Collator): List<TvShow> {
+fun shows(files: List<TvFile>, collator: Collator): List<TvShow> {
     val byNumber = compareBy<TvEpisode> { it.episode }
         .then(compareBy<TvEpisode, String?>(nullsFirst<String>(collator)) { it.title })
         .thenBy { it.video.id }
     val byCountThenSpelling = compareByDescending<Map.Entry<String, Int>> { it.value }
         .then(compareBy<Map.Entry<String, Int>, String>(collator) { it.key })
-    return episodes
-        .groupBy { (_, identity) -> ArtistNames.sortKey(identity.show) }
+    return files
+        .groupBy { it.showKey }
         .map { (key, group) ->
-            val name = group.groupingBy { (_, identity) -> identity.show }.eachCount().entries
+            val name = group.groupingBy { it.episode.show }.eachCount().entries
                 .minWith(byCountThenSpelling)
                 .key
             val seasons = group
-                .map { (video, identity) ->
-                    TvEpisode(video, identity.season, identity.episode, identity.lastEpisode, identity.episodeTitle)
+                .map { file ->
+                    val identity = file.episode
+                    TvEpisode(file.video, identity.season, identity.episode, identity.lastEpisode, identity.episodeTitle)
                 }
                 .groupBy { it.season }
                 .toSortedMap()
-                .map { (number, files) -> TvSeason(number, files.sortedWith(byNumber)) }
+                .map { (number, episodes) -> TvSeason(number, episodes.sortedWith(byNumber)) }
             TvShow(key, name, seasons)
         }
         .sortedWith(compareBy<TvShow, String>(collator) { it.key })
@@ -115,8 +142,9 @@ fun shows(episodes: List<Pair<Video, VideoIdentity.Episode>>, collator: Collator
 /**
  * The episode to continue: of the show's episodes with a timed save ([VideoProgress.updatedAtMs]
  * above 0, by `contentUri`), the latest. If it stopped part way, that one, however few seconds
- * in. If it was watched (saved at 0, or in its last 5%), the next in show order, or null after
- * the last. Null when nothing was saved.
+ * in. If it was watched (saved at 0, or in its last 5%), the first later file past the episodes
+ * it holds: another copy of it, or an E11 after an E10E11 file, is skipped. Null after the last,
+ * and when nothing was saved.
  *
  * Known limit: Start over followed by closing at exactly 0 also stores 0, so it counts as watched.
  */
@@ -127,7 +155,12 @@ fun continueEpisode(show: TvShow, progress: Map<String, VideoProgress>): TvEpiso
         .maxByOrNull { (_, saved) -> saved.updatedAtMs }
         ?: return null
     val (index, saved) = latest
-    val duration = saved.durationMs.takeIf { it > 0L } ?: ordered[index].video.durationMs ?: 0L
+    val watched = ordered[index]
+    val duration = saved.durationMs.takeIf { it > 0L } ?: watched.video.durationMs ?: 0L
     val stoppedPartWay = saved.positionMs > 0L && !ResumePolicy.isFinished(saved.positionMs, duration)
-    return if (stoppedPartWay) ordered[index] else ordered.getOrNull(index + 1)
+    if (stoppedPartWay) return watched
+    val lastHeld = watched.lastEpisode ?: watched.episode
+    return ordered.subList(index + 1, ordered.size).firstOrNull { next ->
+        next.season > watched.season || (next.season == watched.season && next.episode > lastHeld)
+    }
 }

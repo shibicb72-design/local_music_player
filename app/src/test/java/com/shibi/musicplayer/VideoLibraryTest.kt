@@ -1,6 +1,8 @@
 package com.shibi.musicplayer
 
+import com.shibi.musicplayer.domain.Classified
 import com.shibi.musicplayer.domain.TvEpisode
+import com.shibi.musicplayer.domain.TvFile
 import com.shibi.musicplayer.domain.TvShow
 import com.shibi.musicplayer.domain.Video
 import com.shibi.musicplayer.domain.VideoClassifier
@@ -22,6 +24,7 @@ import java.util.Locale
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class VideoLibraryTest {
@@ -84,6 +87,61 @@ class VideoLibraryTest {
             classifier.identityOf(copyOfA.copy())
         }
         assertEquals(listOf("a.mp4" to "Camera", "a.mp4" to "Movies"), calls)
+        // The cached entry, show key included, is the same object on every scan.
+        assertSame(classifier.classify(a), classifier.classify(a.copy()))
+    }
+
+    @Test
+    fun theClassifierKeepsOnlyTheCurrentScan() {
+        var parses = 0
+        val classifier = VideoClassifier { name, _ ->
+            parses++
+            Other(name)
+        }
+        val a = video(1L, "a.mp4")
+        val b = video(2L, "b.mp4")
+        classifier.identityOf(a)
+        classifier.identityOf(b)
+        classifier.retainOnly(listOf(b))
+        classifier.identityOf(b)
+        assertEquals(2, parses)
+        // a left the library: it is parsed again if it comes back.
+        classifier.identityOf(a)
+        assertEquals(3, parses)
+    }
+
+    @Test
+    fun anEpisodeCarriesItsShowKey() {
+        assertEquals("office", Classified(Episode("The Office", 1, 1, null, null)).showKey)
+        assertNull(Classified(Movie("Inception", 2010)).showKey)
+        assertNull(TvFile.of(video(1L, "x.mkv"), Classified(Movie("Inception", 2010))))
+    }
+
+    @Test
+    fun classifyingAndGroupingTwentyThousandFilesIsFast() {
+        fun library(size: Int) = (0 until size).map { i ->
+            val name = when (i % 4) {
+                0 -> "Movie Number $i (${1950 + i % 70}).mkv"
+                1 -> "Show ${'a' + i % 300 % 26}${'a' + i % 300 / 26}.S%02dE%02d.Episode.Title.1080p.mkv".format(i % 9 + 1, i % 24 + 1)
+                2 -> "DJI_20250630${(100000 + i).toString().takeLast(6)}_0036_D.MP4"
+                else -> "clip number $i.mp4"
+            }
+            video(i.toLong(), name, folder = "Folder ${i % 50}")
+        }
+        fun classifyAndGroup(videos: List<Video>): List<TvShow> {
+            val classifier = VideoClassifier()
+            val files = videos.mapNotNull { TvFile.of(it, classifier.classify(it)) }
+            return shows(files, collator)
+        }
+        repeat(3) { classifyAndGroup(library(2_000)) }
+
+        val videos = library(20_000)
+        val start = System.nanoTime()
+        val result = classifyAndGroup(videos)
+        val ms = (System.nanoTime() - start) / 1_000_000
+        println("classify-and-group 20000 files: $ms ms")
+        assertTrue(result.isNotEmpty())
+        assertTrue("took $ms ms", ms < 2_000)
     }
 
     @Test
@@ -180,11 +238,49 @@ class VideoLibraryTest {
         assertEquals(1L, continueEpisode(lost(), progress)?.video?.id)
     }
 
+    @Test
+    fun aSaveInTheLastFivePercentCountsAsWatched() {
+        // 97.5% in: not a place to resume, so the next episode.
+        val progress = mapOf(uri(1L) to VideoProgress(1_950_000L, 2_000_000L, updatedAtMs = 100L))
+        assertEquals(2L, continueEpisode(lost(), progress)?.video?.id)
+    }
+
+    @Test
+    fun withNoSavedLengthTheFileLengthDecidesWatched() {
+        // libVLC saved no length; MediaStore's 2_000_000 ms puts 1_950_000 in the last 5%.
+        val progress = mapOf(uri(1L) to VideoProgress(1_950_000L, 0L, updatedAtMs = 100L))
+        assertEquals(2L, continueEpisode(lost(), progress)?.video?.id)
+    }
+
+    @Test
+    fun aSecondCopyOfTheWatchedEpisodeIsSkipped() {
+        val show = shows(listOf(episode(1L, "Lost", 1, 1), episode(2L, "Lost", 1, 1), episode(3L, "Lost", 1, 2)), collator).single()
+        val progress = mapOf(uri(1L) to VideoProgress(0L, 2_000_000L, updatedAtMs = 100L))
+        assertEquals(3L, continueEpisode(show, progress)?.video?.id)
+    }
+
+    @Test
+    fun aMultiEpisodeFileSkipsTheEpisodesItHolds() {
+        val show = shows(
+            listOf(episode(1L, "Show", 2, 10, last = 11), episode(2L, "Show", 2, 11), episode(3L, "Show", 2, 12)),
+            collator,
+        ).single()
+        val progress = mapOf(uri(1L) to VideoProgress(0L, 2_000_000L, updatedAtMs = 100L))
+        assertEquals(3L, continueEpisode(show, progress)?.video?.id)
+    }
+
+    @Test
+    fun theLastEpisodeOfASeasonContinuesWithTheNextSeason() {
+        val show = shows(listOf(episode(1L, "Lost", 1, 3), episode(2L, "Lost", 2, 1), episode(3L, "Lost", 1, 2)), collator).single()
+        val progress = mapOf(uri(1L) to VideoProgress(0L, 2_000_000L, updatedAtMs = 100L))
+        assertEquals(2L, continueEpisode(show, progress)?.video?.id)
+    }
+
     private fun lost(): TvShow =
         shows((1..3).map { episode(it.toLong(), "Lost", 1, it) }, collator).single()
 
-    private fun episode(id: Long, show: String, season: Int, number: Int, title: String? = null, last: Int? = null) =
-        video(id, "$show S${season}E$number.mkv") to Episode(show, season, number, last, title)
+    private fun episode(id: Long, show: String, season: Int, number: Int, title: String? = null, last: Int? = null): TvFile =
+        TvFile.of(video(id, "$show S${season}E$number.mkv"), Classified(Episode(show, season, number, last, title)))!!
 
     private fun uri(id: Long) = "content://media/external/video/media/$id"
 

@@ -255,7 +255,7 @@ class SortPrefsTest {
         arrayOf(id, "$title.mp4", title, duration, size, 1920, 1080, "video/mp4", dateAdded, "Camera")
 
     /** A store that has not answered yet; [video] stays null until the test sets it. */
-    private class SlowSortPrefs : SortPrefs {
+    private class SlowSortPrefs : SortPrefs by InMemorySortPrefs() {
         val video = MutableStateFlow<SortSpec?>(null)
         override val videoSort = video.filterNotNull()
         override val musicSort = MutableStateFlow(LibrarySorts.MusicDefault)

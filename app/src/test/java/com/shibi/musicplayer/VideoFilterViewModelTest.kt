@@ -16,12 +16,21 @@ import com.shibi.musicplayer.library.InMemorySortPrefs
 import com.shibi.musicplayer.library.SortPrefs
 import com.shibi.musicplayer.library.VideoLibraryViewModel
 import com.shibi.musicplayer.library.VideoRepository
+import com.shibi.musicplayer.domain.VideoClassifier
+import com.shibi.musicplayer.domain.VideoNameParser
 import java.text.Collator
 import java.time.ZoneId
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -172,6 +181,73 @@ class VideoFilterViewModelTest {
         idleMain()
         assertTrue(viewModel.uiState.value.videos.isEmpty())
         assertEquals(VideoFilter.Movies, viewModel.uiState.value.filter)
+    }
+
+    @Test
+    fun underAllTheListIsPublishedBeforeClassificationFinishes() {
+        val release = CountDownLatch(1)
+        val classifier = VideoClassifier { name, folder ->
+            release.await(10, TimeUnit.SECONDS)
+            VideoNameParser.parse(name, folder)
+        }
+        val sortThread = Executors.newSingleThreadExecutor()
+        try {
+            val viewModel = VideoLibraryViewModel(
+                application = application,
+                repository = VideoRepository(application),
+                ioDispatcher = Dispatchers.Unconfined,
+                sortPrefs = InMemorySortPrefs(),
+                sortDispatcher = sortThread.asCoroutineDispatcher(),
+                classifier = classifier,
+            )
+            viewModel.refresh()
+            idleUntil { viewModel.uiState.value.videos.isNotEmpty() }
+            // The sorted list is out while the parser is still held: nothing classified yet.
+            val first = viewModel.uiState.value
+            assertEquals(8, first.videos.size)
+            assertTrue(first.isReady)
+            assertEquals(VideoCounts(), first.counts)
+            assertTrue(first.shows.isEmpty())
+
+            release.countDown()
+            idleUntil { viewModel.uiState.value.counts.all == 8 }
+            assertEquals(listOf("Lost"), viewModel.uiState.value.shows.map { it.name })
+            assertSame(first.videos, viewModel.uiState.value.videos)
+        } finally {
+            release.countDown()
+            sortThread.shutdownNow()
+        }
+    }
+
+    @Test
+    fun nothingIsPublishedUntilTheStoredFilterLoads() {
+        val prefs = SlowFilterPrefs()
+        val viewModel = loaded(prefs)
+        assertTrue(viewModel.uiState.value.isLoading)
+        assertTrue(viewModel.uiState.value.videos.isEmpty())
+        assertFalse(viewModel.uiState.value.isReady)
+
+        prefs.filter.value = VideoFilter.Movies
+        idleMain()
+        val state = viewModel.uiState.value
+        assertTrue(state.isReady)
+        assertEquals(VideoFilter.Movies, state.filter)
+        assertEquals(listOf("Arrival", "Inception"), state.videos.map { it.title })
+    }
+
+    /** A store whose filter has not answered yet; [filter] stays null until the test sets it. */
+    private class SlowFilterPrefs : SortPrefs by InMemorySortPrefs() {
+        val filter = MutableStateFlow<VideoFilter?>(null)
+        override val videoFilter = filter.filterNotNull()
+    }
+
+    private fun idleUntil(condition: () -> Boolean) {
+        val deadline = System.currentTimeMillis() + 10_000L
+        while (!condition()) {
+            check(System.currentTimeMillis() < deadline) { "timed out" }
+            idleMain()
+            Thread.sleep(5L)
+        }
     }
 
     private fun loaded(prefs: SortPrefs): VideoLibraryViewModel {
