@@ -1,5 +1,6 @@
 package com.shibi.musicplayer.ui
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -42,6 +43,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -81,7 +84,9 @@ import com.shibi.musicplayer.domain.Selection
 import com.shibi.musicplayer.domain.SortSpec
 import com.shibi.musicplayer.domain.Video
 import com.shibi.musicplayer.domain.VideoAccess
+import com.shibi.musicplayer.domain.VideoFilter
 import com.shibi.musicplayer.domain.VideoFormat
+import com.shibi.musicplayer.domain.VideoIdentity
 import com.shibi.musicplayer.domain.VideoListEntry
 import com.shibi.musicplayer.domain.VideoProgress
 import com.shibi.musicplayer.domain.VideoTimeline
@@ -131,9 +136,10 @@ internal fun VideosScreen(
 ) {
     val context = LocalContext.current
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    LaunchedEffect(state.videos, state.access) {
-        // Partial access lists only the picked videos: pruning then would drop the rest.
-        if (!state.hasError && !state.isLoading && state.access == VideoAccess.Full) {
+    LaunchedEffect(state.videos, state.access, state.filter) {
+        // Partial access lists only the picked videos, and a filter lists part of the library:
+        // pruning against either would drop history and saved positions of the rest.
+        if (!state.hasError && !state.isLoading && state.access == VideoAccess.Full && state.filter == VideoFilter.All) {
             onLibraryLoaded(state.videos)
         }
     }
@@ -169,6 +175,9 @@ internal fun VideosScreen(
         savedProgress = savedProgress,
         onTrashVideos = onTrashVideos,
         onSortChange = viewModel::setSort,
+        onFilterChange = viewModel::setFilter,
+        onOpenShow = viewModel::openShow,
+        onCloseShow = viewModel::closeShow,
         player = if (video.isActive && showInlinePlayer) {
             { maxHeight ->
                 InlineVideoPlayer(
@@ -211,6 +220,12 @@ internal fun VideosContent(
     fastScrollDragFraction: Float? = null,
     /** The user picked a new sort; [state] comes back sorted by it. */
     onSortChange: (SortSpec) -> Unit = {},
+    /** The user tapped a filter chip; [state] comes back with that filter's list. */
+    onFilterChange: (VideoFilter) -> Unit = {},
+    /** The user tapped a show; [state] comes back with its page open. */
+    onOpenShow: (String) -> Unit = {},
+    /** Back or the arrow on a show page; [state] comes back with the show list. */
+    onCloseShow: () -> Unit = {},
     /** Screenshots only: the sort menu starts open. */
     initialSortMenuOpen: Boolean = false,
     /** Whether rows get a ⋮ with Move to trash: the system trash needs Android 11. */
@@ -229,6 +244,18 @@ internal fun VideosContent(
     val pickSort: (SortSpec) -> Unit = { spec ->
         jumpToTopFor = spec
         onSortChange(spec)
+    }
+    // The same for a filter chip: the new filter's list starts at the top, not where the last one was.
+    var jumpToTopForFilter by remember { mutableStateOf<VideoFilter?>(null) }
+    if (jumpToTopForFilter != null && jumpToTopForFilter == state.filter) {
+        SideEffect {
+            listState.requestScrollToItem(0)
+            jumpToTopForFilter = null
+        }
+    }
+    val pickFilter: (VideoFilter) -> Unit = { filter ->
+        jumpToTopForFilter = filter
+        onFilterChange(filter)
     }
     var selection by remember { mutableStateOf(initialSelection) }
     val allIds = remember(state.videos) { state.videos.map { it.id } }
@@ -267,13 +294,80 @@ internal fun VideosContent(
     } else {
         null
     }
-    if (player != null) {
-        PlayingFrame(
-            player = player,
-            modifier = modifier,
+    // Under Tv, the page of the show the view model has open; null shows the show list.
+    val openShow = if (state.filter == VideoFilter.Tv) state.shows.firstOrNull { it.key == state.openShowKey } else null
+    // The page's scroll and season live here, keyed by the show, not in the page: compact
+    // layout composes the page in another place when the inline player opens or closes.
+    val showPageListState = rememberSaveable(openShow?.key, saver = LazyListState.Saver) { LazyListState() }
+    var chosenSeason by rememberSaveable(openShow?.key) {
+        mutableIntStateOf(openShow?.let { show -> (state.continueByShow[show.key] ?: show.episodes.first()).season } ?: 0)
+    }
+    val showHeader: (@Composable () -> Unit)? = if (openShow != null) {
+        { TvShowHeader(name = openShow.name, onBack = onCloseShow) }
+    } else {
+        null
+    }
+    // Hidden until the stored filter loaded, with nothing to filter, while selecting and on a show page.
+    val chips: (@Composable () -> Unit)? =
+        if (state.isReady && state.access != VideoAccess.Denied && !selection.active && openShow == null &&
+            !(state.counts.all == 0 && state.videos.isEmpty())
         ) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                selectionBar?.invoke()
+            {
+                VideoFilterChips(
+                    selected = state.filter,
+                    // Under All the counts arrive after the list: until they match it, labels only.
+                    counts = state.counts.takeIf { state.filter != VideoFilter.All || it.all == state.videos.size },
+                    onSelect = pickFilter,
+                )
+            }
+        } else {
+            null
+        }
+    // Tv draws its shows, or one show's page, and never the video list.
+    val body: @Composable (Modifier, Dp) -> Unit = { bodyModifier, topPadding ->
+        if (state.filter == VideoFilter.Tv) {
+            when {
+                openShow != null -> {
+                    // Composed only while the page is open, so it is newer than MusicApp's
+                    // two-pane close-video handler and Back closes the page first.
+                    AppBackHandler { onCloseShow() }
+                    TvShowPage(
+                        show = openShow,
+                        next = state.continueByShow[openShow.key],
+                        playingVideoId = playingVideoId,
+                        savedProgress = savedProgress,
+                        onVideoClick = onVideoClick,
+                        onTrashVideo = trashVideo,
+                        listState = showPageListState,
+                        chosenSeason = chosenSeason,
+                        onChooseSeason = { chosenSeason = it },
+                        contentBottomPadding = contentBottomPadding,
+                        topPadding = topPadding,
+                        modifier = bodyModifier,
+                    )
+                }
+                state.shows.isEmpty() && state.isLoading -> Box(modifier = bodyModifier, contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
+                state.shows.isEmpty() -> VideosMessage(
+                    icon = Icons.Rounded.VideoLibrary,
+                    message = stringResource(if (state.hasError) R.string.video_library_error else R.string.tv_shows_empty),
+                    modifier = bodyModifier.padding(bottom = contentBottomPadding),
+                )
+                else -> TvShowList(
+                    shows = state.shows,
+                    continueByShow = state.continueByShow,
+                    savedProgress = savedProgress,
+                    listState = listState,
+                    onOpenShow = onOpenShow,
+                    contentBottomPadding = contentBottomPadding,
+                    topPadding = topPadding,
+                    modifier = bodyModifier,
+                )
+            }
+        } else {
+            // Keyed by filter, so a switch swaps the list instead of animating rows between lists.
+            key(state.filter) {
                 VideoList(
                     state = state,
                     onVideoClick = onVideoClick,
@@ -284,12 +378,23 @@ internal fun VideosContent(
                     listState = listState,
                     selection = selection,
                     onSelectionChange = { selection = it },
-                    topPadding = 8.dp,
+                    topPadding = topPadding,
                     fastScrollDragFraction = fastScrollDragFraction,
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth(),
+                    modifier = bodyModifier,
                 )
+            }
+        }
+    }
+    if (player != null) {
+        PlayingFrame(
+            player = player,
+            modifier = modifier,
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                selectionBar?.invoke()
+                chips?.invoke()
+                showHeader?.invoke()
+                body(Modifier.weight(1f).fillMaxWidth(), 8.dp)
             }
         }
         return
@@ -300,17 +405,26 @@ internal fun VideosContent(
     // ends, which is the blank gap under the title. A list already loaded stays up through
     // that gap and through a refresh; only a first visit with nothing loaded stays blank.
     val showLibrary = state.videos.isNotEmpty() || (checked && !denied)
-    val count = pluralStringResource(R.plurals.video_count, state.videos.size, state.videos.size)
+    val countPlural = when (state.filter) {
+        VideoFilter.All -> R.plurals.video_count
+        VideoFilter.Movies -> R.plurals.movie_count
+        VideoFilter.Tv -> R.plurals.episode_count
+        VideoFilter.Personal -> R.plurals.clip_count
+    }
+    val count = pluralStringResource(countPlural, state.videos.size, state.videos.size)
+    val showCount = pluralStringResource(R.plurals.show_count, state.shows.size, state.shows.size)
     VideosFrame(
         subtitle = when {
             !showLibrary -> ""
+            state.filter == VideoFilter.Tv -> "$showCount · $count"
             state.videos.isEmpty() -> count
             else -> sortSubtitle(count, state.sort)
         },
         selectionBar = selectionBar,
+        titleRow = showHeader,
         modifier = modifier,
-        // Hidden with the title row while selecting, and with nothing to sort.
-        sortButton = if (state.videos.isNotEmpty()) {
+        // Hidden with the title row while selecting, with nothing to sort, and under Tv.
+        sortButton = if (state.videos.isNotEmpty() && state.filter != VideoFilter.Tv) {
             {
                 SortButton(
                     sort = state.sort,
@@ -325,6 +439,7 @@ internal fun VideosContent(
     ) {
         when {
             showLibrary -> {
+                chips?.invoke()
                 if (state.access == VideoAccess.Partial) {
                     VideoPartialBanner(
                         onAllowAll = onRequestAccess,
@@ -334,28 +449,14 @@ internal fun VideosContent(
                             .padding(start = 8.dp, end = 8.dp, bottom = 8.dp),
                     )
                 }
-                if (state.videos.isNotEmpty()) {
+                if (state.videos.isNotEmpty() && state.filter != VideoFilter.Tv) {
                     ListPlayAll(
                         // Videos never auto-advance (see MusicApp), so this opens the first in the sort.
                         onPlayAll = { onVideoClick(state.videos.first()) },
                         enabled = !selection.active,
                     )
                 }
-                VideoList(
-                    state = state,
-                    onVideoClick = onVideoClick,
-                    onTrashVideo = trashVideo,
-                    contentBottomPadding = contentBottomPadding,
-                    playingVideoId = playingVideoId,
-                    savedProgress = savedProgress,
-                    listState = listState,
-                    selection = selection,
-                    onSelectionChange = { selection = it },
-                    fastScrollDragFraction = fastScrollDragFraction,
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth(),
-                )
+                body(Modifier.weight(1f).fillMaxWidth(), 0.dp)
             }
             !checked -> Unit
             else -> Box(
@@ -393,6 +494,8 @@ private fun VideoList(
     fastScrollDragFraction: Float? = null,
 ) {
     val videos = state.videos
+    // Under All no identity is read, so its second update (the identities) recomposes no row.
+    val identities = if (state.filter == VideoFilter.All) emptyMap() else state.identities
     val reduceMotion = rememberReduceMotion()
     when {
         videos.isEmpty() && state.isLoading -> Box(modifier, contentAlignment = Alignment.Center) {
@@ -405,7 +508,13 @@ private fun VideoList(
         )
         videos.isEmpty() -> VideosMessage(
             icon = Icons.Rounded.VideoLibrary,
-            message = stringResource(R.string.videos_empty),
+            message = stringResource(
+                when (state.filter) {
+                    VideoFilter.Movies -> R.string.movies_empty
+                    VideoFilter.Personal -> R.string.personal_videos_empty
+                    else -> R.string.videos_empty
+                },
+            ),
             modifier = modifier.padding(bottom = contentBottomPadding),
         )
         else -> {
@@ -433,8 +542,21 @@ private fun VideoList(
                             is VideoListEntry.Row -> {
                                 val video = entry.video
                                 item(key = video.id, contentType = "video") {
+                                    val identity = identities[video.id]
                                     VideoRow(
                                         video = video,
+                                        // A movie's year leads its details and its folder is dropped; a
+                                        // clip's source stands in for the folder (Other keeps it).
+                                        leading = (identity as? VideoIdentity.Movie)?.year?.toString(),
+                                        subtitle = videoSubtitle(
+                                            video,
+                                            tail = when (identity) {
+                                                is VideoIdentity.Movie -> null
+                                                is VideoIdentity.Personal ->
+                                                    stringResource(sourceLabelRes(identity.source))
+                                                else -> video.folder
+                                            },
+                                        ),
                                         isPlaying = video.id == playingVideoId,
                                         saved = savedProgress[video.contentUri],
                                         onClick = {
@@ -520,6 +642,10 @@ internal fun VideoRow(
     selectionMode: Boolean = false,
     selected: Boolean = false,
     onLongClick: (() -> Unit)? = null,
+    title: String = video.title,
+    subtitle: String = videoSubtitle(video),
+    /** Shown before the length: a movie's year. */
+    leading: String? = null,
 ) {
     val chrome = LocalBackgroundChrome.current
     val fill = if (isPlaying || selected) chrome.playingRowFill else chrome.rowFill
@@ -529,8 +655,10 @@ internal fun VideoRow(
     // MediaStore often has no length for MKV/WMV; libVLC's from an earlier play is saved.
     val length = ResumePolicy.displayDuration(video.durationMs, saved) ?: 0L
     ListRow(
-        title = video.title,
-        detail = videoDetails(length, videoSubtitle(video)).ifEmpty { null },
+        title = title,
+        detail = listOfNotNull(leading, videoDetails(length, subtitle).ifEmpty { null })
+            .joinToString(" · ")
+            .ifEmpty { null },
         fill = fill,
         isPlaying = isPlaying,
         onClick = onClick,
@@ -568,12 +696,26 @@ internal fun VideoRow(
     )
 }
 
-/** `1.4 GB · 1080p · Camera`; values MediaStore could not read are left out, not dashed. */
-internal fun videoSubtitle(video: Video): String = listOfNotNull(
+/**
+ * `1.4 GB · 1080p · Camera`; values MediaStore could not read are left out, not dashed. [tail]
+ * ends the line: the folder, or what a filter shows instead (a clip's source), or null for none.
+ */
+internal fun videoSubtitle(video: Video, tail: String? = video.folder): String = listOfNotNull(
     VideoFormat.size(video.sizeBytes).takeIf { it != VideoFormat.MISSING },
     VideoFormat.resolution(video.width, video.height).takeIf { it != VideoFormat.MISSING },
-    video.folder,
+    tail,
 ).joinToString(" · ")
+
+@StringRes
+private fun sourceLabelRes(source: VideoIdentity.CameraSource): Int = when (source) {
+    VideoIdentity.CameraSource.DJI -> R.string.video_source_dji
+    VideoIdentity.CameraSource.GOPRO -> R.string.video_source_gopro
+    VideoIdentity.CameraSource.PIXEL -> R.string.video_source_pixel
+    VideoIdentity.CameraSource.PHONE_TIMESTAMP -> R.string.video_source_phone
+    VideoIdentity.CameraSource.SCREEN_RECORDING -> R.string.video_source_screen_recording
+    VideoIdentity.CameraSource.MESSAGING -> R.string.video_source_messaging
+    VideoIdentity.CameraSource.OTHER_CAMERA -> R.string.video_source_camera
+}
 
 /**
  * A 3dp bar in the row's bottom padding, 3dp under the thumbnail: the watched part in
@@ -603,7 +745,7 @@ private fun Modifier.watchedHairline(fraction: Float, color: Color, description:
 
 /** The row's frame, cropped square; the length is on the row's second line. */
 @Composable
-private fun VideoThumbnail(video: Video, modifier: Modifier = Modifier) {
+internal fun VideoThumbnail(video: Video, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     // The request carries its own fetcher factory, so build it once per video.
     val request = remember(video.contentUri) { videoThumbnailRequest(context, video.contentUri) }
@@ -660,6 +802,8 @@ private fun VideosFrame(
     subtitle: String,
     modifier: Modifier = Modifier,
     selectionBar: (@Composable () -> Unit)? = null,
+    /** Replaces the "Videos" title, subtitle and sort: a show page's back arrow and name. */
+    titleRow: (@Composable () -> Unit)? = null,
     sortButton: (@Composable () -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
@@ -672,6 +816,8 @@ private fun VideosFrame(
     ) {
         if (selectionBar != null) {
             Box(modifier = Modifier.statusBarsPadding()) { selectionBar() }
+        } else if (titleRow != null) {
+            Box(modifier = Modifier.statusBarsPadding().padding(top = 8.dp, bottom = 4.dp)) { titleRow() }
         } else {
             Row(
                 modifier = Modifier

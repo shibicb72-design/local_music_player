@@ -279,7 +279,7 @@ class MusicRepositoryTest {
     }
 
     /** A store that has not answered yet; [music] stays null until the test sets it. */
-    private class SlowSortPrefs : com.shibi.musicplayer.library.SortPrefs {
+    private class SlowSortPrefs : com.shibi.musicplayer.library.SortPrefs by com.shibi.musicplayer.library.InMemorySortPrefs() {
         val music = MutableStateFlow<SortSpec?>(null)
         override val videoSort = MutableStateFlow(LibrarySorts.VideoDefault)
         override val musicSort = music.filterNotNull()
