@@ -73,6 +73,25 @@ class ArtistNamesTest {
     }
 
     @Test
+    fun artistIsThePrimaryNameOrNull() {
+        assertEquals("X", ArtistNames.artist("X feat. Y", unknown))
+        assertEquals("A", ArtistNames.artist("A; B", unknown))
+        assertEquals("Simon & Garfunkel", ArtistNames.artist("Simon & Garfunkel", unknown))
+        assertNull(ArtistNames.artist("Unknown artist", unknown))
+        assertNull(ArtistNames.artist("UNKNOWN ARTIST", unknown))
+        assertNull(ArtistNames.artist("<unknown>", unknown))
+        assertNull(ArtistNames.artist(" ", unknown))
+        assertNull(ArtistNames.artist(null, unknown))
+    }
+
+    @Test
+    fun albumIsTheNameOrNullForPlaceholders() {
+        assertEquals("Abbey Road", ArtistNames.album("Abbey Road", unknown))
+        assertNull(ArtistNames.album("Unknown album", unknown))
+        assertNull(ArtistNames.album(null, unknown))
+    }
+
+    @Test
     fun libraryArtistPrefersAlbumArtistThenPrimaryTrackArtist() {
         assertEquals("Various Artists", ArtistNames.libraryArtist(track(artist = "X feat. Y", albumArtist = "Various Artists"), unknown))
         assertEquals("X", ArtistNames.libraryArtist(track(artist = "X feat. Y"), unknown))

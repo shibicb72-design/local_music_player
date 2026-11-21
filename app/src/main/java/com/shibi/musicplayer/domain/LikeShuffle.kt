@@ -44,6 +44,22 @@ object LikeShuffleTuning {
     const val RETURN_JITTER = 1.0
 
     /**
+     * Weight multiplier for a song whose artist played in the last [ARTIST_WINDOW] songs, so
+     * one artist's songs spread across the pass (the idea of Spotify's 2014 shuffle and Martin
+     * Fiedler's balanced shuffle). Applied once, however many of those songs were by the artist.
+     */
+    const val ARTIST_RECENT_FACTOR = 0.15
+
+    /**
+     * How many of the latest songs count as recent for [ARTIST_RECENT_FACTOR]. Shrunk to one
+     * less than the number of artists in the pool, so at least one artist is never recent.
+     */
+    const val ARTIST_WINDOW = 4
+
+    /** Weight multiplier for a song from the same album as the song that just played. */
+    const val SAME_ALBUM_FACTOR = 0.3
+
+    /**
      * Songs that must play between two plays of the same song:
      * `clamp(round(poolSize * GAP_POOL_FRACTION), MIN_GAP_FLOOR, MIN_GAP_CAP)`, then shrunk to at
      * most half the pool (and at least one) so small playlists keep variety and never repeat a
@@ -58,10 +74,33 @@ object LikeShuffleTuning {
 }
 
 /**
+ * What the shuffle spreads apart: [artist] is the primary artist's sort key, [album] the album's
+ * sort key under that artist. Null means unknown and never matches another song, except that
+ * untagged artists count as one group for recency and balance.
+ */
+data class SpreadKey(val artist: String?, val album: String?)
+
+private val NO_SPREAD = SpreadKey(null, null)
+
+/** The [SpreadKey] for a song's raw artist and album tags; blanks and placeholders become null. */
+fun spreadKey(artist: String?, album: String?, unknown: UnknownNames): SpreadKey {
+    val artistKey = ArtistNames.artist(artist, unknown)?.let(ArtistNames::sortKey)
+    val albumKey = ArtistNames.album(album, unknown)?.let { name ->
+        val albumName = ArtistNames.sortKey(name)
+        if (artistKey == null) albumName else artistKey + "\u0000" + albumName
+    }
+    return SpreadKey(artistKey, albumKey)
+}
+
+/**
  * The like-weighted shuffle picker. A pass plays every song in the pool at least once; unliked
  * songs play exactly once, liked songs may come back. Each draw is weighted ([LikeShuffleTuning]):
  * unplayed songs by liked or not, plus liked songs whose cooldown has run out. The last song
  * played is never drawn, so nothing repeats back to back.
+ *
+ * Artists are spread by [spreadOf]: the last song's artist is skipped while another artist's
+ * song is unplayed, recent artists and the last album weigh less, and artists with more songs
+ * left weigh more, so a pass does not end on one artist. With no keys the draws are unchanged.
  *
  * [draw] only proposes; [onPlayed] commits a song that actually started, so a queued proposal
  * can be redrawn when likes change. Pure Kotlin with an injected [random] for tests.
@@ -70,6 +109,7 @@ class LikeShufflePicker(
     pool: List<Long>,
     liked: Set<Long>,
     private val random: Random = Random.Default,
+    spreadOf: (Long) -> SpreadKey? = { null },
 ) {
     private val pool: List<Long> = pool.distinct()
     private val members: Set<Long> = this.pool.toSet()
@@ -77,6 +117,13 @@ class LikeShufflePicker(
     private val unplayed = LinkedHashSet(this.pool)
     private val eligibleAt = HashMap<Long, Int>()
     private var last: Long? = null
+    private val spread: Map<Long, SpreadKey> = this.pool.associateWith { spreadOf(it) ?: NO_SPREAD }
+    private val distinctArtists: Int = spread.values.mapNotNullTo(HashSet()) { it.artist }.size
+    private val artistWindow: Int =
+        minOf(LikeShuffleTuning.ARTIST_WINDOW, distinctArtists - 1).coerceAtLeast(0)
+
+    /** Keys of the last [artistWindow] songs played, oldest first. */
+    private val recent = ArrayDeque<SpreadKey>()
 
     /** Songs started so far in this pass. */
     var plays: Int = 0
@@ -101,23 +148,42 @@ class LikeShufflePicker(
         eligibleAt[id] = plays + 1 + minimumGap + random.nextInt(maxJitter + 1)
         plays++
         last = id
+        if (artistWindow > 0) {
+            recent.addLast(spread.getValue(id))
+            if (recent.size > artistWindow) recent.removeFirst()
+        }
     }
 
     /** The next song, or null when the pass is complete. Does not change the pass. */
     fun draw(): Long? {
         if (unplayed.isEmpty()) return null
-        val fresh = unplayed.toList()
-        val returning = returningSongs()
+        val lastKey = last?.let { spread.getValue(it) } ?: NO_SPREAD
+        val otherArtist = { id: Long -> lastKey.artist == null || spread.getValue(id).artist != lastKey.artist }
+        val fresh = unplayed.filter(otherArtist).ifEmpty { unplayed.toList() }
+        val returning = returningSongs().filter(otherArtist)
+        val recentArtists = recent.mapNotNullTo(HashSet()) { it.artist }
+        val untaggedRecent = recent.any { it.artist == null }
+        val left: Map<String?, Int> =
+            if (distinctArtists > 0) unplayed.groupingBy { spread.getValue(it).artist }.eachCount() else emptyMap()
+        val spreadWeight = { id: Long ->
+            val key = spread.getValue(id)
+            val isRecent = if (key.artist == null) untaggedRecent else key.artist in recentArtists
+            val recency = if (isRecent) LikeShuffleTuning.ARTIST_RECENT_FACTOR else 1.0
+            val album = if (key.album != null && key.album == lastKey.album) LikeShuffleTuning.SAME_ALBUM_FACTOR else 1.0
+            weight(id) * recency * album
+        }
+        // Balance: an artist with more songs left is drawn sooner. Returns do not get it.
+        val freshWeight = { id: Long -> spreadWeight(id) * (left[spread.getValue(id).artist] ?: 1) }
         if (returning.isNotEmpty()) {
-            val freshWeight = fresh.sumOf(::weight)
-            val returnWeight = returning.size * LikeShuffleTuning.LIKED_WEIGHT
+            val freshTotal = fresh.sumOf(freshWeight)
+            val returnWeight = returning.sumOf(spreadWeight)
             val share = minOf(
                 LikeShuffleTuning.MAX_RETURN_SHARE,
-                returnWeight / (freshWeight + returnWeight),
+                returnWeight / (freshTotal + returnWeight),
             )
             if (random.nextDouble() < share) return returning[random.nextInt(returning.size)]
         }
-        return weightedPick(fresh)
+        return weightedPick(fresh, freshWeight)
     }
 
     /** Liked, already played, past the cooldown, and not the song that just played. */
@@ -128,10 +194,11 @@ class LikeShufflePicker(
     private fun weight(id: Long): Double =
         if (id in liked) LikeShuffleTuning.LIKED_WEIGHT else LikeShuffleTuning.UNLIKED_WEIGHT
 
-    private fun weightedPick(ids: List<Long>): Long {
-        var roll = random.nextDouble() * ids.sumOf(::weight)
+    /** [ids] is never empty: [draw] falls back to every unplayed song. */
+    private fun weightedPick(ids: List<Long>, weightOf: (Long) -> Double): Long {
+        var roll = random.nextDouble() * ids.sumOf(weightOf)
         for (id in ids) {
-            roll -= weight(id)
+            roll -= weightOf(id)
             if (roll < 0.0) return id
         }
         return ids.last()
@@ -157,8 +224,9 @@ class LikeShuffleQueue(
     startId: Long,
     liked: Set<Long>,
     random: Random = Random.Default,
+    spreadOf: (Long) -> SpreadKey? = { null },
 ) {
-    private val picker = LikeShufflePicker(pool, liked, random)
+    private val picker = LikeShufflePicker(pool, liked, random, spreadOf)
     private val ids = mutableListOf(startId)
     private var furthest = 0
 

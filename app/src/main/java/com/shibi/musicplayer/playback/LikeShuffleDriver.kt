@@ -7,6 +7,8 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.ShuffleOrder
 import com.shibi.musicplayer.domain.LikeShuffleQueue
 import com.shibi.musicplayer.domain.QueueEdit
+import com.shibi.musicplayer.domain.UnknownNames
+import com.shibi.musicplayer.domain.spreadKey
 import kotlin.random.Random
 
 /**
@@ -22,6 +24,8 @@ import kotlin.random.Random
  */
 internal class LikeShuffleDriver(
     private val player: ExoPlayer,
+    /** The app's placeholders, so "Unknown artist" items are spread as untagged, not as one artist. */
+    private val unknown: UnknownNames,
     private val random: Random = Random.Default,
 ) : Player.Listener {
     private val handler = Handler(player.applicationLooper)
@@ -92,7 +96,11 @@ internal class LikeShuffleDriver(
         if (index !in 0 until count) return
         val items = List(count) { player.getMediaItemAt(it) }
         val ids = items.map { it.mediaId.toLongOrNull() ?: return }
-        val started = LikeShuffleQueue(ids, ids[index], liked, random)
+        val spread = ids.zip(items).associate { (id, item) ->
+            val metadata = item.mediaMetadata
+            id to spreadKey(metadata.artist?.toString(), metadata.albumTitle?.toString(), unknown)
+        }
+        val started = LikeShuffleQueue(ids, ids[index], liked, random, spread::get)
         pool = items
         itemsById = ids.zip(items).toMap()
         queue = started
