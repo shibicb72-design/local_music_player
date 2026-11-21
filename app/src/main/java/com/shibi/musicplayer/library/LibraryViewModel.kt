@@ -7,6 +7,7 @@ import com.shibi.musicplayer.R
 import com.shibi.musicplayer.domain.LibrarySorter
 import com.shibi.musicplayer.domain.LibrarySorts
 import com.shibi.musicplayer.domain.MusicCatalog
+import com.shibi.musicplayer.domain.MusicView
 import com.shibi.musicplayer.domain.SortSpec
 import com.shibi.musicplayer.domain.SortedList
 import com.shibi.musicplayer.domain.Track
@@ -23,6 +24,7 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.StateFlow
@@ -45,7 +47,16 @@ data class LibraryUiState(
     val songs: SortedList<Track>? = null,
     /** The library as artists and albums, from the same scan as [songs]; null until they load. */
     val catalog: MusicCatalog? = null,
+    /** The chosen chip: the stored one, then the user's picks. */
+    val view: MusicView = MusicView.Songs,
+    /** True once [songs] and the stored [view] have both loaded, so neither the chips nor the list jump. */
+    val isReady: Boolean = false,
+    /** The artist page shown in place of the Artists list; null shows the list. Not stored. */
+    val openArtistKey: OpenArtist? = null,
 )
+
+/** An open artist page. Wraps the key, because the unknown artist's key is null. */
+data class OpenArtist(val key: String?)
 
 class LibraryViewModel internal constructor(
     application: Application,
@@ -72,6 +83,12 @@ class LibraryViewModel internal constructor(
     /** The sort asked for: the stored one, then the user's picks. Null until the store answers. */
     private val requestedSort = MutableStateFlow<SortSpec?>(null)
 
+    /** Set once the store has answered with the view; nothing is published before. */
+    private val viewLoaded = MutableStateFlow(false)
+
+    /** The user picked a view while the store was still reading: the pick wins. */
+    private var viewPicked = false
+
     init {
         viewModelScope.launch {
             val stored = sortPrefs.musicSort.first()
@@ -79,7 +96,12 @@ class LibraryViewModel internal constructor(
             if (requestedSort.value == null) requestedSort.value = stored
         }
         viewModelScope.launch {
-            combine(scan.filterNotNull(), requestedSort.filterNotNull(), ::Pair)
+            val stored = sortPrefs.musicView.first()
+            if (!viewPicked) _uiState.update { it.copy(view = stored) }
+            viewLoaded.value = true
+        }
+        viewModelScope.launch {
+            combine(scan.filterNotNull(), requestedSort.filterNotNull(), viewLoaded.filter { it }) { loaded, sort, _ -> loaded to sort }
                 .collectLatest { (scan, sort) -> publish(scan, sort) }
         }
         viewModelScope.launch {
@@ -127,6 +149,28 @@ class LibraryViewModel internal constructor(
         }
     }
 
+    /** The user picked [view] from the chips: it shows, any open page closes, and the pick is stored. */
+    fun setView(view: MusicView) {
+        viewPicked = true
+        _uiState.update { it.copy(view = view, openArtistKey = null) }
+        viewModelScope.launch {
+            try {
+                sortPrefs.setMusicView(view)
+            } catch (_: IOException) {
+                // Kept for this session; the next start falls back to the stored view.
+            }
+        }
+    }
+
+    /** Opens the page of the artist with [key]; null is the unknown artist. */
+    fun openArtist(key: String?) {
+        _uiState.update { it.copy(openArtistKey = OpenArtist(key)) }
+    }
+
+    fun closePage() {
+        _uiState.update { it.copy(openArtistKey = null) }
+    }
+
     private suspend fun publish(scan: Scan, sort: SortSpec) {
         val app = getApplication<Application>()
         val unknown = UnknownNames(
@@ -147,7 +191,15 @@ class LibraryViewModel internal constructor(
             ensureActive()
             sorted to catalog.await()
         }
-        _uiState.update { it.copy(songs = sorted, catalog = catalog) }
+        _uiState.update { current ->
+            current.copy(
+                songs = sorted,
+                catalog = catalog,
+                isReady = true,
+                // A rescan without the open artist closes the page.
+                openArtistKey = current.openArtistKey?.takeIf { catalog.artistPage(it.key) != null },
+            )
+        }
     }
 
     /** One load's list and the catalog built from it. Compared by identity, so every load sorts again. */

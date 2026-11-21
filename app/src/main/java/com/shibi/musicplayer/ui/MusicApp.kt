@@ -936,6 +936,12 @@ private fun AppNavHost(
                 onTrackSelected = { tracks, trackId ->
                     onPlayQueue(tracks, trackId, ShuffleContext.ALL_SONGS)
                 },
+                onShuffle = { tracks ->
+                    LikeShufflePicker(tracks.map { it.id }, favoriteIds).draw()?.let { startId ->
+                        playerViewModel.shuffleNextQueue()
+                        onPlayQueue(tracks, startId, ShuffleContext.ALL_SONGS)
+                    }
+                },
                 onOpenPlayer = onOpenPlayer,
                 onTogglePlayPause = playerViewModel::togglePlayPause,
                 onAddToPlaylist = onAddToPlaylist,

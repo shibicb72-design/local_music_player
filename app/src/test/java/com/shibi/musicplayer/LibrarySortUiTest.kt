@@ -225,7 +225,7 @@ class LibrarySortUiTest {
         flingAndSettle { swipeDown(durationMillis = 300) }
         compose.onNodeWithTag(SongFastScrollerTag).assertIsDisplayed()
         dragSongsThumbTo(10f / 29f)
-        val listTop = compose.onNode(hasScrollAction()).fetchSemanticsNode().boundsInRoot.top
+        val listTop = verticalList().fetchSemanticsNode().boundsInRoot.top
         assertTrue("Mango 9 heads the list", top("Mango 9") - listTop < with(compose.density) { 72.dp.toPx() })
         assertEquals(HapticFeedbackConstants.SEGMENT_TICK, shadowOf(view).lastHapticFeedbackPerformed())
         compose.onNodeWithTag(SongFastScrollerTag).performTouchInput { up() }
@@ -253,7 +253,7 @@ class LibrarySortUiTest {
         )
 
         // M starts at entry 10 of 30: its dot is at 10/29 of the track (the list less the thumb).
-        val listHeight = compose.onNode(hasScrollAction()).fetchSemanticsNode().boundsInRoot.height
+        val listHeight = verticalList().fetchSemanticsNode().boundsInRoot.height
         val dotY = (listHeight - with(compose.density) { 56.dp.toPx() }) * 10f / 29f
         thumb.performTouchInput {
             down(center)
@@ -263,7 +263,7 @@ class LibrarySortUiTest {
         compose.mainClock.advanceTimeBy(100)
 
         // The bubble, by the thumb on the right (the rows' art tiles also show initials, on the left).
-        val list = compose.onNode(hasScrollAction()).fetchSemanticsNode().boundsInRoot
+        val list = verticalList().fetchSemanticsNode().boundsInRoot
         assertTrue(
             "the bubble names M",
             compose.onAllNodesWithText("M").fetchSemanticsNodes().any { it.boundsInRoot.left > list.center.x },
@@ -295,7 +295,7 @@ class LibrarySortUiTest {
         thumb.assertIsDisplayed()
 
         // The busy weeks start at songs 120 and 145 of 305: their dots are inside one snap radius.
-        val list = compose.onNode(hasScrollAction()).fetchSemanticsNode().boundsInRoot
+        val list = verticalList().fetchSemanticsNode().boundsInRoot
         val travel = list.height - with(compose.density) { 56.dp.toPx() }
         val stops = listOf(ScrollSection(120, 25), ScrollSection(145, 40))
         assertEquals(
@@ -413,15 +413,18 @@ class LibrarySortUiTest {
     private fun song(id: Long, title: String, artist: String = "Artist", dateAdded: Long? = null): Array<Any?> =
         arrayOf(id, title, artist, "Album", 180_000L, 0L, dateAdded, 4_000_000L)
 
+    /** The Videos filters and the Songs chips scroll sideways: the list is the vertical one. */
+    private fun verticalList() =
+        compose.onNode(hasScrollAction() and !SemanticsMatcher.keyIsDefined(SemanticsProperties.HorizontalScrollAxisRange))
+
     private fun scrollDown() {
-        // The Videos filter chips scroll sideways: the list is the vertical one.
-        repeat(2) { compose.onNode(hasScrollAction() and !SemanticsMatcher.keyIsDefined(SemanticsProperties.HorizontalScrollAxisRange)).performTouchInput { swipeUp() } }
+        repeat(2) { verticalList().performTouchInput { swipeUp() } }
         settle()
     }
 
     /** Drags the Songs thumb from where it rests to [fraction] of its track, and holds it there unless [lift]. */
     private fun dragSongsThumbTo(fraction: Float, lift: Boolean = false) {
-        val list = compose.onNode(hasScrollAction()).fetchSemanticsNode().boundsInRoot
+        val list = verticalList().fetchSemanticsNode().boundsInRoot
         val travel = list.height - with(compose.density) { 56.dp.toPx() }
         val thumb = compose.onNodeWithTag(SongFastScrollerTag)
         val start = (thumb.fetchSemanticsNode().boundsInRoot.top - list.top) / travel
@@ -436,7 +439,7 @@ class LibrarySortUiTest {
 
     /** A swipe on the list with the clock held, then 1.2 s for the fling: inside the thumb's 2 s. */
     private fun flingAndSettle(swipe: androidx.compose.ui.test.TouchInjectionScope.() -> Unit) {
-        compose.onNode(hasScrollAction()).performTouchInput(swipe)
+        verticalList().performTouchInput(swipe)
         repeat(24) { compose.mainClock.advanceTimeBy(50) }
         shadowOf(Looper.getMainLooper()).idle()
     }
