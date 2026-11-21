@@ -82,6 +82,11 @@ data class VideoLibraryUiState(
     val identities: Map<Long, VideoIdentity> = emptyMap(),
     /** The episode to continue, by [TvShow.key]; a show with nothing to continue is absent. */
     val continueByShow: Map<String, TvEpisode> = emptyMap(),
+    /**
+     * The show whose page is open, by [TvShow.key]; null shows the list. Not stored: it lives as
+     * long as this view model, so it survives a trip to fullscreen and back.
+     */
+    val openShowKey: String? = null,
 )
 
 /**
@@ -230,10 +235,11 @@ class VideoLibraryViewModel internal constructor(
     }
 
     /**
-     * Shows [filter]'s part of the library, and stores it. Only tests call this until the filter
-     * screens land: today's screen would draw Tv as an empty list.
+     * Shows [filter]'s part of the library, and stores it. The Videos screen's filter chips call
+     * it. An open show page closes.
      */
     fun setFilter(filter: VideoFilter) {
+        closeShow()
         requestedFilter.value = filter
         viewModelScope.launch {
             try {
@@ -242,6 +248,15 @@ class VideoLibraryViewModel internal constructor(
                 // Kept for this session; the next start falls back to the stored filter.
             }
         }
+    }
+
+    /** Opens the page of the show with [key] ([TvShow.key]) in place of the show list. */
+    fun openShow(key: String) {
+        _uiState.update { it.copy(openShowKey = key) }
+    }
+
+    fun closeShow() {
+        _uiState.update { it.copy(openShowKey = null) }
     }
 
     /**
@@ -299,6 +314,8 @@ class VideoLibraryViewModel internal constructor(
                     sort = list.spec,
                     runs = list.runs,
                     filter = filter,
+                    // A show page belongs to Tv: any other list closes it.
+                    openShowKey = next.openShowKey.takeIf { filter == VideoFilter.Tv },
                     isReady = true,
                     isLoading = false,
                     hasError = false,
@@ -310,6 +327,8 @@ class VideoLibraryViewModel internal constructor(
                     shows = library.shows,
                     identities = library.identities,
                     continueByShow = library.continueByShow,
+                    // A rescan without the open show closes its page.
+                    openShowKey = current.openShowKey?.takeIf { key -> library.shows.any { it.key == key } },
                 )
             }
             next

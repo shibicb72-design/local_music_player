@@ -1,6 +1,7 @@
 package com.shibi.musicplayer.domain
 
 import java.text.Collator
+import java.util.Locale
 
 /** Which part of the library the Videos screen shows. [key] is what the store keeps. */
 enum class VideoFilter(val key: String) {
@@ -163,4 +164,27 @@ fun continueEpisode(show: TvShow, progress: Map<String, VideoProgress>): TvEpiso
     return ordered.subList(index + 1, ordered.size).firstOrNull { next ->
         next.season > watched.season || (next.season == watched.season && next.episode > lastHeld)
     }
+}
+/** The episode numbers a file holds: `E03`, or `E10–E11` for a multi-episode file. */
+fun episodeNumbers(episode: TvEpisode): String =
+    "E%02d".format(Locale.ROOT, episode.episode) +
+        (episode.lastEpisode?.let { "–E%02d".format(Locale.ROOT, it) } ?: "")
+
+/** `S01E03`; a special reads `S00E01`, a multi-episode file `S02E10–E11`. */
+fun episodeCode(episode: TvEpisode): String = "S%02d".format(Locale.ROOT, episode.season) + episodeNumbers(episode)
+
+/** A show page row's title: `E03 · Pilot`, or `E03 · ` [untitled] when the file names none. */
+fun episodeLabel(episode: TvEpisode, untitled: String): String =
+    "${episodeNumbers(episode)} · ${episode.title ?: untitled}"
+
+/**
+ * Whole minutes left in [video] after [saved], rounded up; the length is the one the row shows
+ * ([ResumePolicy.displayDuration]). Null when the row shows no watched bar
+ * ([ResumePolicy.watchedFraction]): nothing saved, not started, finished, or no length.
+ */
+fun minutesLeft(video: Video, saved: VideoProgress?): Int? {
+    if (ResumePolicy.watchedFraction(saved, video.durationMs) == null) return null
+    val length = ResumePolicy.displayDuration(video.durationMs, saved) ?: return null
+    val left = (length - checkNotNull(saved).positionMs).coerceAtLeast(0L)
+    return ((left + 59_999L) / 60_000L).toInt()
 }

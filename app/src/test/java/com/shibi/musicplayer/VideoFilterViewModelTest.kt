@@ -241,6 +241,47 @@ class VideoFilterViewModelTest {
         override val videoFilter = filter.filterNotNull()
     }
 
+    // --- The open show page ---
+
+    @Test
+    fun openShowAndCloseShowSetTheOpenShow() {
+        val viewModel = loaded(InMemorySortPrefs())
+        viewModel.setFilter(VideoFilter.Tv)
+        idleMain()
+        assertEquals(null, viewModel.uiState.value.openShowKey)
+        viewModel.openShow("lost")
+        assertEquals("lost", viewModel.uiState.value.openShowKey)
+        viewModel.closeShow()
+        assertEquals(null, viewModel.uiState.value.openShowKey)
+    }
+
+    @Test
+    fun changingTheFilterClosesTheShow() {
+        val viewModel = loaded(InMemorySortPrefs())
+        viewModel.setFilter(VideoFilter.Tv)
+        idleMain()
+        viewModel.openShow("lost")
+        viewModel.setFilter(VideoFilter.Movies)
+        idleMain()
+        assertEquals(null, viewModel.uiState.value.openShowKey)
+        assertEquals(VideoFilter.Movies, viewModel.uiState.value.filter)
+    }
+
+    @Test
+    fun aRescanKeepsTheOpenShowWhileItIsThereAndClosesItOnceItIsGone() {
+        val viewModel = loaded(InMemorySortPrefs())
+        viewModel.setFilter(VideoFilter.Tv)
+        idleMain()
+        viewModel.openShow("lost")
+        viewModel.refresh()
+        idleMain()
+        assertEquals("lost", viewModel.uiState.value.openShowKey)
+        provider.rows.removeAll { (it[1] as String).startsWith("Lost", ignoreCase = true) }
+        viewModel.refresh()
+        idleUntil { viewModel.uiState.value.shows.isEmpty() }
+        assertEquals(null, viewModel.uiState.value.openShowKey)
+    }
+
     private fun idleUntil(condition: () -> Boolean) {
         val deadline = System.currentTimeMillis() + 10_000L
         while (!condition()) {

@@ -1,5 +1,8 @@
 package com.shibi.musicplayer
 
+import com.shibi.musicplayer.domain.VideoFilter
+import com.shibi.musicplayer.library.SortPrefs
+import kotlinx.coroutines.runBlocking
 import android.Manifest
 import android.app.Application
 import android.content.ComponentName
@@ -279,6 +282,30 @@ class TwoPaneNavigationTest {
         assertTrue(engines.single().released)
     }
 
+    /** The show page sits over the video: Back closes the page first, then the video. */
+    @Test
+    @WithMedia
+    fun backClosesTheShowPageBeforeTheVideoPane() {
+        try {
+            start()
+            select("Videos")
+            tapDescription("TV, 1 video")
+            tapText("Lost")
+            tapText("E01 · Episode 1")
+            assertPane(video = true)
+            pressBack()
+            assertPane(video = true)
+            assertShown("TV shows", "1 show · 1 episode")
+            pressBack()
+            assertPane(video = false)
+            assertTrue(engines.single().released)
+        } finally {
+            // The chip stored TV in the app's one DataStore, which outlives this test: put All
+            // back, or the next test's Videos screen opens on TV.
+            runBlocking { SortPrefs.get(ApplicationProvider.getApplicationContext()).setVideoFilter(VideoFilter.All) }
+        }
+    }
+
     /** No auto-next and no music: the pane keeps the ended video with "Play again", not Now Playing. */
     @Test
     @WithMedia
@@ -314,6 +341,22 @@ class TwoPaneNavigationTest {
     private fun tapText(text: String) {
         assertShown(text, text)
         compose.onAllNodesWithText(text)[0].performSemanticsAction(SemanticsActions.OnClick)
+        settle()
+    }
+
+    /**
+     * A filter chip says its count only once the files are classified, on the view model's own
+     * thread after the list shows; until then it reads just its label. Poll for the full phrase.
+     */
+    private fun tapDescription(description: String) {
+        val found = runCatching {
+            compose.waitUntil(timeoutMillis = 5_000) {
+                compose.mainClock.advanceTimeByFrame()
+                compose.onAllNodes(hasContentDescription(description)).fetchSemanticsNodes().isNotEmpty()
+            }
+        }.isSuccess
+        assertTrue("no node reads \"$description\"", found)
+        compose.onNode(hasContentDescription(description)).performSemanticsAction(SemanticsActions.OnClick)
         settle()
     }
 
@@ -481,6 +524,8 @@ class FakeMediaStore : ContentProvider() {
         ).apply {
             addRow(arrayOf<Any?>(1L, "Beach day.mp4", "Beach day", 754_000L, 1_412_000_000L, 1920, 1080, "video/mp4", 1_760_000_000L, "Camera"))
             addRow(arrayOf<Any?>(2L, "Recital.mp4", "Recital", 2_640_000L, 3_300_000_000L, 1920, 1080, "video/mp4", 1_760_000_000L, "Movies"))
+            // An episode, so the TV chip has a show; added earliest, so it lists last under All.
+            addRow(arrayOf<Any?>(3L, "Lost.S01E01.mp4", "Lost.S01E01", 2_400_000L, 1_000_000_000L, 1920, 1080, "video/mp4", 1_700_000_000L, "Lost"))
         }
         else -> MatrixCursor(arrayOf(MediaStore.MediaColumns._ID))
     }
