@@ -59,8 +59,8 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 /**
- * The Videos filter chips: All, Movies, Personal and the TV placeholder, compact and two-pane,
- * plus a 2x font size and the compact layout with the inline player open. The state is a fake
+ * The Videos filter chips over the All, Movies and Personal lists, compact and two-pane (the
+ * TV chip's screens are in TvShowsScreenshotTest), plus a 2x font size and the compact layout with the inline player open. The state is a fake
  * with `isReady = true` and real counts; no MediaStore.
  */
 @RunWith(AndroidJUnit4::class)
@@ -78,9 +78,6 @@ class VideoFilterScreenshotTest {
     fun personalCompact() = compact(personalState, "vf_personal_compact.png")
 
     @Test
-    fun tvCompact() = compact(tvState, "vf_tv_compact.png")
-
-    @Test
     @Config(qualifiers = "w900dp-h600dp-xhdpi")
     fun allTwoPane() = twoPane(allState, "vf_all_two_pane.png")
 
@@ -91,10 +88,6 @@ class VideoFilterScreenshotTest {
     @Test
     @Config(qualifiers = "w900dp-h600dp-xhdpi")
     fun personalTwoPane() = twoPane(personalState, "vf_personal_two_pane.png")
-
-    @Test
-    @Config(qualifiers = "w900dp-h600dp-xhdpi")
-    fun tvTwoPane() = twoPane(tvState, "vf_tv_two_pane.png")
 
     /** The chip row at twice the font size: it scrolls sideways and the chips grow, not clip. */
     @Test
@@ -273,6 +266,5 @@ class VideoFilterScreenshotTest {
         )
         val moviesState = state(VideoFilter.Movies, movieFiles, MovieSortDefault)
         val personalState = state(VideoFilter.Personal, clipFiles.map { it.first }, LibrarySorts.VideoDefault)
-        val tvState = state(VideoFilter.Tv, episodeFiles, LibrarySorts.VideoDefault, sorted = false)
     }
 }

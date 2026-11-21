@@ -1,6 +1,8 @@
 package com.shibi.musicplayer
 
-import androidx.compose.ui.test.onNodeWithContentDescription
+import com.shibi.musicplayer.domain.VideoFilter
+import com.shibi.musicplayer.library.SortPrefs
+import kotlinx.coroutines.runBlocking
 import android.Manifest
 import android.app.Application
 import android.content.ComponentName
@@ -284,22 +286,24 @@ class TwoPaneNavigationTest {
     @Test
     @WithMedia
     fun backClosesTheShowPageBeforeTheVideoPane() {
-        start()
-        select("Videos")
-        compose.onNodeWithContentDescription("TV, 1 video").performSemanticsAction(SemanticsActions.OnClick)
-        settle()
-        tapText("Lost")
-        tapText("E01 · Episode 1")
-        assertPane(video = true)
-        pressBack()
-        assertPane(video = true)
-        assertShown("TV shows", "1 show · 1 episode")
-        pressBack()
-        assertPane(video = false)
-        assertTrue(engines.single().released)
-        // The filter is stored: put All back for the next test.
-        compose.onNodeWithContentDescription("All, 3 videos").performSemanticsAction(SemanticsActions.OnClick)
-        settle()
+        try {
+            start()
+            select("Videos")
+            tapDescription("TV, 1 video")
+            tapText("Lost")
+            tapText("E01 · Episode 1")
+            assertPane(video = true)
+            pressBack()
+            assertPane(video = true)
+            assertShown("TV shows", "1 show · 1 episode")
+            pressBack()
+            assertPane(video = false)
+            assertTrue(engines.single().released)
+        } finally {
+            // The chip stored TV in the app's one DataStore, which outlives this test: put All
+            // back, or the next test's Videos screen opens on TV.
+            runBlocking { SortPrefs.get(ApplicationProvider.getApplicationContext()).setVideoFilter(VideoFilter.All) }
+        }
     }
 
     /** No auto-next and no music: the pane keeps the ended video with "Play again", not Now Playing. */
@@ -337,6 +341,22 @@ class TwoPaneNavigationTest {
     private fun tapText(text: String) {
         assertShown(text, text)
         compose.onAllNodesWithText(text)[0].performSemanticsAction(SemanticsActions.OnClick)
+        settle()
+    }
+
+    /**
+     * A filter chip says its count only once the files are classified, on the view model's own
+     * thread after the list shows; until then it reads just its label. Poll for the full phrase.
+     */
+    private fun tapDescription(description: String) {
+        val found = runCatching {
+            compose.waitUntil(timeoutMillis = 5_000) {
+                compose.mainClock.advanceTimeByFrame()
+                compose.onAllNodes(hasContentDescription(description)).fetchSemanticsNodes().isNotEmpty()
+            }
+        }.isSuccess
+        assertTrue("no node reads \"$description\"", found)
+        compose.onNode(hasContentDescription(description)).performSemanticsAction(SemanticsActions.OnClick)
         settle()
     }
 
