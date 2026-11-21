@@ -8,6 +8,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyGridState
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Text
 import androidx.compose.ui.Alignment
@@ -41,6 +45,7 @@ import com.shibi.musicplayer.domain.section
 import com.shibi.musicplayer.domain.stopFractions
 import com.shibi.musicplayer.domain.thinStops
 import com.shibi.musicplayer.domain.thumbFraction
+import com.shibi.musicplayer.ui.FastScroller
 import com.shibi.musicplayer.ui.VideoFastScroller
 import com.shibi.musicplayer.ui.VideoFastScrollerTag
 import com.shibi.musicplayer.ui.theme.MusicPlayerTheme
@@ -144,6 +149,58 @@ class VideoFastScrollerTest {
             moveBy(Offset(0f, (fraction - start) * travelPx))
         }
         compose.mainClock.advanceTimeBy(100)
+    }
+
+    @Test
+    fun aGridFollowsTheThumbOntoAStopAndShowsItsFirstCell() {
+        val entryCount = 200
+        val stops = listOf(ScrollSection(0, 101), ScrollSection(101, 99))
+        val gridHeight = 200.dp
+        val travelPx = with(compose.density) { (gridHeight - 56.dp).toPx() }
+        lateinit var gridState: LazyGridState
+        compose.mainClock.autoAdvance = false
+        compose.setContent {
+            MusicPlayerTheme {
+                gridState = rememberLazyGridState()
+                Box(Modifier.fillMaxSize()) {
+                    Box(Modifier.align(Alignment.TopStart).height(gridHeight).width(300.dp)) {
+                        LazyVerticalGrid(GridCells.Fixed(2), Modifier.fillMaxSize().testTag("grid_under_test"), state = gridState) {
+                            items(entryCount) { index ->
+                                Text("Cell $index", Modifier.height(56.dp).testTag("cell_$index"))
+                            }
+                        }
+                        FastScroller(
+                            gridState = gridState,
+                            entryCount = entryCount,
+                            sections = stops,
+                            stops = stops,
+                            label = { "" },
+                            description = "Scroll",
+                            modifier = Modifier.align(Alignment.CenterEnd),
+                        )
+                    }
+                }
+            }
+        }
+        compose.mainClock.advanceTimeBy(100)
+        compose.onNodeWithTag("grid_under_test").performTouchInput { swipeUp(durationMillis = 100) }
+        var guard = 0
+        while (guard++ < 400) {
+            compose.mainClock.advanceTimeBy(50)
+            if (!gridState.isScrollInProgress) break
+        }
+
+        val start = thumbFraction(gridState.firstVisibleItemIndex, gridState.layoutInfo.visibleItemsInfo.size, entryCount)
+        compose.onNodeWithTag(VideoFastScrollerTag).performTouchInput {
+            down(center)
+            moveBy(Offset(0f, viewConfiguration.touchSlop))
+            moveBy(Offset(0f, (stopFractions(stops, entryCount)[1] - start) * travelPx))
+        }
+        compose.mainClock.advanceTimeBy(100)
+
+        // Cell 101 opens the second row of its pair, so the grid starts at 100.
+        compose.onNodeWithTag("cell_101").assertIsDisplayed()
+        assertEquals(100, gridState.firstVisibleItemIndex)
     }
 
     @Test

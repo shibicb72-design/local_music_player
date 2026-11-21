@@ -1,9 +1,12 @@
 package com.shibi.musicplayer
 
+import com.shibi.musicplayer.domain.AlbumEntry
 import com.shibi.musicplayer.domain.AlbumSort
+import com.shibi.musicplayer.domain.ArtistNames
 import com.shibi.musicplayer.domain.MusicCatalog
 import com.shibi.musicplayer.domain.MusicView
 import com.shibi.musicplayer.domain.SortGroup
+import com.shibi.musicplayer.domain.SortLetters
 import com.shibi.musicplayer.domain.SortRun
 import com.shibi.musicplayer.domain.Track
 import com.shibi.musicplayer.domain.UnknownNames
@@ -322,6 +325,65 @@ class MusicCatalogTest {
     fun albumsAreNotSortedPerCall() {
         val catalog = catalog()
         assertSame(catalog.albums(AlbumSort.Artist), catalog.albums(AlbumSort.Artist))
+    }
+
+    @Test
+    fun theTitleOrderGroupsByLetterWithOneRunPerLetter() {
+        val titles = listOf("Zoo", "Ænima", "Aesop", "Abbey Road", "1989", "...And Justice")
+        val catalog = catalog(titles.map { track("$it song", "Band", it, "Band") })
+        // Leading punctuation is skipped, so "...And Justice" files under A; Æ is its own letter after A.
+        assertEquals(
+            listOf("1989", "...And Justice", "Abbey Road", "Aesop", "Ænima", "Zoo"),
+            catalog.albums(AlbumSort.Title).map { it.title },
+        )
+        assertEquals(
+            listOf(
+                SortRun(SortGroup.Letter("#"), 0, 1),
+                SortRun(SortGroup.Letter("A"), 1, 3),
+                SortRun(SortGroup.Letter("Æ"), 4, 1),
+                SortRun(SortGroup.Letter("Z"), 5, 1),
+            ),
+            catalog.albumRuns(AlbumSort.Title),
+        )
+    }
+
+    @Test
+    fun theAlbumRunsMatchTheListOrder() {
+        val extra = listOf(
+            track("J", "Metallica", "...And Justice", "Metallica"),
+            track("Æ", "Tool", "Ænima", "Tool"),
+            track("Ø", "Ølafur", "Arc", "Ølafur"),
+            track("Real", "Unknown artist", "Real LP"),
+        )
+        val catalog = catalog(library() + extra)
+        val letterOf = mapOf<AlbumSort, (AlbumEntry) -> String?>(
+            AlbumSort.Title to { SortLetters.of(ArtistNames.sortKey(it.title)) },
+            AlbumSort.Artist to { it.artistKey?.let(SortLetters::of) },
+        )
+        letterOf.forEach { (sort, letter) ->
+            val albums = catalog.albums(sort)
+            val runs = catalog.albumRuns(sort)
+            assertEquals(sort.name, albums.indices.toList(), runs.flatMap { it.start until it.start + it.count })
+            assertEquals(sort.name, runs.size, runs.map { it.group }.toSet().size)
+            runs.forEach { run ->
+                albums.subList(run.start, run.start + run.count).forEach {
+                    assertEquals("${sort.name} ${it.title}", run.group, SortGroup.Letter(letter(it)))
+                }
+            }
+        }
+    }
+
+    @Test
+    fun theNoArtistRunIsLastUnderArtist() {
+        val catalog = catalog(library() + track("Real", "Unknown artist", "Real LP"))
+        val last = catalog.albumRuns(AlbumSort.Artist).last()
+        assertEquals(SortGroup.Letter(null), last.group)
+        assertEquals(listOf("Real LP"), catalog.albums(AlbumSort.Artist).drop(last.start).map { it.title })
+    }
+
+    @Test
+    fun newestFirstHasNoRuns() {
+        assertTrue(catalog().albumRuns(AlbumSort.YearNewest).isEmpty())
     }
 
     @Test

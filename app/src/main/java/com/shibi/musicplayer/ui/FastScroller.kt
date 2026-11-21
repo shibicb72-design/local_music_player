@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.systemGestureExclusion
 import androidx.compose.material3.MaterialTheme
@@ -116,9 +117,76 @@ internal fun FastScroller(
     initialDragFraction: Float? = null,
     thin: Boolean = true,
 ) {
+    val target = remember(listState) { ListScrollTarget(listState) }
+    TargetFastScroller(target, entryCount, sections, stops, label, description, modifier, ticks, resetKey, tag, initialDragFraction, thin)
+}
+
+/** [FastScroller] over a grid: indices are cells, and a jump brings the cell's row to the top. */
+@Composable
+internal fun FastScroller(
+    gridState: LazyGridState,
+    entryCount: Int,
+    sections: List<ScrollSection>,
+    stops: List<ScrollSection>,
+    label: (sectionIndex: Int?) -> String,
+    description: String,
+    modifier: Modifier = Modifier,
+    ticks: List<FastScrollTick> = emptyList(),
+    resetKey: Any? = null,
+    tag: String = VideoFastScrollerTag,
+    initialDragFraction: Float? = null,
+    thin: Boolean = true,
+) {
+    val target = remember(gridState) { GridScrollTarget(gridState) }
+    TargetFastScroller(target, entryCount, sections, stops, label, description, modifier, ticks, resetKey, tag, initialDragFraction, thin)
+}
+
+/** What the scroller reads from and drives in a lazy list or grid. Every getter reads the live state. */
+private interface ScrollTarget {
+    val isScrollInProgress: Boolean
+    val canScrollForward: Boolean
+    val canScrollBackward: Boolean
+    val firstVisibleItemIndex: Int
+    val visibleItemCount: Int
+    suspend fun scrollToItem(index: Int)
+}
+
+private class ListScrollTarget(private val state: LazyListState) : ScrollTarget {
+    override val isScrollInProgress get() = state.isScrollInProgress
+    override val canScrollForward get() = state.canScrollForward
+    override val canScrollBackward get() = state.canScrollBackward
+    override val firstVisibleItemIndex get() = state.firstVisibleItemIndex
+    override val visibleItemCount get() = state.layoutInfo.visibleItemsInfo.size
+    override suspend fun scrollToItem(index: Int) = state.scrollToItem(index)
+}
+
+private class GridScrollTarget(private val state: LazyGridState) : ScrollTarget {
+    override val isScrollInProgress get() = state.isScrollInProgress
+    override val canScrollForward get() = state.canScrollForward
+    override val canScrollBackward get() = state.canScrollBackward
+    override val firstVisibleItemIndex get() = state.firstVisibleItemIndex
+    override val visibleItemCount get() = state.layoutInfo.visibleItemsInfo.size
+    override suspend fun scrollToItem(index: Int) = state.scrollToItem(index)
+}
+
+@Composable
+private fun TargetFastScroller(
+    scrollTarget: ScrollTarget,
+    entryCount: Int,
+    sections: List<ScrollSection>,
+    stops: List<ScrollSection>,
+    label: (sectionIndex: Int?) -> String,
+    description: String,
+    modifier: Modifier,
+    ticks: List<FastScrollTick>,
+    resetKey: Any?,
+    tag: String,
+    initialDragFraction: Float?,
+    thin: Boolean,
+) {
     key(resetKey) {
         FastScrollerBody(
-            listState = listState,
+            scrollTarget = scrollTarget,
             entryCount = entryCount,
             sections = sections,
             stops = stops,
@@ -135,7 +203,7 @@ internal fun FastScroller(
 
 @Composable
 private fun FastScrollerBody(
-    listState: LazyListState,
+    scrollTarget: ScrollTarget,
     entryCount: Int,
     sections: List<ScrollSection>,
     stops: List<ScrollSection>,
@@ -162,7 +230,7 @@ private fun FastScrollerBody(
     // The list/text detent is independent of the raw finger position used by the halo.
     var thumb by remember { mutableStateOf(MagneticSnap(initialDragFraction ?: 0f)) }
     var fingerFraction by remember { mutableFloatStateOf(initialDragFraction ?: 0f) }
-    val active = listState.isScrollInProgress || dragging
+    val active = scrollTarget.isScrollInProgress || dragging
     val dragPresence = animateFloatAsState(
         targetValue = if (dragging) 1f else 0f,
         animationSpec = if (reduceMotion) snap() else tween(durationMillis = 220),
@@ -189,7 +257,7 @@ private fun FastScrollerBody(
         label = "fastScrollAlpha",
     )
     val present by remember { derivedStateOf { shown || alpha.value > 0f } }
-    val canScroll = listState.canScrollForward || listState.canScrollBackward
+    val canScroll = scrollTarget.canScrollForward || scrollTarget.canScrollBackward
     if (!present || !(canScroll || initialDragFraction != null)) return
 
     val density = LocalDensity.current
@@ -216,8 +284,8 @@ private fun FastScrollerBody(
         }
 
         fun listFraction(): Float = thumbFraction(
-            listState.firstVisibleItemIndex,
-            listState.layoutInfo.visibleItemsInfo.size,
+            scrollTarget.firstVisibleItemIndex,
+            scrollTarget.visibleItemCount,
             currentEntryCount,
         )
 
@@ -337,7 +405,7 @@ private fun FastScrollerBody(
                         val target = dragTargetIndex(snapped, currentStops, currentEntryCount)
                         if (target != lastTarget) {
                             lastTarget = target
-                            scope.launch { listState.scrollToItem(target) }
+                            scope.launch { scrollTarget.scrollToItem(target) }
                         }
                     }
                 },
