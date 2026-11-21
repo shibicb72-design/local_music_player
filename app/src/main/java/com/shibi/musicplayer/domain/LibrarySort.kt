@@ -216,14 +216,18 @@ object LibrarySorter {
                 SortField.Artist -> letters.key(
                     track,
                     track.id,
-                    TrackDisplay.artist(track.artist)?.takeUnless { it.equals(unknown.artist, ignoreCase = true) },
+                    ArtistNames.libraryArtist(track, unknown)?.let(ArtistNames::sortKey),
                     title,
+                    secondText = ArtistNames.album(track.album, unknown)?.let(ArtistNames::sortKey),
+                    discAndTrack = track,
                 )
                 SortField.Album -> letters.key(
                     track,
                     track.id,
-                    TrackDisplay.album(track.album)?.takeUnless { it.equals(unknown.album, ignoreCase = true) },
+                    ArtistNames.album(track.album, unknown)?.let(ArtistNames::sortKey),
                     title,
+                    secondText = ArtistNames.libraryArtist(track, unknown)?.let(ArtistNames::sortKey),
+                    discAndTrack = track,
                 )
                 SortField.Size -> bandKey(track, track.id, track.sizeBytes?.takeIf { it > 0L }, SortBands.MusicSize, sizes = true)
                 SortField.Length -> bandKey(track, track.id, track.durationMs.takeIf { it > 0L }, SortBands.MusicLength, sizes = false)
@@ -257,7 +261,7 @@ object LibrarySorter {
         // The unknown group (often the biggest, "Unknown artist") reads by title like a known one.
         val ordered = known.sortedWith { a, b -> sign * compareKnown(a, b) } +
             unknown.sortedWith { a, b ->
-                sign * (compareCollation(a.secondText, b.secondText).takeIf { it != 0 } ?: a.id.compareTo(b.id))
+                sign * (compareCollation(a.titleText, b.titleText).takeIf { it != 0 } ?: a.id.compareTo(b.id))
             }
         return SortedList(spec, ordered.map { it.item }, runs(ordered.map { it.group }))
     }
@@ -275,6 +279,10 @@ object LibrarySorter {
         result = compareCollation(a.secondText, b.secondText)
         if (result != 0) return result
         result = a.number.compareTo(b.number)
+        if (result != 0) return result
+        result = a.trackNumber.compareTo(b.trackNumber)
+        if (result != 0) return result
+        result = compareCollation(a.titleText, b.titleText)
         if (result != 0) return result
         return a.id.compareTo(b.id)
     }
@@ -303,9 +311,25 @@ object LibrarySorter {
     private class LetterKeys(private val collator: Collator) {
         private val letterKeys = HashMap<String, CollationKey>()
 
-        fun <T> key(item: T, id: Long, text: String?, secondText: String?): Keyed<T> {
+        /**
+         * [text] is the group's name (already a sort key for artists and albums); [title] reads
+         * last, and by itself in the unknown group; [secondText] is the next name down (the album
+         * under an artist). [discAndTrack] adds the disc (a missing one is 1) and the track
+         * (a missing one comes after numbered tracks) between them.
+         */
+        fun <T> key(
+            item: T,
+            id: Long,
+            text: String?,
+            title: String?,
+            secondText: String? = null,
+            discAndTrack: Track? = null,
+        ): Keyed<T> {
+            val titleText = title?.let(collator::getCollationKey)
+            val disc = (discAndTrack?.discNumber ?: 1).toLong()
+            val track = discAndTrack?.trackNumber?.toLong() ?: Long.MAX_VALUE
             if (text == null) {
-                return Keyed(item, id, SortGroup.Letter(null), 0L, secondText = secondText?.let(collator::getCollationKey))
+                return Keyed(item, id, SortGroup.Letter(null), 0L, titleText = titleText)
             }
             val letter = SortLetters.of(text)
             val hash = letter == SortLetters.HASH
@@ -318,6 +342,9 @@ object LibrarySorter {
                 groupText = if (hash) null else letterKeys.getOrPut(letter) { collator.getCollationKey(letter) },
                 text = collator.getCollationKey(text),
                 secondText = secondText?.let(collator::getCollationKey),
+                number = disc,
+                trackNumber = track,
+                titleText = titleText,
             )
         }
     }
@@ -332,7 +359,10 @@ object LibrarySorter {
         val groupText: CollationKey? = null,
         val text: CollationKey? = null,
         val secondText: CollationKey? = null,
-        /** The time, size or length. */
+        /** The time, size or length; for a song, its disc. */
         val number: Long = 0L,
+        /** A song's track number; 0 for items without one. */
+        val trackNumber: Long = 0L,
+        val titleText: CollationKey? = null,
     )
 }
