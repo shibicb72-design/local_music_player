@@ -81,6 +81,7 @@ import com.shibi.musicplayer.domain.Selection
 import com.shibi.musicplayer.domain.SortSpec
 import com.shibi.musicplayer.domain.Video
 import com.shibi.musicplayer.domain.VideoAccess
+import com.shibi.musicplayer.domain.VideoFilter
 import com.shibi.musicplayer.domain.VideoFormat
 import com.shibi.musicplayer.domain.VideoListEntry
 import com.shibi.musicplayer.domain.VideoProgress
@@ -131,9 +132,10 @@ internal fun VideosScreen(
 ) {
     val context = LocalContext.current
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    LaunchedEffect(state.videos, state.access) {
-        // Partial access lists only the picked videos: pruning then would drop the rest.
-        if (!state.hasError && !state.isLoading && state.access == VideoAccess.Full) {
+    LaunchedEffect(state.videos, state.access, state.filter) {
+        // Partial access lists only the picked videos, and a filter lists part of the library:
+        // pruning against either would drop history and saved positions of the rest.
+        if (!state.hasError && !state.isLoading && state.access == VideoAccess.Full && state.filter == VideoFilter.All) {
             onLibraryLoaded(state.videos)
         }
     }
