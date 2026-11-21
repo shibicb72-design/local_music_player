@@ -23,15 +23,15 @@ sealed interface VideoIdentity {
     data class Personal(val source: CameraSource) : VideoIdentity
 
     data class Other(val title: String) : VideoIdentity
-}
 
-/** Which kind of device or app named a [VideoIdentity.Personal] clip. */
-enum class CameraSource {
-    DJI,
-    GOPRO,
-    PIXEL,
-    PHONE_TIMESTAMP,
-    SCREEN_RECORDING,
-    MESSAGING,
-    OTHER_CAMERA,
+    /** Which kind of device or app named a [Personal] clip. */
+    enum class CameraSource {
+        DJI,
+        GOPRO,
+        PIXEL,
+        PHONE_TIMESTAMP,
+        SCREEN_RECORDING,
+        MESSAGING,
+        OTHER_CAMERA,
+    }
 }
