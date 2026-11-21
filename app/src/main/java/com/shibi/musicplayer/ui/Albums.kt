@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -102,7 +103,7 @@ internal fun AlbumGrid(
 }
 
 /** Rounded to the nearest minute, and never under one: "12 min". */
-private fun albumMinutes(durationMs: Long): Int = maxOf(1L, (durationMs + 30_000L) / 60_000L).toInt()
+internal fun albumMinutes(durationMs: Long): Int = maxOf(1L, (durationMs + 30_000L) / 60_000L).toInt()
 
 /**
  * An album's page under its [TvShowHeader]: the artist and year, the songs and minutes, Play all
@@ -195,15 +196,22 @@ private fun DiscHeading(text: String) {
     )
 }
 
-/** A track's number in a box the size of the art, in the row's own muted colour; a dash when it has none. */
+/**
+ * A track's number in a box the size of the art, in the row's own muted colour; a dash when it
+ * has none. Three digits take a smaller style, and the text keeps its own width, so "128" is
+ * never clipped, even at 2x font.
+ */
 @Composable
 private fun TrackNumber(number: Int?, tint: Color) {
+    val text = number?.toString() ?: stringResource(R.string.track_number_missing)
     Box(modifier = Modifier.size(ListThumbnailSize), contentAlignment = Alignment.Center) {
         Text(
-            text = number?.toString() ?: stringResource(R.string.track_number_missing),
-            style = MaterialTheme.typography.titleMedium,
+            text = text,
+            style = if (text.length >= 3) MaterialTheme.typography.labelSmall else MaterialTheme.typography.titleMedium,
             color = tint,
             maxLines = 1,
+            softWrap = false,
+            modifier = Modifier.wrapContentWidth(unbounded = true),
         )
     }
 }

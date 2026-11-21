@@ -7,7 +7,12 @@ import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.hasScrollToIndexAction
+import androidx.compose.ui.test.performScrollToIndex
+import com.shibi.musicplayer.ui.albumMinutes
+import org.junit.Assert.assertFalse
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasContentDescription
@@ -216,6 +221,60 @@ class AlbumsUiTest {
         pressBack()
         assertEquals(1, outerBacks)
     }
+
+    @Test
+    @Config(qualifiers = "w411dp-h891dp-xxhdpi")
+    fun onAPhoneTheGridKeepsItsPlaceAcrossAPageASortJumpsToTheTopAndEachPageStartsAtItsTop() {
+        // Eight more one-song albums (14 in all), so the grid scrolls; Clarity gets 15 more songs, so its page does.
+        for (n in 1..8) {
+            val band = "Band %02d".format(n)
+            provider.rows += song(100L + n, "Filler $n", band, "Zz Single %02d".format(n), band, 1, 2000 + n)
+        }
+        for (n in 3..17) provider.rows += song(200L + n, "Clarity Extra $n", "Zedd", "Clarity", "Zedd", n, 2012)
+        val lastCard = "Zz Single 08, Band 08 · 2008"
+        showAlbums()
+        assertFalse(shown(compose.onNodeWithContentDescription(lastCard)))
+        compose.onNode(hasScrollToIndexAction()).performScrollToIndex(13)
+        settle()
+        compose.onNodeWithContentDescription(lastCard).assertIsDisplayed()
+
+        // An album page and Back: the grid is where it was.
+        compose.onNodeWithContentDescription(lastCard).performClick()
+        settle()
+        compose.onNodeWithText("Band 08 · 2008").assertIsDisplayed()
+        pressBack()
+        compose.onNodeWithContentDescription(lastCard).assertIsDisplayed()
+
+        // A new sort starts at the top of its order: Clarity (2012) is the newest.
+        pickSort(SortSpec(SortField.Date, false))
+        compose.onNodeWithContentDescription(Clarity).assertIsDisplayed()
+
+        // Each album page starts at its own top, even after another was scrolled.
+        compose.onNodeWithContentDescription(Clarity).performClick()
+        settle()
+        compose.onNodeWithText("Zedd · 2012").assertIsDisplayed()
+        compose.onNode(hasScrollToIndexAction()).performScrollToIndex(17)
+        settle()
+        assertFalse(shown(compose.onNodeWithText("Zedd · 2012")))
+        pressBack()
+        compose.onNodeWithContentDescription(lastCard).performClick()
+        settle()
+        compose.onNodeWithText("Band 08 · 2008").assertIsDisplayed()
+        pressBack()
+        compose.onNodeWithContentDescription(Clarity).performClick()
+        settle()
+        compose.onNodeWithText("Zedd · 2012").assertIsDisplayed()
+    }
+
+    @Test
+    fun anAlbumsMinutesRoundToTheNearestAndAreNeverUnderOne() {
+        assertEquals(1, albumMinutes(89_000L))
+        assertEquals(2, albumMinutes(90_000L))
+        assertEquals(1, albumMinutes(0L))
+        assertEquals(60, albumMinutes((59 * 60 + 31) * 1_000L))
+    }
+
+    private fun shown(node: SemanticsNodeInteraction): Boolean = runCatching { node.assertIsDisplayed() }.isSuccess
 
     private fun cardsOf(sort: AlbumSort): List<String> =
         viewModel.uiState.value.catalog!!.albums(sort).map { album ->

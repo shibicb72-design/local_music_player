@@ -372,6 +372,15 @@ fun LibraryContent(
     val albumPageListState = rememberSaveable(openAlbum, saver = LazyListState.Saver) { LazyListState() }
     // Outside the view's key, so Back from an album page finds the grid where it was.
     val albumGridState = rememberLazyGridState()
+    // Set when the user picks an album sort: the grid goes to the top once it shows that sort.
+    var jumpToTopForAlbumSort by remember { mutableStateOf<AlbumSort?>(null) }
+    if (jumpToTopForAlbumSort != null && jumpToTopForAlbumSort == albumSort) {
+        SideEffect {
+            // Before the new order's first layout, so the grid never shows the old position.
+            albumGridState.requestScrollToItem(0)
+            jumpToTopForAlbumSort = null
+        }
+    }
     var selection by remember { mutableStateOf(initialSelection) }
     val allIds = remember(tracks) { tracks.map { it.id } }
     LaunchedEffect(allIds) { selection = selection.retain(allIds.toSet()) }
@@ -496,7 +505,7 @@ fun LibraryContent(
                         AlbumSortButton(
                             sort = albumSort,
                             onSortChange = { picked ->
-                                albumGridState.requestScrollToItem(0)
+                                jumpToTopForAlbumSort = picked
                                 onAlbumSortChange(picked)
                             },
                         )
