@@ -54,6 +54,21 @@
     <string name="nav_videos">Videos</string>
     <string name="videos_title">Videos</string>
     <string name="videos_empty">No videos found on this device.</string>
+    <string name="movies_empty">No movies found</string>
+    <string name="personal_videos_empty">No personal videos found</string>
+    <string name="tv_coming_soon">TV shows are coming in the next update.</string>
+    <string name="video_filters_label">Video filters</string>
+    <string name="video_filter_all">All</string>
+    <string name="video_filter_movies">Movies</string>
+    <string name="video_filter_tv">TV</string>
+    <string name="video_filter_personal">Personal</string>
+    <string name="video_source_dji">DJI</string>
+    <string name="video_source_gopro">GoPro</string>
+    <string name="video_source_pixel">Pixel</string>
+    <string name="video_source_phone">Phone</string>
+    <string name="video_source_screen_recording">Screen recording</string>
+    <string name="video_source_messaging">Messaging</string>
+    <string name="video_source_camera">Camera</string>
     <string name="video_date_unknown">Unknown date</string>
     <string name="video_fast_scroll">Scroll by week</string>
     <string name="video_week_of">Week of %1$s</string>
@@ -328,6 +343,22 @@
     <plurals name="video_count">
         <item quantity="one">%d video</item>
         <item quantity="other">%d videos</item>
+    </plurals>
+    <plurals name="movie_count">
+        <item quantity="one">%d movie</item>
+        <item quantity="other">%d movies</item>
+    </plurals>
+    <plurals name="clip_count">
+        <item quantity="one">%d clip</item>
+        <item quantity="other">%d clips</item>
+    </plurals>
+    <plurals name="episode_count">
+        <item quantity="one">%d episode</item>
+        <item quantity="other">%d episodes</item>
+    </plurals>
+    <plurals name="video_filter_description">
+        <item quantity="one">%1$s, %2$d video</item>
+        <item quantity="other">%1$s, %2$d videos</item>
     </plurals>
     <plurals name="error_log_count">
         <item quantity="one">%d error, newest first</item>

@@ -230,8 +230,8 @@ class VideoLibraryViewModel internal constructor(
     }
 
     /**
-     * Shows [filter]'s part of the library, and stores it. Only tests call this until the filter
-     * screens land: today's screen would draw Tv as an empty list.
+     * Shows [filter]'s part of the library, and stores it. The Videos screen's filter chips call
+     * it; Tv shows a placeholder until its screens land.
      */
     fun setFilter(filter: VideoFilter) {
         requestedFilter.value = filter
