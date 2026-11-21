@@ -10,9 +10,16 @@ object ArtistNames {
 
     private val bracketed = Regex("""[(\[]\s*(?:feat\.?|ft\.?|featuring)\s+([^)\]]+?)\s*[)\]]""", RegexOption.IGNORE_CASE)
     private val plain = Regex("""\s+(?:feat\.?|ft\.?|featuring)\s+(.+)$""", RegexOption.IGNORE_CASE)
-    private val leadingNumber = Regex("""^\d{1,3}(?:-\d{1,3})?(?:\s*[.\-]\s*|\s+)""")
+    /** The forms a leading track number takes, tried in order: disc-track, "7.", "7 - ", "07 ". */
+    private val leadingNumbers = listOf(
+        Regex("""^\d-\d{1,3}\s+"""),
+        Regex("""^\d{1,3}\s*[.)]\s*"""),
+        Regex("""^\d{1,3}\s+-\s+"""),
+        Regex("""^0\d\s+"""),
+    )
+    private val shortNumber = Regex("""\d{1,2}""")
     private val whitespace = Regex("""\s+""")
-    private val marks = Regex("""\p{M}+""")
+    private val diacritics = Regex("""\p{InCombiningDiacriticalMarks}+""")
 
     /** Splits on `;`, then splits `feat.` forms off the first part. Never splits on `&`, `,`, `/`, " and " or " x ". */
     fun split(raw: String): Split {
@@ -48,8 +55,8 @@ object ArtistNames {
 
     /** Lower case, no accents, no leading "the ", single spaces: what names are compared by. */
     fun sortKey(name: String): String {
-        val folded = Normalizer.normalize(name, Normalizer.Form.NFD)
-            .replace(marks, "")
+        // Only Latin-style accents go: stripping every mark would break Tamil and Korean.
+        val folded = Normalizer.normalize(Normalizer.normalize(name, Normalizer.Form.NFD).replace(diacritics, ""), Normalizer.Form.NFC)
             .lowercase(Locale.ROOT)
             .trim()
             .replace(whitespace, " ")
@@ -65,10 +72,17 @@ object ArtistNames {
     private fun fromFileName(fileName: String?): String? {
         if (fileName == null) return null
         val dot = fileName.lastIndexOf('.')
-        val stem = (if (dot > 0) fileName.substring(0, dot) else fileName).trim().replace(leadingNumber, "")
+        val stem = (if (dot > 0) fileName.substring(0, dot) else fileName).trim()
+        val number = leadingNumbers.firstNotNullOfOrNull { it.find(stem) }
+        // "311 - Amber" strips to "Amber", which has no artist: then the whole stem is read.
+        return (number?.let { artistOf(stem.removeRange(it.range)) }) ?: artistOf(stem)
+    }
+
+    /** The left side of exactly one " - " when both sides have text and the artist is not just 1-2 digits. */
+    private fun artistOf(stem: String): String? {
         val sides = stem.split(" - ")
         if (sides.size != 2) return null
         val artist = sides[0].trim()
-        return artist.takeIf { it.isNotEmpty() && sides[1].isNotBlank() }
+        return artist.takeIf { it.isNotEmpty() && sides[1].isNotBlank() && !shortNumber.matches(it) }
     }
 }

@@ -142,13 +142,13 @@ class MusicRepository(private val context: Context) {
 
     /** `/storage/emulated/0/Music/A/b.mp3` is `Music/A`; null for a file at the volume root. */
     private fun parentOfData(data: String): String? {
-        val relative = data.replace(VOLUME_ROOT, "")
+        val relative = data.replace(VOLUME_ROOT, "").trimStart('/')
         val slash = relative.lastIndexOf('/')
         return if (slash > 0) relative.substring(0, slash) else null
     }
 
     private companion object {
-        val VOLUME_ROOT = Regex("^/storage/(?:emulated/\\d+|[^/]+)/")
+        val VOLUME_ROOT = Regex("^/(?:storage/(?:emulated/\\d+|[^/]+)|sdcard)/")
         val ALBUM_ART_URI: Uri = Uri.parse("content://media/external/audio/albumart")
     }
 }

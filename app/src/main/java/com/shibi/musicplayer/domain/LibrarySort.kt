@@ -276,7 +276,8 @@ object LibrarySorter {
         if (result != 0) return result
         result = compareCollation(a.text, b.text)
         if (result != 0) return result
-        result = compareCollation(a.secondText, b.secondText)
+        // A missing second name (no album under an artist) comes after the real ones.
+        result = compareNullsLast(a.secondText, b.secondText)
         if (result != 0) return result
         result = a.number.compareTo(b.number)
         if (result != 0) return result
@@ -285,6 +286,13 @@ object LibrarySorter {
         result = compareCollation(a.titleText, b.titleText)
         if (result != 0) return result
         return a.id.compareTo(b.id)
+    }
+
+    private fun compareNullsLast(a: CollationKey?, b: CollationKey?): Int = when {
+        a == null && b == null -> 0
+        a == null -> 1
+        b == null -> -1
+        else -> a.compareTo(b)
     }
 
     private fun compareCollation(a: CollationKey?, b: CollationKey?): Int = when {
@@ -361,7 +369,7 @@ object LibrarySorter {
         val secondText: CollationKey? = null,
         /** The time, size or length; for a song, its disc. */
         val number: Long = 0L,
-        /** A song's track number; 0 for items without one. */
+        /** A song's track number, Long.MAX_VALUE when it has none (so it sorts after numbered tracks); 0 for other items. */
         val trackNumber: Long = 0L,
         val titleText: CollationKey? = null,
     )

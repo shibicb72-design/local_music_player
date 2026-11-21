@@ -363,6 +363,28 @@ class LibrarySortTest {
     }
 
     @Test
+    fun aMissingAlbumSortsAfterTheRealAlbumsInsideAnArtist() {
+        val tracks = listOf(
+            track(1, "NoAlbum", artist = "Abba", album = "Unknown album"),
+            track(2, "Gold", artist = "Abba", album = "Gold"),
+            track(3, "Arrival", artist = "Abba", album = "Arrival"),
+        )
+        assertEquals(listOf("Arrival", "Gold", "NoAlbum"), sortTracks(tracks, SortField.Artist, true).titles())
+        assertEquals(listOf("NoAlbum", "Gold", "Arrival"), sortTracks(tracks, SortField.Artist, false).titles())
+    }
+
+    @Test
+    fun tamilAndKoreanArtistsKeepTheirOwnHeaders() {
+        val tracks = listOf(
+            track(1, "Tamil", artist = "ஔவை"),
+            track(2, "Korean", artist = "가나"),
+            track(3, "Latin", artist = "Abba"),
+        )
+        val letters = sortTracks(tracks, SortField.Artist, true).runs.map { (it.group as SortGroup.Letter).letter }
+        assertEquals(setOf("A", "ஔ", "가"), letters.toSet())
+    }
+
+    @Test
     fun theAlbumSortHeadersStripTheToo() {
         val tracks = listOf(
             track(1, "One", album = "The Wall"),

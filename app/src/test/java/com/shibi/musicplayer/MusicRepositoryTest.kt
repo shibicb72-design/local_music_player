@@ -142,6 +142,7 @@ class MusicRepositoryTest {
         provider.rows += row(id = 1L, title = "A", genre = "Rock", relativePath = "Wrong/", data = "/storage/emulated/0/Music/Artist/Album/a.mp3")
         provider.rows += row(id = 2L, title = "B", data = "/storage/1234-ABCD/Podcasts/b.mp3")
         provider.rows += row(id = 3L, title = "C", data = "/storage/emulated/0/c.mp3")
+        provider.rows += row(id = 4L, title = "D", data = "/sdcard/Music/x.mp3")
 
         val tracks = MusicRepository(application).loadTracks()
 
@@ -149,7 +150,7 @@ class MusicRepositoryTest {
         assertTrue(MediaStore.Audio.Media.DATA in projection)
         assertTrue(MediaStore.Audio.Media.GENRE !in projection)
         assertTrue(MediaStore.Audio.Media.RELATIVE_PATH !in projection)
-        assertEquals(listOf("Music/Artist/Album", "Podcasts", null), tracks.map { it.folder })
+        assertEquals(listOf("Music/Artist/Album", "Podcasts", null, "Music"), tracks.map { it.folder })
         assertNull(tracks[0].genre)
     }
 
