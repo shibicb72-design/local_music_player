@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.shibi.musicplayer.R
 import com.shibi.musicplayer.domain.LibrarySorter
 import com.shibi.musicplayer.domain.LibrarySorts
+import com.shibi.musicplayer.domain.MusicCatalog
 import com.shibi.musicplayer.domain.SortSpec
 import com.shibi.musicplayer.domain.SortedList
 import com.shibi.musicplayer.domain.Track
@@ -15,6 +16,8 @@ import java.text.Collator
 import java.time.ZoneId
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collectLatest
@@ -39,6 +42,8 @@ data class LibraryUiState(
      * never flashes the default order.
      */
     val songs: SortedList<Track>? = null,
+    /** The library as artists and albums, from the same scan as [songs]; null until they load. */
+    val catalog: MusicCatalog? = null,
 )
 
 class LibraryViewModel internal constructor(
@@ -74,7 +79,7 @@ class LibraryViewModel internal constructor(
         }
         viewModelScope.launch {
             combine(scan.filterNotNull(), requestedSort.filterNotNull(), ::Pair)
-                .collectLatest { (scan, sort) -> publish(scan.tracks, sort) }
+                .collectLatest { (scan, sort) -> publish(scan, sort) }
         }
         viewModelScope.launch {
             repository.changes().collectLatest {
@@ -121,21 +126,30 @@ class LibraryViewModel internal constructor(
         }
     }
 
-    private suspend fun publish(tracks: List<Track>, sort: SortSpec) {
+    private suspend fun publish(scan: Scan, sort: SortSpec) {
         val app = getApplication<Application>()
         val unknown = UnknownNames(
             title = app.getString(R.string.unknown_title),
             artist = app.getString(R.string.unknown_artist),
             album = app.getString(R.string.unknown_album),
         )
-        val sorted = withContext(sortDispatcher) {
-            LibrarySorter.tracks(tracks, sort, Collator.getInstance(), ZoneId.systemDefault(), unknown)
+        // The catalog does not depend on the sort: it is built once per scan, beside the sort.
+        val (sorted, catalog) = coroutineScope {
+            val catalog = async(sortDispatcher) {
+                scan.catalog ?: MusicCatalog.build(scan.tracks, unknown, Collator.getInstance()).also { scan.catalog = it }
+            }
+            val sorted = withContext(sortDispatcher) {
+                LibrarySorter.tracks(scan.tracks, sort, Collator.getInstance(), ZoneId.systemDefault(), unknown)
+            }
+            sorted to catalog.await()
         }
-        _uiState.update { it.copy(songs = sorted) }
+        _uiState.update { it.copy(songs = sorted, catalog = catalog) }
     }
 
-    /** One load's list. Compared by identity, so every load sorts again. */
-    private class Scan(val tracks: List<Track>)
+    /** One load's list and the catalog built from it. Compared by identity, so every load sorts again. */
+    private class Scan(val tracks: List<Track>) {
+        @Volatile var catalog: MusicCatalog? = null
+    }
 
     private companion object {
         const val CHANGE_SETTLE_MS = 500L
