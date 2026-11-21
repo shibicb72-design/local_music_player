@@ -11,6 +11,7 @@ import com.shibi.musicplayer.domain.LibrarySorts
 import com.shibi.musicplayer.domain.SortField
 import com.shibi.musicplayer.domain.SortSpec
 import com.shibi.musicplayer.domain.VideoAccess
+import com.shibi.musicplayer.domain.VideoFilter
 import com.shibi.musicplayer.domain.VideoProgress
 import com.shibi.musicplayer.library.DataStoreSortPrefs
 import com.shibi.musicplayer.library.InMemorySortPrefs
@@ -185,6 +186,49 @@ class SortPrefsTest {
             scope.cancel()
             file.delete()
         }
+    }
+
+    @Test
+    fun theStoreKeepsTheVideoFilterAndMovieSortUnderTheirOwnKeys() = runBlocking {
+        val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+        val file = File(application.filesDir, "filter_prefs_test.preferences_pb").apply { delete() }
+        val store = PreferenceDataStoreFactory.create(scope = scope, produceFile = { file })
+        try {
+            val prefs = DataStoreSortPrefs(store)
+            assertEquals(VideoFilter.All, prefs.videoFilter.first())
+            assertEquals(SortSpec(SortField.Name, ascending = true), prefs.movieSort.first())
+
+            prefs.setVideoFilter(VideoFilter.Tv)
+            prefs.setMovieSort(SortSpec(SortField.Date, ascending = true))
+            assertEquals(VideoFilter.Tv, prefs.videoFilter.first())
+            assertEquals(SortSpec(SortField.Date, ascending = true), prefs.movieSort.first())
+            val stored = store.data.first()
+            assertEquals("tv", stored[stringPreferencesKey("video_filter")])
+            assertEquals("date_asc", stored[stringPreferencesKey("movie_sort")])
+            // The video sort is its own pref.
+            assertEquals(LibrarySorts.VideoDefault, prefs.videoSort.first())
+
+            store.edit {
+                it[stringPreferencesKey("video_filter")] = "shorts"
+                it[stringPreferencesKey("movie_sort")] = "artist_asc"
+            }
+            assertEquals(VideoFilter.All, prefs.videoFilter.first())
+            assertEquals(SortSpec(SortField.Name, ascending = true), prefs.movieSort.first())
+        } finally {
+            scope.cancel()
+            file.delete()
+        }
+    }
+
+    @Test
+    fun theInMemoryStoreKeepsTheFilterAndMovieSort() = runBlocking {
+        val prefs = InMemorySortPrefs()
+        assertEquals(VideoFilter.All, prefs.videoFilter.first())
+        assertEquals(SortSpec(SortField.Name, ascending = true), prefs.movieSort.first())
+        prefs.setVideoFilter(VideoFilter.Personal)
+        prefs.setMovieSort(SortSpec(SortField.Size, ascending = false))
+        assertEquals(VideoFilter.Personal, prefs.videoFilter.first())
+        assertEquals(SortSpec(SortField.Size, ascending = false), prefs.movieSort.first())
     }
 
     @Test
