@@ -2,6 +2,7 @@ package com.shibi.musicplayer
 
 import com.shibi.musicplayer.domain.AlbumSort
 import com.shibi.musicplayer.domain.MusicCatalog
+import com.shibi.musicplayer.domain.MusicView
 import com.shibi.musicplayer.domain.SortGroup
 import com.shibi.musicplayer.domain.SortRun
 import com.shibi.musicplayer.domain.Track
@@ -65,6 +66,26 @@ class MusicCatalogTest {
     )
 
     private fun catalog(tracks: List<Track> = library()) = MusicCatalog.build(tracks, unknown, collator)
+
+    @Test
+    fun aMusicViewKeyReadsBackAndAnUnknownOneIsSongs() {
+        assertEquals(listOf("songs", "artists", "albums"), MusicView.entries.map { it.key })
+        MusicView.entries.forEach { assertEquals(it, MusicView.fromKey(it.key)) }
+        assertEquals(MusicView.Songs, MusicView.fromKey(null))
+        assertEquals(MusicView.Songs, MusicView.fromKey("genres"))
+    }
+
+    @Test
+    fun albumOfIsTheKeptAlbumAndNeverAFolderName() {
+        val tracks = library()
+        val catalog = catalog(tracks)
+        assertEquals("Revolver", catalog.albumOf(tracks.first { it.title == "Revolver One" })?.title)
+        // A guest's track is kept under the album it is on.
+        assertEquals("Club Mix", catalog.albumOf(tracks.first { it.title == "Club Zedd" })?.title)
+        // Untagged, with its folder's name as the album: the catalog kept no album for it.
+        assertNull(catalog.albumOf(tracks.first { it.title == "Zeta" }))
+        assertNull(catalog.albumOf(tracks.first { it.title == "Alpha" }))
+    }
 
     @Test
     fun artistsAreOrderedHashFirstThenByLetterWithUnknownLast() {
