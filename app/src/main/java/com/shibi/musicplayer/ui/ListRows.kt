@@ -115,7 +115,8 @@ private val PlayAllGlyphGap = 6.dp
  * fades to [fill] (it snaps under reduce motion) in the draw phase, and its text colours come
  * from that fill. While [selectionMode] a check rides the art's corner and, as with no
  * [actions], the end keeps the side margin. [actions] that do not end in a ⋮ end with a
- * [ListRowEndGap] spacer, which keeps it too.
+ * [ListRowEndGap] spacer, which keeps it too. [accentLine], when set, is a third line in the
+ * accent colour the playing glyph uses (a show's Continue); without it the row is unchanged.
  */
 @Composable
 internal fun ListRow(
@@ -130,6 +131,7 @@ internal fun ListRow(
     length: String? = null,
     selectionMode: Boolean = false,
     selected: Boolean = false,
+    accentLine: String? = null,
     actions: (@Composable RowScope.(tint: Color) -> Unit)? = null,
 ) {
     val shownFill = animateColorAsState(fill, highlightSpec(), label = "listRowFill")
@@ -171,6 +173,15 @@ internal fun ListRow(
                 modifier = Modifier.fillMaxWidth(),
             )
             SecondLine(detail = detail, length = length, color = variant)
+            if (accentLine != null) {
+                Text(
+                    text = accentLine,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = LocalBackgroundChrome.current.accentText,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
         if (isPlaying) {
             Icon(

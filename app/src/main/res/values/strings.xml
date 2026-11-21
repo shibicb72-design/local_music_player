@@ -56,7 +56,13 @@
     <string name="videos_empty">No videos found on this device.</string>
     <string name="movies_empty">No movies found</string>
     <string name="personal_videos_empty">No personal videos found</string>
-    <string name="tv_coming_soon">TV shows are coming in the next update.</string>
+    <string name="tv_shows_empty">No TV shows found</string>
+    <string name="tv_continue">Continue %s</string>
+    <string name="tv_play_episode">Play %s</string>
+    <string name="tv_season">Season %d</string>
+    <string name="tv_specials">Specials</string>
+    <string name="tv_seasons_label">Seasons</string>
+    <string name="tv_episode_untitled">Episode %d</string>
     <string name="video_filters_label">Video filters</string>
     <string name="video_filter_all">All</string>
     <string name="video_filter_movies">Movies</string>
@@ -355,6 +361,18 @@
     <plurals name="episode_count">
         <item quantity="one">%d episode</item>
         <item quantity="other">%d episodes</item>
+    </plurals>
+    <plurals name="show_count">
+        <item quantity="one">%d show</item>
+        <item quantity="other">%d shows</item>
+    </plurals>
+    <plurals name="season_count">
+        <item quantity="one">%d season</item>
+        <item quantity="other">%d seasons</item>
+    </plurals>
+    <plurals name="minutes_left">
+        <item quantity="one">%d min left</item>
+        <item quantity="other">%d min left</item>
     </plurals>
     <plurals name="video_filter_description">
         <item quantity="one">%1$s, %2$d video</item>

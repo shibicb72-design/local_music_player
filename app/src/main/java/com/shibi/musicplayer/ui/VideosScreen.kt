@@ -175,6 +175,8 @@ internal fun VideosScreen(
         onTrashVideos = onTrashVideos,
         onSortChange = viewModel::setSort,
         onFilterChange = viewModel::setFilter,
+        onOpenShow = viewModel::openShow,
+        onCloseShow = viewModel::closeShow,
         player = if (video.isActive && showInlinePlayer) {
             { maxHeight ->
                 InlineVideoPlayer(
@@ -219,6 +221,10 @@ internal fun VideosContent(
     onSortChange: (SortSpec) -> Unit = {},
     /** The user tapped a filter chip; [state] comes back with that filter's list. */
     onFilterChange: (VideoFilter) -> Unit = {},
+    /** The user tapped a show; [state] comes back with its page open. */
+    onOpenShow: (String) -> Unit = {},
+    /** Back or the arrow on a show page; [state] comes back with the show list. */
+    onCloseShow: () -> Unit = {},
     /** Screenshots only: the sort menu starts open. */
     initialSortMenuOpen: Boolean = false,
     /** Whether rows get a ⋮ with Move to trash: the system trash needs Android 11. */
@@ -287,9 +293,16 @@ internal fun VideosContent(
     } else {
         null
     }
-    // Hidden until the stored filter loaded, with nothing to filter, and while selecting.
+    // Under Tv, the page of the show the view model has open; null shows the show list.
+    val openShow = if (state.filter == VideoFilter.Tv) state.shows.firstOrNull { it.key == state.openShowKey } else null
+    val showHeader: (@Composable () -> Unit)? = if (openShow != null) {
+        { TvShowHeader(name = openShow.name, onBack = onCloseShow) }
+    } else {
+        null
+    }
+    // Hidden until the stored filter loaded, with nothing to filter, while selecting and on a show page.
     val chips: (@Composable () -> Unit)? =
-        if (state.isReady && state.access != VideoAccess.Denied && !selection.active &&
+        if (state.isReady && state.access != VideoAccess.Denied && !selection.active && openShow == null &&
             !(state.counts.all == 0 && state.videos.isEmpty())
         ) {
             {
@@ -303,10 +316,45 @@ internal fun VideosContent(
         } else {
             null
         }
-    // Tv is a placeholder until its screens land; it never draws the list.
+    // Tv draws its shows, or one show's page, and never the video list.
     val body: @Composable (Modifier, Dp) -> Unit = { bodyModifier, topPadding ->
         if (state.filter == VideoFilter.Tv) {
-            TvPlaceholder(modifier = bodyModifier.padding(bottom = contentBottomPadding))
+            when {
+                openShow != null -> {
+                    // Composed only while the page is open, so it is newer than MusicApp's
+                    // two-pane close-video handler and Back closes the page first.
+                    AppBackHandler { onCloseShow() }
+                    TvShowPage(
+                        show = openShow,
+                        next = state.continueByShow[openShow.key],
+                        playingVideoId = playingVideoId,
+                        savedProgress = savedProgress,
+                        onVideoClick = onVideoClick,
+                        onTrashVideo = trashVideo,
+                        contentBottomPadding = contentBottomPadding,
+                        topPadding = topPadding,
+                        modifier = bodyModifier,
+                    )
+                }
+                state.shows.isEmpty() && state.isLoading -> Box(modifier = bodyModifier, contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
+                state.shows.isEmpty() -> VideosMessage(
+                    icon = Icons.Rounded.VideoLibrary,
+                    message = stringResource(if (state.hasError) R.string.video_library_error else R.string.tv_shows_empty),
+                    modifier = bodyModifier.padding(bottom = contentBottomPadding),
+                )
+                else -> TvShowList(
+                    shows = state.shows,
+                    continueByShow = state.continueByShow,
+                    savedProgress = savedProgress,
+                    listState = listState,
+                    onOpenShow = onOpenShow,
+                    contentBottomPadding = contentBottomPadding,
+                    topPadding = topPadding,
+                    modifier = bodyModifier,
+                )
+            }
         } else {
             // Keyed by filter, so a switch swaps the list instead of animating rows between lists.
             key(state.filter) {
@@ -335,6 +383,7 @@ internal fun VideosContent(
             Column(modifier = Modifier.fillMaxSize()) {
                 selectionBar?.invoke()
                 chips?.invoke()
+                showHeader?.invoke()
                 body(Modifier.weight(1f).fillMaxWidth(), 8.dp)
             }
         }
@@ -353,13 +402,16 @@ internal fun VideosContent(
         VideoFilter.Personal -> R.plurals.clip_count
     }
     val count = pluralStringResource(countPlural, state.videos.size, state.videos.size)
+    val showCount = pluralStringResource(R.plurals.show_count, state.shows.size, state.shows.size)
     VideosFrame(
         subtitle = when {
             !showLibrary -> ""
-            state.videos.isEmpty() || state.filter == VideoFilter.Tv -> count
+            state.filter == VideoFilter.Tv -> "$showCount · $count"
+            state.videos.isEmpty() -> count
             else -> sortSubtitle(count, state.sort)
         },
         selectionBar = selectionBar,
+        titleRow = showHeader,
         modifier = modifier,
         // Hidden with the title row while selecting, with nothing to sort, and under Tv.
         sortButton = if (state.videos.isNotEmpty() && state.filter != VideoFilter.Tv) {
@@ -655,19 +707,6 @@ private fun sourceLabelRes(source: VideoIdentity.CameraSource): Int = when (sour
     VideoIdentity.CameraSource.OTHER_CAMERA -> R.string.video_source_camera
 }
 
-/** What the TV chip shows until its screens land. */
-@Composable
-private fun TvPlaceholder(modifier: Modifier = Modifier) {
-    Box(modifier = modifier.padding(horizontal = 32.dp), contentAlignment = Alignment.Center) {
-        Text(
-            text = stringResource(R.string.tv_coming_soon),
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
-    }
-}
-
 /**
  * A 3dp bar in the row's bottom padding, 3dp under the thumbnail: the watched part in
  * [color], the rest in [color] at 25%. It sits outside the thumbnail's clip, so the row's
@@ -696,7 +735,7 @@ private fun Modifier.watchedHairline(fraction: Float, color: Color, description:
 
 /** The row's frame, cropped square; the length is on the row's second line. */
 @Composable
-private fun VideoThumbnail(video: Video, modifier: Modifier = Modifier) {
+internal fun VideoThumbnail(video: Video, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     // The request carries its own fetcher factory, so build it once per video.
     val request = remember(video.contentUri) { videoThumbnailRequest(context, video.contentUri) }
@@ -753,6 +792,8 @@ private fun VideosFrame(
     subtitle: String,
     modifier: Modifier = Modifier,
     selectionBar: (@Composable () -> Unit)? = null,
+    /** Replaces the "Videos" title, subtitle and sort: a show page's back arrow and name. */
+    titleRow: (@Composable () -> Unit)? = null,
     sortButton: (@Composable () -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
@@ -765,6 +806,8 @@ private fun VideosFrame(
     ) {
         if (selectionBar != null) {
             Box(modifier = Modifier.statusBarsPadding()) { selectionBar() }
+        } else if (titleRow != null) {
+            Box(modifier = Modifier.statusBarsPadding().padding(top = 8.dp, bottom = 4.dp)) { titleRow() }
         } else {
             Row(
                 modifier = Modifier

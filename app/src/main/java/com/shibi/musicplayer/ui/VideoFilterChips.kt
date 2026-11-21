@@ -33,7 +33,7 @@ import com.shibi.musicplayer.domain.VideoFilter
 import com.shibi.musicplayer.ui.background.rememberSurfaceRoles
 import com.shibi.musicplayer.ui.background.toComposeColor
 
-/** The chip's label; the TV chip is drawn now and its screens come later. */
+/** The chip's label. */
 @StringRes
 private fun labelRes(filter: VideoFilter): Int = when (filter) {
     VideoFilter.All -> R.string.video_filter_all
@@ -72,9 +72,16 @@ internal fun VideoFilterChips(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         VideoFilter.entries.forEach { filter ->
+            val label = stringResource(labelRes(filter))
+            val count = counts?.let { countOf(it, filter) }
             FilterChipItem(
-                filter = filter,
-                count = counts?.let { countOf(it, filter) },
+                label = label,
+                count = count,
+                description = if (count != null) {
+                    pluralStringResource(R.plurals.video_filter_description, count, label, count)
+                } else {
+                    label
+                },
                 chosen = filter == selected,
                 onClick = { if (filter != selected) onSelect(filter) },
             )
@@ -83,26 +90,23 @@ internal fun VideoFilterChips(
 }
 
 /**
- * One chip. Fill: the theme's `primary` when chosen, `surfaceVariant` otherwise; the text takes
- * its colour from that fill (`rememberSurfaceRoles`), the count in the quieter role. The pill is
- * 40 dp tall inside a 48 dp touch target, and grows with the font.
+ * One chip, a tab in a `selectableGroup` row: the Videos filters, a show page's seasons. Fill:
+ * the theme's `primary` when chosen, `surfaceVariant` otherwise; the text takes its colour from
+ * that fill (`rememberSurfaceRoles`), the [count] (none when null) in the quieter role. The pill
+ * is 40 dp tall inside a 48 dp touch target, and grows with the font. [description] is what it
+ * reads out: the label and the count as one phrase.
  */
 @Composable
-private fun FilterChipItem(
-    filter: VideoFilter,
+internal fun FilterChipItem(
+    label: String,
     count: Int?,
+    description: String,
     chosen: Boolean,
     onClick: () -> Unit,
 ) {
     val colors = MaterialTheme.colorScheme
     val fill = if (chosen) colors.primary else colors.surfaceVariant
     val roles = rememberSurfaceRoles(fill)
-    val label = stringResource(labelRes(filter))
-    val description = if (count != null) {
-        pluralStringResource(R.plurals.video_filter_description, count, label, count)
-    } else {
-        label
-    }
     Box(
         modifier = Modifier
             .heightIn(min = 48.dp)

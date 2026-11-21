@@ -154,16 +154,28 @@ class VideoFilterUiTest {
     }
 
     @Test
-    fun tvShowsThePlaceholderAndNoRows() {
+    fun tvShowsOneRowPerShowAndNoVideoList() {
         show(viewModel(InMemorySortPrefs()))
         chip("TV, 4 videos").performClick()
         settle()
-        compose.onNodeWithText("4 episodes").assertIsDisplayed()
-        compose.onNodeWithText("TV shows are coming in the next update.").assertIsDisplayed()
+        compose.onNodeWithText("1 show · 4 episodes").assertIsDisplayed()
+        compose.onNodeWithText("Lost").assertIsDisplayed()
+        compose.onNodeWithText("2 seasons · 4 episodes").assertIsDisplayed()
         compose.onNodeWithText("Lost.S01E02").assertDoesNotExist()
         compose.onNodeWithText("Play all").assertDoesNotExist()
-        compose.onAllNodes(verticalList).assertCountEquals(0)
+        compose.onNodeWithTag(SortButtonTag).assertDoesNotExist()
         chip("TV, 4 videos").assertIsSelected()
+    }
+
+    @Test
+    fun tvWithNoShowsSaysSoAndKeepsTheChips() {
+        val provider = provider()
+        provider.rows += row(1L, "Inception.2010.1080p.mkv", "Inception.2010.1080p", "Downloads")
+        show(viewModelOver(InMemorySortPrefs()))
+        chip("TV, 0 videos").performClick()
+        settle()
+        compose.onNodeWithText("No TV shows found").assertIsDisplayed()
+        chip("TV, 0 videos").assertIsSelected()
     }
 
     @Test

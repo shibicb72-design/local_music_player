@@ -1,5 +1,6 @@
 package com.shibi.musicplayer
 
+import androidx.compose.ui.test.onNodeWithContentDescription
 import android.Manifest
 import android.app.Application
 import android.content.ComponentName
@@ -279,6 +280,28 @@ class TwoPaneNavigationTest {
         assertTrue(engines.single().released)
     }
 
+    /** The show page sits over the video: Back closes the page first, then the video. */
+    @Test
+    @WithMedia
+    fun backClosesTheShowPageBeforeTheVideoPane() {
+        start()
+        select("Videos")
+        compose.onNodeWithContentDescription("TV, 1 video").performSemanticsAction(SemanticsActions.OnClick)
+        settle()
+        tapText("Lost")
+        tapText("E01 · Episode 1")
+        assertPane(video = true)
+        pressBack()
+        assertPane(video = true)
+        assertShown("TV shows", "1 show · 1 episode")
+        pressBack()
+        assertPane(video = false)
+        assertTrue(engines.single().released)
+        // The filter is stored: put All back for the next test.
+        compose.onNodeWithContentDescription("All, 3 videos").performSemanticsAction(SemanticsActions.OnClick)
+        settle()
+    }
+
     /** No auto-next and no music: the pane keeps the ended video with "Play again", not Now Playing. */
     @Test
     @WithMedia
@@ -481,6 +504,8 @@ class FakeMediaStore : ContentProvider() {
         ).apply {
             addRow(arrayOf<Any?>(1L, "Beach day.mp4", "Beach day", 754_000L, 1_412_000_000L, 1920, 1080, "video/mp4", 1_760_000_000L, "Camera"))
             addRow(arrayOf<Any?>(2L, "Recital.mp4", "Recital", 2_640_000L, 3_300_000_000L, 1920, 1080, "video/mp4", 1_760_000_000L, "Movies"))
+            // An episode, so the TV chip has a show; added earliest, so it lists last under All.
+            addRow(arrayOf<Any?>(3L, "Lost.S01E01.mp4", "Lost.S01E01", 2_400_000L, 1_000_000_000L, 1920, 1080, "video/mp4", 1_700_000_000L, "Lost"))
         }
         else -> MatrixCursor(arrayOf(MediaStore.MediaColumns._ID))
     }

@@ -1,5 +1,11 @@
 package com.shibi.musicplayer
 
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.test.assertIsDisplayed
+import com.shibi.musicplayer.ui.ListRow
 import android.content.Context
 import android.text.format.DateFormat
 import androidx.compose.foundation.layout.Box
@@ -808,6 +814,38 @@ class ListRowsUiTest {
     }
 
     private fun px(dp: Dp): Float = with(compose.density) { dp.toPx() }
+
+    // --- The optional accent line ---
+
+    @Test
+    fun aRowWithoutAnAccentLineKeepsItsHeightAndText() {
+        compose.setContent {
+            MusicPlayerTheme {
+                Column {
+                    ListRow(
+                        title = "Plain", detail = "Two seasons", fill = Color.Black, isPlaying = false,
+                        onClick = {}, onLongClick = null, art = { Box(Modifier.size(40.dp)) },
+                        modifier = Modifier.testTag("plain"),
+                    )
+                    ListRow(
+                        title = "Accented", detail = "Two seasons", fill = Color.Black, isPlaying = false,
+                        onClick = {}, onLongClick = null, art = { Box(Modifier.size(40.dp)) },
+                        modifier = Modifier.testTag("accented"), accentLine = "Continue S01E03",
+                    )
+                }
+            }
+        }
+        val plain = compose.onNodeWithTag("plain").fetchSemanticsNode()
+        assertDp("row height", 60.dp, plain.boundsInRoot.height)
+        assertEquals(listOf("Plain", "Two seasons"), plain.config[SemanticsProperties.Text].map { it.text })
+        val accented = compose.onNodeWithTag("accented").fetchSemanticsNode()
+        assertEquals(
+            listOf("Accented", "Two seasons", "Continue S01E03"),
+            accented.config[SemanticsProperties.Text].map { it.text },
+        )
+        compose.onNodeWithText("Continue S01E03").assertIsDisplayed()
+        assertTrue("the third line adds height", accented.boundsInRoot.height > px(60.dp))
+    }
 
     private fun assertDp(what: String, expected: Dp, actualPx: Float) =
         assertEquals("$what (px)", px(expected), actualPx, 0.5f)
