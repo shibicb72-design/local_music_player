@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentWidth
@@ -30,7 +31,9 @@ import com.shibi.musicplayer.R
 import com.shibi.musicplayer.domain.AlbumEntry
 import com.shibi.musicplayer.domain.AlbumPage
 import com.shibi.musicplayer.domain.AlbumSort
+import com.shibi.musicplayer.domain.ScrollSection
 import com.shibi.musicplayer.domain.SortField
+import com.shibi.musicplayer.domain.SortRun
 import com.shibi.musicplayer.domain.SortSpec
 import com.shibi.musicplayer.domain.Track
 import com.shibi.musicplayer.domain.albumTrackArtist
@@ -64,17 +67,24 @@ private fun artistAndYear(album: AlbumEntry): String {
     return album.year?.let { "$artist · $it" } ?: artist
 }
 
+internal const val AlbumFastScrollerTag = "album_fast_scroller"
+
 /**
- * One card per album in the given order, two columns on a phone and more when unfolded. Tapping
- * a card opens its page. With no albums, one centred line.
+ * One card per album in the given order, two columns on a phone and more when unfolded, with the
+ * A-Z fast scroller over their ends when [runs] (the letter runs of [albums] under [sort]) has
+ * any. Tapping a card opens its page. With no albums, one centred line. [initialDragFraction]
+ * (tests only) starts the scroller mid-drag.
  */
 @Composable
 internal fun AlbumGrid(
     albums: List<AlbumEntry>,
+    runs: List<SortRun>,
+    sort: AlbumSort,
     gridState: LazyGridState,
     onOpenAlbum: (String) -> Unit,
     contentBottomPadding: Dp,
     modifier: Modifier = Modifier,
+    initialDragFraction: Float? = null,
 ) {
     if (albums.isEmpty()) {
         Box(modifier = modifier.padding(24.dp).padding(bottom = contentBottomPadding), contentAlignment = Alignment.Center) {
@@ -87,19 +97,64 @@ internal fun AlbumGrid(
         }
         return
     }
-    LazyVerticalGrid(
-        columns = GridCells.Adaptive(150.dp),
-        modifier = modifier,
-        state = gridState,
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = contentBottomPadding),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        // The key itself, not a tag built from it: album keys hold a NUL.
-        gridItems(albums, key = { it.key }, contentType = { "album" }) { album ->
-            AlbumCard(album = album, meta = artistAndYear(album), onClick = { onOpenAlbum(album.key) })
+    Box(modifier = modifier) {
+        LazyVerticalGrid(
+            columns = GridCells.Adaptive(150.dp),
+            modifier = Modifier.fillMaxSize(),
+            state = gridState,
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = contentBottomPadding),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            // The key itself, not a tag built from it: album keys hold a NUL.
+            gridItems(albums, key = { it.key }, contentType = { "album" }) { album ->
+                AlbumCard(album = album, meta = artistAndYear(album), onClick = { onOpenAlbum(album.key) })
+            }
+        }
+        if (runs.isNotEmpty()) {
+            AlbumFastScroller(
+                gridState = gridState,
+                entryCount = albums.size,
+                runs = runs,
+                sort = sort,
+                initialDragFraction = initialDragFraction,
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(bottom = contentBottomPadding),
+            )
         }
     }
+}
+
+/** A-Z fast scroll over the albums, by the letter runs of [sort]; the no-artist run gets no dot. */
+@Composable
+private fun AlbumFastScroller(
+    gridState: LazyGridState,
+    entryCount: Int,
+    runs: List<SortRun>,
+    sort: AlbumSort,
+    initialDragFraction: Float?,
+    modifier: Modifier = Modifier,
+) {
+    val names = rememberSortGroupNames(music = true)
+    val field = albumSortSpec(sort).field
+    val sections = remember(runs) { runs.map { ScrollSection(it.start, it.count) } }
+    val stops = remember(runs) { runs.filterNot { it.group.isUnknown }.map { ScrollSection(it.start, it.count) } }
+    FastScroller(
+        gridState = gridState,
+        entryCount = entryCount,
+        sections = sections,
+        stops = stops,
+        label = { index ->
+            val group = index?.let(runs::getOrNull)?.group
+            if (group != null) names.name(group, field) else ""
+        },
+        description = stringResource(fastScrollDescriptionRes(field)),
+        modifier = modifier,
+        resetKey = sort,
+        tag = AlbumFastScrollerTag,
+        initialDragFraction = initialDragFraction,
+    )
 }
 
 /** Rounded to the nearest minute, and never under one: "12 min". */
@@ -144,7 +199,7 @@ internal fun AlbumPageContent(
             }
         }
         item(key = "buttons", contentType = "buttons") {
-            ArtistButtons(
+            PlayShuffleButtons(
                 enabled = tracks.isNotEmpty(),
                 onPlayAll = { tracks.firstOrNull()?.let { onTrackSelected(tracks, it.id) } },
                 onShuffle = { if (tracks.isNotEmpty()) onShuffle(tracks) },

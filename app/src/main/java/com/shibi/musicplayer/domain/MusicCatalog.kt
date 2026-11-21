@@ -84,6 +84,7 @@ class MusicCatalog private constructor(
     /** One run per letter over [artists], for the fast scroller. */
     val artistRuns: List<SortRun>,
     private val albumLists: Map<AlbumSort, List<AlbumEntry>>,
+    private val albumRunLists: Map<AlbumSort, List<SortRun>>,
     private val artistByKey: Map<String?, ArtistEntry>,
     private val albumByKey: Map<String, AlbumEntry>,
     private val albumTracks: Map<String, List<Row>>,
@@ -94,6 +95,9 @@ class MusicCatalog private constructor(
 ) {
     /** The albums in [sort] order; precomputed, so this never sorts. */
     fun albums(sort: AlbumSort): List<AlbumEntry> = albumLists.getValue(sort)
+
+    /** One run per letter over [albums] in [sort] order, for the fast scroller; none for [AlbumSort.YearNewest]. */
+    fun albumRuns(sort: AlbumSort): List<SortRun> = albumRunLists.getValue(sort)
 
     /**
      * The album the catalog keeps [track] under, or null: no album tag, or only its folder's
@@ -154,7 +158,17 @@ class MusicCatalog private constructor(
     }
 
     /** An album with the keys it is ordered by. */
-    private class AlbumSortKeys(val entry: AlbumEntry, val title: CollationKey, val artist: CollationKey?)
+    private class AlbumSortKeys(
+        val entry: AlbumEntry,
+        val title: CollationKey,
+        val artist: CollationKey?,
+        val titleLetter: GroupLetter,
+        /** Null when the album has no artist. */
+        val artistLetter: GroupLetter?,
+    )
+
+    /** A group letter of [SortLetters] and its collation [key]; null for [SortLetters.HASH]. */
+    private class GroupLetter(val letter: String, val key: CollationKey?)
 
     companion object {
         private const val SEP = "\u0000"
@@ -199,14 +213,28 @@ class MusicCatalog private constructor(
                     albumArtUri = group.firstNotNullOfOrNull { it.track.albumArtUri },
                 )
             }
+            val letters = HashMap<String, GroupLetter>()
+            fun letterOf(sortKey: String) = SortLetters.of(sortKey).let { letter ->
+                letters.getOrPut(letter) { GroupLetter(letter, if (letter == SortLetters.HASH) null else collate(letter)) }
+            }
             val sortKeys = albumEntries.map {
-                AlbumSortKeys(it, collate(key(it.title)), it.artistKey?.let(::collate))
+                val titleKey = key(it.title)
+                AlbumSortKeys(it, collate(titleKey), it.artistKey?.let(::collate), letterOf(titleKey), it.artistKey?.let(::letterOf))
             }
 
-            val titleOrder = Comparator<AlbumSortKeys> { a, b -> a.title.compareTo(b.title) }
+            // Letter group first, as the artists are, so each letter is one run for the fast scroller.
+            val titleOrder = Comparator<AlbumSortKeys> { a, b -> compareLetters(a.titleLetter, b.titleLetter) }
+                .thenComparator { a, b -> a.title.compareTo(b.title) }
                 .thenComparator { a, b -> compareNullable(a.artist, b.artist) }
                 .thenComparator { a, b -> a.entry.key.compareTo(b.entry.key) }
-            val artistOrder = Comparator<AlbumSortKeys> { a, b -> compareNullable(a.artist, b.artist) }
+            // Albums with no artist stay last.
+            val artistOrder = Comparator<AlbumSortKeys> { a, b -> (a.artistLetter == null).compareTo(b.artistLetter == null) }
+                .thenComparator { a, b ->
+                    val aLetter = a.artistLetter
+                    val bLetter = b.artistLetter
+                    if (aLetter == null || bLetter == null) 0 else compareLetters(aLetter, bLetter)
+                }
+                .thenComparator { a, b -> compareNullable(a.artist, b.artist) }
                 .thenComparator { a, b -> a.title.compareTo(b.title) }
                 .thenComparator { a, b -> a.entry.key.compareTo(b.entry.key) }
             val yearNewest = Comparator<AlbumSortKeys> { a, b -> compareYear(a.entry.year, b.entry.year, newestFirst = true) }
@@ -217,10 +245,17 @@ class MusicCatalog private constructor(
                 .thenComparator { a, b -> a.title.compareTo(b.title) }
                 .thenComparator { a, b -> a.entry.key.compareTo(b.entry.key) }
 
+            val byTitle = sortKeys.sortedWith(titleOrder)
+            val byArtistName = sortKeys.sortedWith(artistOrder)
             val albumLists = mapOf(
-                AlbumSort.Title to sortKeys.sortedWith(titleOrder).map { it.entry },
-                AlbumSort.Artist to sortKeys.sortedWith(artistOrder).map { it.entry },
+                AlbumSort.Title to byTitle.map { it.entry },
+                AlbumSort.Artist to byArtistName.map { it.entry },
                 AlbumSort.YearNewest to sortKeys.sortedWith(yearNewest).map { it.entry },
+            )
+            val albumRuns = mapOf(
+                AlbumSort.Title to LibrarySorter.runs(byTitle.map { SortGroup.Letter(it.titleLetter.letter) }),
+                AlbumSort.Artist to LibrarySorter.runs(byArtistName.map { SortGroup.Letter(it.artistLetter?.letter) }),
+                AlbumSort.YearNewest to emptyList(),
             )
             val pageSorted = sortKeys.sortedWith(pageOrder).map { it.entry }
             val ownAlbums = pageSorted.groupBy { it.artistKey }
@@ -260,6 +295,7 @@ class MusicCatalog private constructor(
                 artists = ordered,
                 artistRuns = runs,
                 albumLists = albumLists,
+                albumRunLists = albumRuns,
                 artistByKey = entries.associateBy { it.key },
                 albumByKey = albumByKey,
                 albumTracks = byAlbum,
@@ -295,6 +331,15 @@ class MusicCatalog private constructor(
                 }
             }
             return keyed.sortedWith(comparator).map { it.entry } + unknown
+        }
+
+        /** `#` first, then letters by the collator; two letters it calls equal still differ. */
+        private fun compareLetters(a: GroupLetter, b: GroupLetter): Int {
+            if (a === b) return 0
+            val aHash = a.key == null
+            val bHash = b.key == null
+            if (aHash != bHash) return if (aHash) -1 else 1
+            return compareNullable(a.key, b.key).takeIf { it != 0 } ?: a.letter.compareTo(b.letter)
         }
 
         private fun compareNullable(a: CollationKey?, b: CollationKey?): Int = when {

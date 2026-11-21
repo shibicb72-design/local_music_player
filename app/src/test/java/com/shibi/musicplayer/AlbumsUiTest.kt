@@ -11,6 +11,9 @@ import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeUp
+import com.shibi.musicplayer.ui.AlbumFastScrollerTag
 import com.shibi.musicplayer.ui.albumMinutes
 import org.junit.Assert.assertFalse
 import androidx.compose.ui.test.assertIsDisplayed
@@ -225,11 +228,8 @@ class AlbumsUiTest {
     @Test
     @Config(qualifiers = "w411dp-h891dp-xxhdpi")
     fun onAPhoneTheGridKeepsItsPlaceAcrossAPageASortJumpsToTheTopAndEachPageStartsAtItsTop() {
-        // Eight more one-song albums (14 in all), so the grid scrolls; Clarity gets 15 more songs, so its page does.
-        for (n in 1..8) {
-            val band = "Band %02d".format(n)
-            provider.rows += song(100L + n, "Filler $n", band, "Zz Single %02d".format(n), band, 1, 2000 + n)
-        }
+        // Filler albums, so the grid scrolls; Clarity gets 15 more songs, so its page does.
+        addFillerAlbums()
         for (n in 3..17) provider.rows += song(200L + n, "Clarity Extra $n", "Zedd", "Clarity", "Zedd", n, 2012)
         val lastCard = "Zz Single 08, Band 08 · 2008"
         showAlbums()
@@ -264,6 +264,36 @@ class AlbumsUiTest {
         compose.onNodeWithContentDescription(Clarity).performClick()
         settle()
         compose.onNodeWithText("Zedd · 2012").assertIsDisplayed()
+    }
+
+    @Test
+    @Config(qualifiers = "w411dp-h891dp-xxhdpi")
+    fun theGridHasTheLetterFastScrollerUnderBothAZOrdersAndNoneUnderNewestFirst() {
+        addFillerAlbums()
+        showAlbums()
+        for ((spec, present) in listOf(
+            SortSpec(SortField.Album, true) to true,
+            SortSpec(SortField.Artist, true) to true,
+            SortSpec(SortField.Date, false) to false,
+        )) {
+            pickSort(spec)
+            // Held clock: the scroller fades out a moment after the grid stops.
+            compose.mainClock.autoAdvance = false
+            compose.onNode(hasScrollToIndexAction()).performTouchInput { swipeUp(durationMillis = 100) }
+            compose.mainClock.advanceTimeBy(50)
+            val scroller = compose.onNodeWithTag(AlbumFastScrollerTag)
+            if (present) scroller.assertIsDisplayed() else scroller.assertDoesNotExist()
+            compose.mainClock.autoAdvance = true
+            settle()
+        }
+    }
+
+    /** Eight more one-song albums (14 in all), so the grid scrolls on a phone. */
+    private fun addFillerAlbums() {
+        for (n in 1..8) {
+            val band = "Band %02d".format(n)
+            provider.rows += song(100L + n, "Filler $n", band, "Zz Single %02d".format(n), band, 1, 2000 + n)
+        }
     }
 
     @Test

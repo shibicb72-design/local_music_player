@@ -588,9 +588,12 @@ fun LibraryContent(
                                     )
                                     heldView == MusicView.Albums -> AlbumGrid(
                                         albums = catalog?.albums(albumSort).orEmpty(),
+                                        runs = catalog?.albumRuns(albumSort).orEmpty(),
+                                        sort = albumSort,
                                         gridState = albumGridState,
                                         onOpenAlbum = onOpenAlbum,
                                         contentBottomPadding = contentBottomPadding,
+                                        initialDragFraction = fastScrollDragFraction,
                                         modifier = Modifier
                                             .weight(1f)
                                             .fillMaxWidth(),

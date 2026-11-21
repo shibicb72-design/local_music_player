@@ -56,6 +56,14 @@ class AlbumsScreenshotTest {
     @Test
     fun albumGridCompact() = compact(null, "albums_compact.png")
 
+    /** Mid-drag under Artist A–Z: the bubble names the letter under the thumb, over the grid's end. */
+    @Test
+    fun albumGridDragCompact() = compact(null, "albums_drag_compact.png", sort = AlbumSort.Artist, dragFraction = 0.5f)
+
+    @Test
+    @Config(qualifiers = "w900dp-h600dp-xhdpi")
+    fun albumGridDragTwoPane() = twoPane(null, "albums_drag_two_pane.png", sort = AlbumSort.Artist, dragFraction = 0.5f)
+
     @Test
     fun albumPageCompact() = compact(abbaHits, "album_page_compact.png")
 
@@ -86,6 +94,8 @@ class AlbumsScreenshotTest {
         background: AppBackground = AppBackground.Default,
         library: List<Track> = tracks,
         playingId: String = "3",
+        sort: AlbumSort = AlbumSort.Title,
+        dragFraction: Float? = null,
     ) {
         captureRoboImage("build/outputs/roborazzi/$fileName") {
             MusicPlayerTheme {
@@ -104,21 +114,26 @@ class AlbumsScreenshotTest {
                             )
                         },
                     ) { bottom ->
-                        Albums(open, bottom, library, playingId)
+                        Albums(open, bottom, library, playingId, sort, dragFraction)
                     }
                 }
             }
         }
     }
 
-    private fun twoPane(open: String?, fileName: String) {
+    private fun twoPane(
+        open: String?,
+        fileName: String,
+        sort: AlbumSort = AlbumSort.Title,
+        dragFraction: Float? = null,
+    ) {
         captureRoboImage("build/outputs/roborazzi/$fileName") {
             MusicPlayerTheme {
                 AppBackgroundHost(AppBackground.Default, emptyMap(), forceStatic = true) {
                     Column(modifier = Modifier.fillMaxSize()) {
                         Row(modifier = Modifier.weight(1f).fillMaxSize()) {
                             ListViewport(modifier = Modifier.weight(0.42f).fillMaxHeight()) {
-                                Albums(open, SongListBottomPadding)
+                                Albums(open, SongListBottomPadding, sort = sort, dragFraction = dragFraction)
                             }
                             Box(modifier = Modifier.weight(0.58f).fillMaxHeight()) {
                                 PlayerScreen(
@@ -154,7 +169,14 @@ class AlbumsScreenshotTest {
     }
 
     @Composable
-    private fun Albums(open: String?, bottom: Dp, library: List<Track> = tracks, playingId: String = "3") {
+    private fun Albums(
+        open: String?,
+        bottom: Dp,
+        library: List<Track> = tracks,
+        playingId: String = "3",
+        sort: AlbumSort = AlbumSort.Title,
+        dragFraction: Float? = null,
+    ) {
         LibraryContent(
             tracks = library,
             nowPlaying = PlayerUiState(currentMediaId = playingId),
@@ -167,8 +189,9 @@ class AlbumsScreenshotTest {
             modifier = Modifier.fillMaxSize(),
             view = MusicView.Albums,
             catalog = if (library === tracks) catalog else numbersCatalog,
-            albumSort = AlbumSort.Title,
+            albumSort = sort,
             openAlbum = open,
+            fastScrollDragFraction = dragFraction,
         )
     }
 

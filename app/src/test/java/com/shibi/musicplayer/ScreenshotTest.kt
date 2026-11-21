@@ -389,6 +389,40 @@ class ScreenshotTest {
     }
 
     @Test
+    fun playlistDetailOnCream() {
+        captureRoboImage("build/outputs/roborazzi/playlist_detail_cream.png") {
+            MusicPlayerTheme {
+                AppBackgroundHost(AppBackground.Solid("cream"), emptyMap(), forceStatic = true) {
+                    SectionScaffold(
+                        modifier = Modifier.fillMaxSize(),
+                        showMiniPlayer = false,
+                        showCarousel = true,
+                        contentBottomPadding = SongListBottomPadding,
+                        carousel = {
+                            NavCarousel(selected = NavSection.Playlists, onSelect = {})
+                        },
+                    ) { bottom ->
+                        PlaylistDetailContent(
+                            name = "Late night",
+                            songs = detailSongs,
+                            onBack = {},
+                            onPlayAll = {},
+                            onShuffle = {},
+                            onRenameClick = {},
+                            onDeleteClick = {},
+                            onRemove = {},
+                            onReorder = {},
+                            onPlayFrom = {},
+                            contentBottomPadding = bottom,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
     fun addToPlaylist() {
         captureRoboImage("build/outputs/roborazzi/add_to_playlist.png") {
             MusicPlayerTheme {
