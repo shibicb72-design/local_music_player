@@ -6,6 +6,8 @@ import android.provider.MediaStore
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsSelected
@@ -184,7 +186,7 @@ class VideoFilterUiTest {
         chip("Movies, 26 videos").performClick()
         settle()
         compose.onNodeWithText("Alpha").assertIsDisplayed()
-        repeat(3) { compose.onNode(hasScrollAction()).performTouchInput { swipeUp() } }
+        repeat(3) { compose.onNode(hasScrollAction() and !SemanticsMatcher.keyIsDefined(SemanticsProperties.HorizontalScrollAxisRange)).performTouchInput { swipeUp() } }
         settle()
         compose.onNodeWithText("Alpha").assertDoesNotExist()
         chip("Personal, 1 video").performClick()

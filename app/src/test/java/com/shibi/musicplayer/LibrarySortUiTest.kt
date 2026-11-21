@@ -17,6 +17,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasScrollAction
@@ -413,7 +414,8 @@ class LibrarySortUiTest {
         arrayOf(id, title, artist, "Album", 180_000L, 0L, dateAdded, 4_000_000L)
 
     private fun scrollDown() {
-        repeat(2) { compose.onNode(hasScrollAction()).performTouchInput { swipeUp() } }
+        // The Videos filter chips scroll sideways: the list is the vertical one.
+        repeat(2) { compose.onNode(hasScrollAction() and !SemanticsMatcher.keyIsDefined(SemanticsProperties.HorizontalScrollAxisRange)).performTouchInput { swipeUp() } }
         settle()
     }
 
