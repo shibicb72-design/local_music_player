@@ -36,6 +36,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -113,6 +114,8 @@ import com.shibi.musicplayer.library.OpenArtist
 import com.shibi.musicplayer.playback.PlayerUiState
 import com.shibi.musicplayer.ui.background.ContrastSurface
 import com.shibi.musicplayer.ui.background.LocalBackgroundChrome
+import com.shibi.musicplayer.ui.background.rememberSurfaceRoles
+import com.shibi.musicplayer.ui.background.toComposeColor
 import com.shibi.musicplayer.ui.theme.DeviceGreen
 import com.shibi.musicplayer.ui.theme.Secondary
 import com.shibi.musicplayer.ui.theme.Spacing
@@ -282,6 +285,10 @@ fun LibraryScreen(
             onOpenArtist = viewModel::openArtist,
             onClosePage = viewModel::closePage,
             onShuffle = onShuffle,
+            albumSort = state.albumSort,
+            onAlbumSortChange = viewModel::setAlbumSort,
+            openAlbum = state.openAlbumKey,
+            onOpenAlbum = viewModel::openAlbum,
         )
     }
 }
@@ -327,8 +334,14 @@ fun LibraryContent(
     openArtist: OpenArtist? = null,
     onOpenArtist: (String?) -> Unit = {},
     onClosePage: () -> Unit = {},
-    /** An artist page's Shuffle: the artist's songs. */
+    /** An artist or album page's Shuffle: the page's songs. */
     onShuffle: (List<Track>) -> Unit = {},
+    /** The Albums grid's order, and the user's pick from its menu. */
+    albumSort: AlbumSort = AlbumSort.Title,
+    onAlbumSortChange: (AlbumSort) -> Unit = {},
+    /** The album whose page shows in place of the grid or of the artist page; it wins over both. */
+    openAlbum: String? = null,
+    onOpenAlbum: (String) -> Unit = {},
 ) {
     // Set when the user picks a sort: the list goes to the top once it shows that sort.
     var jumpToTopFor by remember { mutableStateOf<SortSpec?>(null) }
@@ -354,6 +367,11 @@ fun LibraryContent(
     }
     // The page's scroll lives here, keyed by the artist, so each page starts at its top.
     val artistPageListState = rememberSaveable(openArtist, saver = LazyListState.Saver) { LazyListState() }
+    // The open album's page, from the grid or from an artist page; it covers both.
+    val albumPage = remember(catalog, openAlbum) { openAlbum?.let { catalog?.albumPage(it) } }
+    val albumPageListState = rememberSaveable(openAlbum, saver = LazyListState.Saver) { LazyListState() }
+    // Outside the view's key, so Back from an album page finds the grid where it was.
+    val albumGridState = rememberLazyGridState()
     var selection by remember { mutableStateOf(initialSelection) }
     val allIds = remember(tracks) { tracks.map { it.id } }
     LaunchedEffect(allIds) { selection = selection.retain(allIds.toSet()) }
@@ -404,6 +422,14 @@ fun LibraryContent(
                         }
                     },
                 )
+            } else if (albumPage != null) {
+                TvShowHeader(
+                    name = albumPage.album.title,
+                    onBack = onClosePage,
+                    modifier = Modifier
+                        .statusBarsPadding()
+                        .padding(top = 8.dp, bottom = 4.dp),
+                )
             } else if (page != null) {
                 TvShowHeader(
                     name = artistName(page.artist),
@@ -413,8 +439,10 @@ fun LibraryContent(
                         .padding(top = 8.dp, bottom = 4.dp),
                 )
             } else {
-                // The sort belongs to the songs: Artists and Albums have none.
-                val sortShown = sorted != null && shownView == MusicView.Songs
+                // Songs and Albums each have their own sort; Artists has none.
+                val songSortShown = sorted != null && shownView == MusicView.Songs
+                val albumSortShown = shownView == MusicView.Albums && catalog != null
+                val sortShown = songSortShown || albumSortShown
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -436,20 +464,24 @@ fun LibraryContent(
                                 pluralStringResource(R.plurals.artist_count, artists, artists)
                             }
                             shownView == MusicView.Albums && catalog != null -> {
-                                val albums = catalog.albums(AlbumSort.Title).size
+                                val albums = catalog.albums(albumSort).size
                                 pluralStringResource(R.plurals.album_count, albums, albums)
                             }
                             else -> pluralStringResource(R.plurals.song_count, tracks.size, tracks.size)
                         }
                         Text(
-                            text = if (sortShown) sortSubtitle(count, sorted.spec) else count,
+                            text = when {
+                                songSortShown -> sortSubtitle(count, sorted.spec)
+                                albumSortShown -> sortSubtitle(count, albumSortSpec(albumSort))
+                                else -> count
+                            },
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
                     }
-                    if (sortShown) {
+                    if (songSortShown) {
                         SortButton(
                             sort = sorted.spec,
                             options = LibrarySorts.MusicOptions,
@@ -460,14 +492,24 @@ fun LibraryContent(
                             initialOpen = initialSortMenuOpen,
                         )
                     }
+                    if (albumSortShown) {
+                        AlbumSortButton(
+                            sort = albumSort,
+                            onSortChange = { picked ->
+                                albumGridState.requestScrollToItem(0)
+                                onAlbumSortChange(picked)
+                            },
+                        )
+                    }
                 }
             }
-            // Hidden with nothing to show, while selecting and on an artist page.
-            if (view != null && tracks.isNotEmpty() && !selection.active && page == null) {
+            // Hidden with nothing to show, while selecting and on an artist or album page.
+            if (view != null && tracks.isNotEmpty() && !selection.active && page == null && albumPage == null) {
                 MusicViewChips(
                     selected = view,
                     onSelect = { picked ->
                         jumpToTopForView = picked
+                        albumGridState.requestScrollToItem(0)
                         onViewChange(picked)
                     },
                     modifier = Modifier.padding(bottom = 8.dp),
@@ -475,11 +517,26 @@ fun LibraryContent(
             }
             // Keyed by view, so a switch swaps the body instead of animating rows between views.
             key(shownView) {
+                // Composed only while a page is open, so it is newer than MusicApp's two-pane
+                // close-video handler and Back closes the album page, then the artist page.
+                if (albumPage != null || page != null) {
+                    AppBackHandler { onClosePage() }
+                }
                 when {
+                    albumPage != null -> AlbumPageContent(
+                        page = albumPage,
+                        nowPlaying = nowPlaying,
+                        favoriteIds = favoriteIds,
+                        onTrackSelected = onTrackSelected,
+                        onShuffle = onShuffle,
+                        onToggleFavorite = onToggleFavorite,
+                        onAddToPlaylist = onAddToPlaylist,
+                        onTrash = trashOne,
+                        listState = albumPageListState,
+                        contentBottomPadding = contentBottomPadding,
+                        modifier = Modifier.weight(1f),
+                    )
                     page != null && catalog != null -> {
-                        // Composed only while the page is open, so it is newer than MusicApp's
-                        // two-pane close-video handler and Back closes the page first.
-                        AppBackHandler { onClosePage() }
                         ArtistPageContent(
                             page = page,
                             catalog = catalog,
@@ -490,6 +547,7 @@ fun LibraryContent(
                             onToggleFavorite = onToggleFavorite,
                             onAddToPlaylist = onAddToPlaylist,
                             onTrash = trashOne,
+                            onOpenAlbum = onOpenAlbum,
                             listState = artistPageListState,
                             contentBottomPadding = contentBottomPadding,
                             modifier = Modifier.weight(1f),
@@ -502,11 +560,14 @@ fun LibraryContent(
                         contentBottomPadding = contentBottomPadding,
                         modifier = Modifier.weight(1f),
                     )
-                    shownView == MusicView.Albums -> AlbumsPlaceholder(
+                    shownView == MusicView.Albums -> AlbumGrid(
+                        albums = catalog?.albums(albumSort).orEmpty(),
+                        gridState = albumGridState,
+                        onOpenAlbum = onOpenAlbum,
+                        contentBottomPadding = contentBottomPadding,
                         modifier = Modifier
                             .weight(1f)
-                            .fillMaxWidth()
-                            .padding(bottom = contentBottomPadding),
+                            .fillMaxWidth(),
                     )
                     else -> SongsBody(
                         tracks = tracks,
@@ -865,23 +926,30 @@ internal fun SongListRow(
     onLongClick: (() -> Unit)? = null,
     /** The line under the title, before the length; an artist page passes the album, or null for the length alone. */
     detail: String? = TrackDisplay.subtitle(track.artist, track.album),
+    /** Drawn in place of the art (an album page's track number), in the muted colour of the row's own fill. */
+    leading: (@Composable (tint: Color) -> Unit)? = null,
 ) {
     val chrome = LocalBackgroundChrome.current
+    val fill = if (isPlaying || selected) chrome.playingRowFill else chrome.rowFill
     ListRow(
         title = TrackDisplay.title(track.title),
         detail = detail,
         length = PlaybackTime.format(track.durationMs),
-        fill = if (isPlaying || selected) chrome.playingRowFill else chrome.rowFill,
+        fill = fill,
         isPlaying = isPlaying,
         onClick = onClick,
         onLongClick = onLongClick ?: onAddToPlaylist,
         art = {
-            AlbumArtwork(
-                albumArtUri = track.albumArtUri,
-                modifier = Modifier.size(ListThumbnailSize),
-                shape = ListThumbnailShape,
-                title = track.title,
-            )
+            if (leading != null) {
+                leading(rememberSurfaceRoles(fill).onVariantArgb.toComposeColor())
+            } else {
+                AlbumArtwork(
+                    albumArtUri = track.albumArtUri,
+                    modifier = Modifier.size(ListThumbnailSize),
+                    shape = ListThumbnailShape,
+                    title = track.title,
+                )
+            }
         },
         modifier = modifier,
         selectionMode = selectionMode,

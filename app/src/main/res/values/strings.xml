@@ -348,7 +348,13 @@
     <string name="artist_albums">Albums</string>
     <string name="artist_appears_on">Appears on</string>
     <string name="artist_songs">Songs</string>
-    <string name="albums_coming">Albums are coming in the next update.</string>
+    <string name="albums_empty">No albums found</string>
+    <string name="album_disc">Disc %d</string>
+    <string name="track_number_missing">—</string>
+    <plurals name="album_minutes">
+        <item quantity="one">%d min</item>
+        <item quantity="other">%d min</item>
+    </plurals>
     <string name="selected">Selected</string>
     <string name="not_selected">Not selected</string>
     <plurals name="album_count">

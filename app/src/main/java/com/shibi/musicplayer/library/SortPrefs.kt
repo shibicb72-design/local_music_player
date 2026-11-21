@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.shibi.musicplayer.domain.AlbumSort
 import com.shibi.musicplayer.domain.LibrarySorts
 import com.shibi.musicplayer.domain.MovieSortDefault
 import com.shibi.musicplayer.domain.MusicView
@@ -21,7 +22,7 @@ import kotlinx.coroutines.flow.map
 /**
  * Each list's own sort: Videos under `video_sort`, Songs under `music_sort`, the Movies filter
  * under `movie_sort`; the Videos filter under `video_filter`; the Songs screen's view under
- * `music_view`. Values that are not one of the
+ * `music_view`; the Albums grid's sort under `album_sort`. Values that are not one of the
  * list's options (an old build, a corrupt file) read as its default.
  */
 interface SortPrefs {
@@ -31,12 +32,14 @@ interface SortPrefs {
     val videoFilter: Flow<VideoFilter>
     val movieSort: Flow<SortSpec>
     val musicView: Flow<MusicView>
+    val albumSort: Flow<AlbumSort>
 
     suspend fun setVideoSort(spec: SortSpec)
     suspend fun setMusicSort(spec: SortSpec)
     suspend fun setVideoFilter(filter: VideoFilter)
     suspend fun setMovieSort(spec: SortSpec)
     suspend fun setMusicView(view: MusicView)
+    suspend fun setAlbumSort(sort: AlbumSort)
 
     companion object {
         /** The app's store, shared by both lists' view models. */
@@ -69,6 +72,8 @@ internal class DataStoreSortPrefs(private val dataStore: DataStore<Preferences>)
 
     override val musicView: Flow<MusicView> = prefs.map { prefs -> MusicView.fromKey(prefs[MusicViewKey]) }
 
+    override val albumSort: Flow<AlbumSort> = prefs.map { prefs -> AlbumSort.fromKey(prefs[AlbumSortKey]) }
+
     override suspend fun setVideoSort(spec: SortSpec) {
         dataStore.edit { prefs -> prefs[VideoSortKey] = spec.encode() }
     }
@@ -89,12 +94,17 @@ internal class DataStoreSortPrefs(private val dataStore: DataStore<Preferences>)
         dataStore.edit { prefs -> prefs[MusicViewKey] = view.key }
     }
 
+    override suspend fun setAlbumSort(sort: AlbumSort) {
+        dataStore.edit { prefs -> prefs[AlbumSortKey] = sort.key }
+    }
+
     private companion object {
         val VideoSortKey = stringPreferencesKey("video_sort")
         val MusicSortKey = stringPreferencesKey("music_sort")
         val VideoFilterKey = stringPreferencesKey("video_filter")
         val MovieSortKey = stringPreferencesKey("movie_sort")
         val MusicViewKey = stringPreferencesKey("music_view")
+        val AlbumSortKey = stringPreferencesKey("album_sort")
     }
 }
 
@@ -105,12 +115,14 @@ internal class InMemorySortPrefs(
     filter: VideoFilter = VideoFilter.All,
     movie: SortSpec = MovieSortDefault,
     view: MusicView = MusicView.Songs,
+    albumSort: AlbumSort = AlbumSort.Title,
 ) : SortPrefs {
     override val videoSort = MutableStateFlow(video)
     override val musicSort = MutableStateFlow(music)
     override val videoFilter = MutableStateFlow(filter)
     override val movieSort = MutableStateFlow(movie)
     override val musicView = MutableStateFlow(view)
+    override val albumSort = MutableStateFlow(albumSort)
 
     override suspend fun setVideoSort(spec: SortSpec) {
         videoSort.value = spec
@@ -130,5 +142,9 @@ internal class InMemorySortPrefs(
 
     override suspend fun setMusicView(view: MusicView) {
         musicView.value = view
+    }
+
+    override suspend fun setAlbumSort(sort: AlbumSort) {
+        albumSort.value = sort
     }
 }

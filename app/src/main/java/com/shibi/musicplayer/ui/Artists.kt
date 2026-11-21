@@ -2,6 +2,7 @@ package com.shibi.musicplayer.ui
 
 import androidx.annotation.StringRes
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -36,9 +38,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -216,6 +218,7 @@ internal fun ArtistPageContent(
     onToggleFavorite: (Track) -> Unit,
     onAddToPlaylist: (Track) -> Unit,
     onTrash: ((Track) -> Unit)?,
+    onOpenAlbum: (String) -> Unit,
     listState: LazyListState,
     contentBottomPadding: Dp,
     modifier: Modifier = Modifier,
@@ -245,12 +248,12 @@ internal fun ArtistPageContent(
         }
         if (page.albums.isNotEmpty()) {
             item(key = "albums", contentType = "strip") {
-                AlbumStrip(heading = stringResource(R.string.artist_albums), albums = page.albums)
+                AlbumStrip(heading = stringResource(R.string.artist_albums), albums = page.albums, onOpenAlbum = onOpenAlbum)
             }
         }
         if (page.appearsOn.isNotEmpty()) {
             item(key = "appears_on", contentType = "strip") {
-                AlbumStrip(heading = stringResource(R.string.artist_appears_on), albums = page.appearsOn)
+                AlbumStrip(heading = stringResource(R.string.artist_appears_on), albums = page.appearsOn, onOpenAlbum = onOpenAlbum)
             }
         }
         item(key = "songs_heading", contentType = "heading") {
@@ -277,7 +280,7 @@ internal fun ArtistPageContent(
  * the page's own content colour, so they read on a dark backdrop and on a pastel one alike.
  */
 @Composable
-private fun ArtistButtons(enabled: Boolean, onPlayAll: () -> Unit, onShuffle: () -> Unit) {
+internal fun ArtistButtons(enabled: Boolean, onPlayAll: () -> Unit, onShuffle: () -> Unit) {
     val content = MaterialTheme.colorScheme.onBackground
     Row(
         modifier = Modifier
@@ -320,9 +323,9 @@ private fun SectionHeading(text: String) {
     )
 }
 
-/** A heading over a row of album cards that scrolls sideways. */
+/** A heading over a row of album cards that scrolls sideways; each card reads "2013 · 4 songs". */
 @Composable
-private fun AlbumStrip(heading: String, albums: List<AlbumEntry>) {
+private fun AlbumStrip(heading: String, albums: List<AlbumEntry>, onOpenAlbum: (String) -> Unit) {
     Column {
         SectionHeading(heading)
         LazyRow(
@@ -330,23 +333,35 @@ private fun AlbumStrip(heading: String, albums: List<AlbumEntry>) {
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             items(albums, key = { it.key }, contentType = { "album" }) { album ->
-                AlbumCard(album)
+                val songs = pluralStringResource(R.plurals.song_count, album.songCount, album.songCount)
+                AlbumCard(
+                    album = album,
+                    meta = album.year?.let { "$it · $songs" } ?: songs,
+                    onClick = { onOpenAlbum(album.key) },
+                    modifier = Modifier.width(AlbumCardSize),
+                )
             }
         }
     }
 }
 
 /**
- * An album: square art, its title and "2013 · 4 songs" (no year when unknown). Not tappable
- * yet: the album page comes in the next step.
+ * An album: square art as wide as the card, its title and [meta], read out as one
+ * "title, meta". [modifier] sets the width: a strip's fixed one or the grid's cell.
  */
 @Composable
-private fun AlbumCard(album: AlbumEntry) {
-    val songs = pluralStringResource(R.plurals.song_count, album.songCount, album.songCount)
-    Column(modifier = Modifier.width(AlbumCardSize)) {
+internal fun AlbumCard(album: AlbumEntry, meta: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .clickable(onClick = onClick)
+            .semantics { contentDescription = "${album.title}, $meta" },
+    ) {
         AlbumArtwork(
             albumArtUri = album.albumArtUri,
-            modifier = Modifier.size(AlbumCardSize),
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(1f)
+                .clearAndSetSemantics {},
             shape = RoundedCornerShape(12.dp),
             title = album.title,
         )
@@ -357,26 +372,15 @@ private fun AlbumCard(album: AlbumEntry) {
             color = MaterialTheme.colorScheme.onBackground,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.clearAndSetSemantics {},
         )
         Text(
-            text = album.year?.let { "$it · $songs" } ?: songs,
+            text = meta,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-        )
-    }
-}
-
-/** The Albums chip for now: one centred line. The grid and the album page replace it in the next step. */
-@Composable
-internal fun AlbumsPlaceholder(modifier: Modifier = Modifier) {
-    Box(modifier = modifier.padding(24.dp), contentAlignment = Alignment.Center) {
-        Text(
-            text = stringResource(R.string.albums_coming),
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
+            modifier = Modifier.clearAndSetSemantics {},
         )
     }
 }

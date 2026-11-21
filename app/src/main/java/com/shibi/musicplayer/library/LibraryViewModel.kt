@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.shibi.musicplayer.R
+import com.shibi.musicplayer.domain.AlbumSort
 import com.shibi.musicplayer.domain.LibrarySorter
 import com.shibi.musicplayer.domain.LibrarySorts
 import com.shibi.musicplayer.domain.MusicCatalog
@@ -53,6 +54,13 @@ data class LibraryUiState(
     val isReady: Boolean = false,
     /** The artist page shown in place of the Artists list; null shows the list. Not stored. */
     val openArtistKey: OpenArtist? = null,
+    /** The Albums grid's order: the stored one, then the user's picks. */
+    val albumSort: AlbumSort = AlbumSort.Title,
+    /**
+     * The album page shown in place of the grid, or of the artist page it was opened from; null
+     * shows what is under it. Not stored.
+     */
+    val openAlbumKey: String? = null,
 )
 
 /** An open artist page. Wraps the key, because the unknown artist's key is null. */
@@ -89,6 +97,9 @@ class LibraryViewModel internal constructor(
     /** The user picked a view while the store was still reading: the pick wins. */
     private var viewPicked = false
 
+    /** The same for the album sort. */
+    private var albumSortPicked = false
+
     init {
         viewModelScope.launch {
             val stored = sortPrefs.musicSort.first()
@@ -98,6 +109,8 @@ class LibraryViewModel internal constructor(
         viewModelScope.launch {
             val stored = sortPrefs.musicView.first()
             if (!viewPicked) _uiState.update { it.copy(view = stored) }
+            val storedAlbumSort = sortPrefs.albumSort.first()
+            if (!albumSortPicked) _uiState.update { it.copy(albumSort = storedAlbumSort) }
             viewLoaded.value = true
         }
         viewModelScope.launch {
@@ -152,7 +165,7 @@ class LibraryViewModel internal constructor(
     /** The user picked [view] from the chips: it shows, any open page closes, and the pick is stored. */
     fun setView(view: MusicView) {
         viewPicked = true
-        _uiState.update { it.copy(view = view, openArtistKey = null) }
+        _uiState.update { it.copy(view = view, openArtistKey = null, openAlbumKey = null) }
         viewModelScope.launch {
             try {
                 sortPrefs.setMusicView(view)
@@ -162,13 +175,34 @@ class LibraryViewModel internal constructor(
         }
     }
 
+    /** The user picked [sort] in the Albums menu: the grid reorders, and the pick is stored. */
+    fun setAlbumSort(sort: AlbumSort) {
+        albumSortPicked = true
+        _uiState.update { it.copy(albumSort = sort) }
+        viewModelScope.launch {
+            try {
+                sortPrefs.setAlbumSort(sort)
+            } catch (_: IOException) {
+                // Kept for this session; the next start falls back to the stored sort.
+            }
+        }
+    }
+
     /** Opens the page of the artist with [key]; null is the unknown artist. */
     fun openArtist(key: String?) {
         _uiState.update { it.copy(openArtistKey = OpenArtist(key)) }
     }
 
+    /** Opens the page of the album with [key], over the grid or over the open artist page. */
+    fun openAlbum(key: String) {
+        _uiState.update { it.copy(openAlbumKey = key) }
+    }
+
+    /** Closes the album page if one is open, so Back returns to the artist it came from; else the artist page. */
     fun closePage() {
-        _uiState.update { it.copy(openArtistKey = null) }
+        _uiState.update {
+            if (it.openAlbumKey != null) it.copy(openAlbumKey = null) else it.copy(openArtistKey = null)
+        }
     }
 
     private suspend fun publish(scan: Scan, sort: SortSpec) {
@@ -198,6 +232,8 @@ class LibraryViewModel internal constructor(
                 isReady = true,
                 // A rescan without the open artist closes the page.
                 openArtistKey = current.openArtistKey?.takeIf { catalog.hasArtist(it.key) },
+                // The same for the open album; the artist page under it stays if its artist does.
+                openAlbumKey = current.openAlbumKey?.takeIf(catalog::hasAlbum),
             )
         }
     }
