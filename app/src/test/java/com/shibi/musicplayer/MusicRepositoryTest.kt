@@ -61,6 +61,12 @@ class MusicRepositoryTest {
                 MediaStore.Audio.Media.ALBUM_ID,
                 MediaStore.Audio.Media.DATE_ADDED,
                 MediaStore.Audio.Media.SIZE,
+                MediaStore.Audio.Media.ALBUM_ARTIST,
+                MediaStore.Audio.Media.TRACK,
+                MediaStore.Audio.Media.YEAR,
+                MediaStore.Audio.Media.DISPLAY_NAME,
+                MediaStore.Audio.Media.GENRE,
+                MediaStore.Audio.Media.RELATIVE_PATH,
             ),
             provider.lastProjection,
         )
@@ -94,6 +100,61 @@ class MusicRepositoryTest {
     }
 
     @Test
+    fun theNewTagsAreDecoded() {
+        provider.rows += row(
+            id = 1L, title = "Aria", albumArtist = "Various Artists", track = 2005, year = 1999,
+            displayName = "05 Aria.mp3", genre = "Opera", relativePath = "Music/Artist/Album/", data = "/storage/emulated/0/ignored/x.mp3",
+        )
+
+        val track = MusicRepository(application).loadTracks().single()
+
+        assertEquals("Various Artists", track.albumArtist)
+        assertEquals(2, track.discNumber)
+        assertEquals(5, track.trackNumber)
+        assertEquals(1999, track.year)
+        assertEquals("Opera", track.genre)
+        assertEquals("Music/Artist/Album", track.folder)
+        assertEquals("05 Aria.mp3", track.fileName)
+    }
+
+    @Test
+    fun aPlainTrackNumberHasNoDiscAndZeroOrNullValuesAreAbsent() {
+        provider.rows += row(id = 1L, title = "A", track = 7, year = 0, relativePath = "/")
+        provider.rows += row(id = 2L, title = "B", track = 0, year = null, albumArtist = " ", genre = null, relativePath = null)
+
+        val (plain, empty) = MusicRepository(application).loadTracks()
+
+        assertEquals(7, plain.trackNumber)
+        assertNull(plain.discNumber)
+        assertNull(plain.year)
+        assertNull(plain.folder)
+        assertNull(empty.trackNumber)
+        assertNull(empty.discNumber)
+        assertNull(empty.albumArtist)
+        assertNull(empty.genre)
+        assertNull(empty.folder)
+        assertNull(empty.fileName)
+    }
+
+    @Test
+    @Config(sdk = [28])
+    fun beforeApi29TheFolderIsTheParentOfDataAndGenreAndRelativePathAreNotQueried() {
+        provider.rows += row(id = 1L, title = "A", genre = "Rock", relativePath = "Wrong/", data = "/storage/emulated/0/Music/Artist/Album/a.mp3")
+        provider.rows += row(id = 2L, title = "B", data = "/storage/1234-ABCD/Podcasts/b.mp3")
+        provider.rows += row(id = 3L, title = "C", data = "/storage/emulated/0/c.mp3")
+        provider.rows += row(id = 4L, title = "D", data = "/sdcard/Music/x.mp3")
+
+        val tracks = MusicRepository(application).loadTracks()
+
+        val projection = provider.lastProjection!!.toList()
+        assertTrue(MediaStore.Audio.Media.DATA in projection)
+        assertTrue(MediaStore.Audio.Media.GENRE !in projection)
+        assertTrue(MediaStore.Audio.Media.RELATIVE_PATH !in projection)
+        assertEquals(listOf("Music/Artist/Album", "Podcasts", null, "Music"), tracks.map { it.folder })
+        assertNull(tracks[0].genre)
+    }
+
+    @Test
     fun missingTagsBecomeThePlaceholdersAndMissingNumbersUnknown() {
         provider.rows += row(id = 8L, title = " ", artist = MediaStore.UNKNOWN_STRING, album = null, duration = -5L, albumId = 0L, dateAdded = 0L, size = null)
 
@@ -110,7 +171,7 @@ class MusicRepositoryTest {
 
     @Test
     fun aProviderWithoutTheNewColumnsStillLoads() {
-        provider.withoutDateAndSize = true
+        provider.withoutColumns = setOf(MediaStore.Audio.Media.DATE_ADDED, MediaStore.Audio.Media.SIZE)
         provider.rows += row(id = 9L, title = "Old")
 
         val track = MusicRepository(application).loadTracks().single()
@@ -239,14 +300,21 @@ class MusicRepositoryTest {
         albumId: Long? = 0L,
         dateAdded: Long? = null,
         size: Long? = null,
-    ): Array<Any?> = arrayOf(id, title, artist, album, duration, albumId, dateAdded, size)
+        albumArtist: String? = null,
+        track: Int? = null,
+        year: Int? = null,
+        displayName: String? = null,
+        genre: String? = null,
+        relativePath: String? = null,
+        data: String? = null,
+    ): Array<Any?> = arrayOf(id, title, artist, album, duration, albumId, dateAdded, size, albumArtist, track, year, displayName, genre, relativePath, data)
 }
 
 /** The audio table: columns in a fixed order unlike the projection, so mapping must go by name. */
 class FakeAudioProvider : ContentProvider() {
     val rows = mutableListOf<Array<Any?>>()
     var returnNull = false
-    var withoutDateAndSize = false
+    var withoutColumns: Set<String> = emptySet()
     var lastUri: Uri? = null
     var lastProjection: Array<String>? = null
     var lastSelection: String? = null
@@ -266,7 +334,16 @@ class FakeAudioProvider : ContentProvider() {
         lastSelection = selection
         lastSortOrder = sortOrder
         if (returnNull) return null
-        val columns = arrayOf(
+        // Only the projected columns that exist, in reverse order: mapping must go by name.
+        val picked = COLUMNS.indices.filter { COLUMNS[it] in projection.orEmpty() && COLUMNS[it] !in withoutColumns }.reversed()
+        val cursor = MatrixCursor(picked.map { COLUMNS[it] }.toTypedArray())
+        rows.forEach { row -> cursor.addRow(picked.map { row.getOrNull(it) }.toTypedArray()) }
+        return cursor
+    }
+
+    private companion object {
+        /** The order of a row's values, see MusicRepositoryTest.row. */
+        val COLUMNS = listOf(
             MediaStore.Audio.Media._ID,
             MediaStore.Audio.Media.TITLE,
             MediaStore.Audio.Media.ARTIST,
@@ -275,11 +352,14 @@ class FakeAudioProvider : ContentProvider() {
             MediaStore.Audio.Media.ALBUM_ID,
             MediaStore.Audio.Media.DATE_ADDED,
             MediaStore.Audio.Media.SIZE,
+            MediaStore.Audio.Media.ALBUM_ARTIST,
+            MediaStore.Audio.Media.TRACK,
+            MediaStore.Audio.Media.YEAR,
+            MediaStore.Audio.Media.DISPLAY_NAME,
+            MediaStore.Audio.Media.GENRE,
+            MediaStore.Audio.Media.RELATIVE_PATH,
+            MediaStore.Audio.Media.DATA,
         )
-        val kept = if (withoutDateAndSize) columns.size - 2 else columns.size
-        val cursor = MatrixCursor(columns.take(kept).reversed().toTypedArray())
-        rows.forEach { cursor.addRow(it.take(kept).reversed().toTypedArray()) }
-        return cursor
     }
 
     override fun getType(uri: Uri): String? = null

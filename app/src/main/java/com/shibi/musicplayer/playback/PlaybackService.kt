@@ -21,6 +21,7 @@ import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import com.shibi.musicplayer.MainActivity
 import com.shibi.musicplayer.R
+import com.shibi.musicplayer.domain.UnknownNames
 import com.shibi.musicplayer.playlist.PlaylistDatabase
 import com.shibi.musicplayer.playlist.PlaylistRepository
 import kotlinx.coroutines.CoroutineScope
@@ -63,7 +64,12 @@ class PlaybackService : MediaSessionService() {
             .apply {
                 repeatMode = Player.REPEAT_MODE_OFF
             }
-        likeShuffle = LikeShuffleDriver(player).also { it.attach() }
+        val unknown = UnknownNames(
+            title = getString(R.string.unknown_title),
+            artist = getString(R.string.unknown_artist),
+            album = getString(R.string.unknown_album),
+        )
+        likeShuffle = LikeShuffleDriver(player, unknown).also { it.attach() }
         // Likes reach the shuffle live, so a heart tapped mid-session changes the next pick.
         val favorites = PlaylistRepository(PlaylistDatabase.get(this).playlistDao()).favoriteIds
         serviceScope.launch {
