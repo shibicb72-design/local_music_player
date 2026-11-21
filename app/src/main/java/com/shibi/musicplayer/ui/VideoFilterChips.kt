@@ -4,6 +4,7 @@ import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.heightIn
@@ -60,11 +61,13 @@ internal fun VideoFilterChips(
     onSelect: (VideoFilter) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val filtersLabel = stringResource(R.string.video_filters_label)
     Row(
         modifier = modifier
             .horizontalScroll(rememberScrollState())
             .selectableGroup()
-            .padding(horizontal = ListRowSideMargin, vertical = 4.dp),
+            .semantics { contentDescription = filtersLabel }
+            .padding(horizontal = ListRowSideMargin),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -80,8 +83,9 @@ internal fun VideoFilterChips(
 }
 
 /**
- * One chip. Fill: the theme's `primaryContainer` when chosen, `surfaceVariant` otherwise; the
- * text takes its colour from that fill (`rememberSurfaceRoles`), the count in the quieter role.
+ * One chip. Fill: the theme's `primary` when chosen, `surfaceVariant` otherwise; the text takes
+ * its colour from that fill (`rememberSurfaceRoles`), the count in the quieter role. The pill is
+ * 40 dp tall inside a 48 dp touch target, and grows with the font.
  */
 @Composable
 private fun FilterChipItem(
@@ -91,7 +95,7 @@ private fun FilterChipItem(
     onClick: () -> Unit,
 ) {
     val colors = MaterialTheme.colorScheme
-    val fill = if (chosen) colors.primaryContainer else colors.surfaceVariant
+    val fill = if (chosen) colors.primary else colors.surfaceVariant
     val roles = rememberSurfaceRoles(fill)
     val label = stringResource(labelRes(filter))
     val description = if (count != null) {
@@ -99,34 +103,40 @@ private fun FilterChipItem(
     } else {
         label
     }
-    Row(
+    Box(
         modifier = Modifier
             .heightIn(min = 48.dp)
-            .clip(RoundedCornerShape(24.dp))
-            .background(fill)
             // The row reads as one tab: its label and count are one spoken phrase.
             .selectable(selected = chosen, onClick = onClick, role = Role.Tab)
-            .semantics { contentDescription = description }
-            .padding(horizontal = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .semantics { contentDescription = description },
+        contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelLarge,
-            color = roles.onSurfaceArgb.toComposeColor(),
-            maxLines = 1,
-            // The chip's description speaks the label and the count; the texts add nothing.
-            modifier = Modifier.clearAndSetSemantics {},
-        )
-        if (count != null) {
-            Spacer(Modifier.width(6.dp))
+        Row(
+            modifier = Modifier
+                .heightIn(min = 40.dp)
+                .clip(RoundedCornerShape(20.dp))
+                .background(fill)
+                .padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             Text(
-                text = count.toString(),
-                style = MaterialTheme.typography.labelMedium,
-                color = roles.onVariantArgb.toComposeColor(),
+                text = label,
+                style = MaterialTheme.typography.labelLarge,
+                color = roles.onSurfaceArgb.toComposeColor(),
                 maxLines = 1,
+                // The chip's description speaks the label and the count; the texts add nothing.
                 modifier = Modifier.clearAndSetSemantics {},
             )
+            if (count != null) {
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = count.toString(),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = roles.onVariantArgb.toComposeColor(),
+                    maxLines = 1,
+                    modifier = Modifier.clearAndSetSemantics {},
+                )
+            }
         }
     }
 }

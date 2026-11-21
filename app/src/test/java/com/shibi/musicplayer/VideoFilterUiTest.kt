@@ -5,9 +5,13 @@ import android.os.Looper
 import android.provider.MediaStore
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsSelected
@@ -16,6 +20,7 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
@@ -23,10 +28,15 @@ import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.shibi.musicplayer.domain.Video
+import com.shibi.musicplayer.domain.VideoAccess
+import com.shibi.musicplayer.domain.VideoCounts
 import com.shibi.musicplayer.domain.VideoFilter
 import com.shibi.musicplayer.library.InMemorySortPrefs
+import com.shibi.musicplayer.library.VideoLibraryUiState
 import com.shibi.musicplayer.library.VideoLibraryViewModel
 import com.shibi.musicplayer.library.VideoRepository
+import com.shibi.musicplayer.ui.SortButtonTag
+import com.shibi.musicplayer.ui.VideosContent
 import com.shibi.musicplayer.ui.VideosScreen
 import com.shibi.musicplayer.ui.theme.MusicPlayerTheme
 import com.shibi.musicplayer.ui.videoSubtitle
@@ -103,6 +113,13 @@ class VideoFilterUiTest {
         show(viewModel(InMemorySortPrefs()))
         // Newest first: the last row added is the first shown.
         assertEquals(ALL_TITLES.reversed(), shownTitles(ALL_TITLES))
+        // An All row keeps its folder and gets no year.
+        assertTrue(
+            "an All row shows its folder",
+            compose.onAllNodes(hasText(" · Downloads", substring = true)).fetchSemanticsNodes().isNotEmpty(),
+        )
+        compose.onAllNodes(hasText("2010 · ", substring = true)).assertCountEquals(0)
+        compose.onAllNodes(hasText("2016 · ", substring = true)).assertCountEquals(0)
     }
 
     @Test
@@ -145,6 +162,7 @@ class VideoFilterUiTest {
         compose.onNodeWithText("TV shows are coming in the next update.").assertIsDisplayed()
         compose.onNodeWithText("Lost.S01E02").assertDoesNotExist()
         compose.onNodeWithText("Play all").assertDoesNotExist()
+        compose.onAllNodes(verticalList).assertCountEquals(0)
         chip("TV, 4 videos").assertIsSelected()
     }
 
@@ -158,6 +176,7 @@ class VideoFilterUiTest {
         settle()
         compose.onNodeWithText("No movies found").assertIsDisplayed()
         compose.onNodeWithText("Play all").assertDoesNotExist()
+        compose.onNodeWithTag(SortButtonTag).assertDoesNotExist()
         chip("All, 2 videos").performClick()
         settle()
         compose.onNodeWithText("Lost.S01E01").assertIsDisplayed()
@@ -178,22 +197,43 @@ class VideoFilterUiTest {
     @Test
     fun switchingFiltersReturnsTheListToTheTop() {
         val provider = provider()
+        // Both lists are longer than the screen: 26 movies, then 30 newer clips.
         NATO.forEachIndexed { index, name ->
             provider.rows += row(index + 1L, "$name.2001.mkv", "$name.2001", "Downloads")
         }
-        provider.rows += row(100L, "DJI_0001.mp4", "DJI_0001", "Camera")
+        (1..30).forEach { n ->
+            val name = "Clip %02d".format(n)
+            provider.rows += row(100L + n, "DJI_%04d.mp4".format(n), name, "Camera")
+        }
         show(viewModelOver(InMemorySortPrefs()))
+        compose.onNodeWithText("Clip 30").assertIsDisplayed()
+        scrollDown()
+        compose.onNodeWithText("Clip 30").assertDoesNotExist()
+        // From a scrolled All to Movies: the first movie shows.
         chip("Movies, 26 videos").performClick()
         settle()
         compose.onNodeWithText("Alpha").assertIsDisplayed()
-        repeat(3) { compose.onNode(hasScrollAction() and !SemanticsMatcher.keyIsDefined(SemanticsProperties.HorizontalScrollAxisRange)).performTouchInput { swipeUp() } }
-        settle()
+        scrollDown()
         compose.onNodeWithText("Alpha").assertDoesNotExist()
-        chip("Personal, 1 video").performClick()
+        // From a scrolled Movies to All: the newest clip shows.
+        chip("All, 56 videos").performClick()
         settle()
-        chip("Movies, 26 videos").performClick()
+        compose.onNodeWithText("Clip 30").assertIsDisplayed()
+    }
+
+    @Test
+    fun chipsShowLabelsOnlyWhileTheCountsDoNotMatchTheList() {
+        val two = listOf(fake(1L), fake(2L))
+        var state by mutableStateOf(readyState(two, VideoCounts(all = 5, movies = 1, tv = 1, personal = 3)))
+        compose.setContent { MusicPlayerTheme { Box(Modifier.fillMaxSize()) { VideosContent(state, {}, {}, {}, 0.dp) } } }
         settle()
-        compose.onNodeWithText("Alpha").assertIsDisplayed()
+        chip("All").assertIsSelected()
+        chip("Movies").assertIsDisplayed()
+        chip("All, 5 videos").assertDoesNotExist()
+        state = readyState(two, VideoCounts(all = 2, movies = 1, tv = 0, personal = 1))
+        settle()
+        chip("All, 2 videos").assertIsSelected()
+        chip("Movies, 1 video").assertIsDisplayed()
     }
 
     @Test
@@ -209,6 +249,24 @@ class VideoFilterUiTest {
     }
 
     // --- Helpers ---
+
+    private val verticalList =
+        hasScrollAction() and !SemanticsMatcher.keyIsDefined(SemanticsProperties.HorizontalScrollAxisRange)
+
+    private fun scrollDown() {
+        repeat(3) { compose.onNode(verticalList).performTouchInput { swipeUp() } }
+        settle()
+    }
+
+    private fun fake(id: Long) = Video(
+        id = id, title = "Fake $id", displayName = "Fake $id.mp4", durationMs = 1_000L, sizeBytes = 1_000_000L,
+        width = 1920, height = 1080, mimeType = "video/mp4", dateAddedSeconds = id, folder = "Camera",
+        contentUri = "content://media/external/video/media/$id",
+    )
+
+    private fun readyState(videos: List<Video>, counts: VideoCounts) = VideoLibraryUiState(
+        access = VideoAccess.Full, videos = videos, filter = VideoFilter.All, isReady = true, counts = counts,
+    )
 
     private fun chip(description: String) = compose.onNodeWithContentDescription(description)
 

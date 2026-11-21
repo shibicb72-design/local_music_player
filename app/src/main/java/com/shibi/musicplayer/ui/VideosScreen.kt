@@ -432,6 +432,8 @@ private fun VideoList(
     fastScrollDragFraction: Float? = null,
 ) {
     val videos = state.videos
+    // Under All no identity is read, so its second update (the identities) recomposes no row.
+    val identities = if (state.filter == VideoFilter.All) emptyMap() else state.identities
     val reduceMotion = rememberReduceMotion()
     when {
         videos.isEmpty() && state.isLoading -> Box(modifier, contentAlignment = Alignment.Center) {
@@ -478,8 +480,7 @@ private fun VideoList(
                             is VideoListEntry.Row -> {
                                 val video = entry.video
                                 item(key = video.id, contentType = "video") {
-                                    // Under All no identity is read: that list stays as it always was.
-                                    val identity = state.identities[video.id].takeIf { state.filter != VideoFilter.All }
+                                    val identity = identities[video.id]
                                     VideoRow(
                                         video = video,
                                         // A movie's year leads its details and its folder is dropped; a
