@@ -5,27 +5,30 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.material3.Text
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.Snapshot
-import com.shibi.musicplayer.domain.LibrarySorter
-import com.shibi.musicplayer.domain.SortField
-import com.shibi.musicplayer.domain.SortSpec
-import java.time.ZoneId
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.MotionDurationScale
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.shibi.musicplayer.domain.LibrarySorter
 import com.shibi.musicplayer.domain.MusicCatalog
 import com.shibi.musicplayer.domain.MusicView
+import com.shibi.musicplayer.domain.SortField
+import com.shibi.musicplayer.domain.SortSpec
 import com.shibi.musicplayer.domain.Track
 import com.shibi.musicplayer.domain.TvEpisode
 import com.shibi.musicplayer.domain.TvSeason
@@ -40,14 +43,19 @@ import com.shibi.musicplayer.library.VideoLibraryUiState
 import com.shibi.musicplayer.playback.PlayerUiState
 import com.shibi.musicplayer.ui.FadeThroughState
 import com.shibi.musicplayer.ui.LibraryContent
+import com.shibi.musicplayer.ui.LibraryPageTag
+import com.shibi.musicplayer.ui.LocalFadeThroughProbe
+import com.shibi.musicplayer.ui.PageMotionTarget
+import com.shibi.musicplayer.ui.PageSlide
 import com.shibi.musicplayer.ui.VideosContent
 import com.shibi.musicplayer.ui.rememberFadeThrough
 import com.shibi.musicplayer.ui.theme.MusicPlayerTheme
 import java.text.Collator
+import java.time.ZoneId
 import org.junit.After
-import org.junit.Before
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -82,7 +90,7 @@ class FilterMotionTest {
         lateinit var fade: FadeThroughState<String>
         compose.setContent {
             fade = remember { FadeThroughState("old", "old") }
-            LaunchedEffect(target) { fade.show(target, target) }
+            LaunchedEffect(target) { fade.showLatest(target) { target } }
             Text(fade.value)
         }
         compose.waitForIdle()
@@ -174,7 +182,7 @@ class FilterMotionTest {
         var target by mutableStateOf("initial")
         lateinit var fade: FadeThroughState<String>
         compose.setContent {
-            fade = rememberFadeThrough(target, animate = reduced)
+            fade = rememberFadeThrough(target, animate = { reduced })
             Text(fade.value)
         }
         compose.waitForIdle()
@@ -188,15 +196,19 @@ class FilterMotionTest {
     @Test
     fun videoChipSwitchHidesOutgoingSemanticsAndShowsIncomingList() {
         var state by mutableStateOf(videoState())
+        // The screen's own fade, heard through the tests-only probe: the filter body is its one FadeThrough.
+        var fade: FadeThroughState<*>? = null
         compose.setContent {
             MusicPlayerTheme {
-                VideosContent(
-                    state = state,
-                    onVideoClick = {}, onRequestAccess = {}, onOpenSettings = {},
-                    onFilterChange = { state = state.copy(filter = it).listing(listOf(NewVideo)) },
-                    contentBottomPadding = 0.dp,
-                    modifier = Modifier.fillMaxSize(),
-                )
+                CompositionLocalProvider(LocalFadeThroughProbe provides { fade = it }) {
+                    VideosContent(
+                        state = state,
+                        onVideoClick = {}, onRequestAccess = {}, onOpenSettings = {},
+                        onFilterChange = { state = state.copy(filter = it).listing(listOf(NewVideo)) },
+                        contentBottomPadding = 0.dp,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
             }
         }
         compose.waitForIdle()
@@ -213,6 +225,41 @@ class FilterMotionTest {
         compose.onNodeWithText("New clip").assertExists()
         compose.mainClock.advanceTimeBy(160)
         compose.onNodeWithText("New clip").assertExists()
+        // About 330 ms after the tap the fade-in is over.
+        compose.runOnIdle {
+            assertEquals(VideoFilter.Movies, requireNotNull(fade).shownKey)
+            assertEquals(1f, requireNotNull(fade).alpha.value, 0.001f)
+        }
+    }
+
+    /**
+     * Reduce motion composes one page at a time: the outgoing one leaves composition on the same
+     * frame the new one arrives, rather than being drawn, merely hidden, for a frame.
+     */
+    @Test
+    fun reducedPageSlideNeverComposesTwoPages() {
+        Settings.Global.putFloat(resolver, Settings.Global.ANIMATOR_DURATION_SCALE, 0f)
+        val list = PageMotionTarget(null, 0, LazyListState())
+        val page = PageMotionTarget("page", 1, LazyListState())
+        var target by mutableStateOf(list)
+        val composed = mutableSetOf<Int>()
+        compose.setContent {
+            PageSlide(target) { shown ->
+                DisposableEffect(shown.depth) {
+                    composed += shown.depth
+                    onDispose { composed -= shown.depth }
+                }
+                Text("depth ${shown.depth}")
+            }
+        }
+        compose.waitForIdle()
+        compose.mainClock.autoAdvance = false
+        write { target = page }
+        compose.mainClock.advanceTimeByFrame()
+        compose.runOnIdle { assertEquals(setOf(1), composed) }
+        write { target = list }
+        compose.mainClock.advanceTimeByFrame()
+        compose.runOnIdle { assertEquals(setOf(0), composed) }
     }
 
     @Test
@@ -246,8 +293,13 @@ class FilterMotionTest {
         val key = catalog.artists[8].key
         compose.mainClock.autoAdvance = false
         write { artist = OpenArtist(key) }
-        compose.mainClock.advanceTimeBy(64)
-        val page = compose.onNodeWithTag("libraryPage:1:$key")
+        // Reduce motion: the very next frame is the resting page. Otherwise, mid-slide.
+        if (reduced) compose.mainClock.advanceTimeByFrame() else compose.mainClock.advanceTimeBy(64)
+        // Only a page has a Back arrow. The unmerged tree still lists content whose semantics are
+        // cleared, so one root there means the list left composition; mid-slide it is only hidden.
+        compose.onNodeWithContentDescription("Back").assertExists()
+        compose.onAllNodesWithTag(LibraryPageTag, useUnmergedTree = reduced).assertCountEquals(1)
+        val page = compose.onNodeWithTag(LibraryPageTag)
         val earlyLeft = page.fetchSemanticsNode().boundsInRoot.left
         compose.mainClock.advanceTimeBy(300)
         val restingLeft = page.fetchSemanticsNode().boundsInRoot.left
@@ -257,8 +309,9 @@ class FilterMotionTest {
             assertTrue("page decelerates to rest", earlyLeft > restingLeft + 1f)
         }
         compose.onNodeWithContentDescription("Back").performClick()
-        compose.mainClock.advanceTimeBy(300)
-        page.assertDoesNotExist()
+        if (reduced) compose.mainClock.advanceTimeByFrame() else compose.mainClock.advanceTimeBy(300)
+        compose.onNodeWithContentDescription("Back").assertDoesNotExist()
+        compose.onAllNodesWithTag(LibraryPageTag, useUnmergedTree = true).assertCountEquals(1)
         compose.runOnIdle {
             assertEquals(before, listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset)
             assertEquals(firstRow, listState.layoutInfo.visibleItemsInfo.first().key)
@@ -288,6 +341,9 @@ class FilterMotionTest {
         compose.waitForIdle()
         compose.onNodeWithText("Show").performClick()
         compose.waitForIdle()
+        // The page really opened: its header's Back arrow is there and the show list is not.
+        compose.onNodeWithContentDescription("Back").assertExists()
+        compose.onNodeWithContentDescription("TV, 1 video").assertDoesNotExist()
         compose.runOnIdle { assertEquals(1, identities) }
     }
 

@@ -371,8 +371,9 @@ fun LibraryContent(
             else -> PageMotionTarget(null, 0, listState)
         }
     }
-    var chipsWereShown by remember { mutableStateOf(false) }
-    val viewFade = rememberFadeThrough(shownView, animate = chipsWereShown)
+    // Not snapshot state: its first flip must not recompose this whole screen.
+    val chipsWereShown = remember { BooleanArray(1) }
+    val viewFade = rememberFadeThrough(shownView, animate = { chipsWereShown[0] })
     // Outside the view's key, so Back from an album page finds the grid where it was.
     val albumGridState = rememberLazyGridState()
     // Set when the user picks an album sort: the grid goes to the top once it shows that sort.
@@ -413,7 +414,7 @@ fun LibraryContent(
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .testTag("libraryPage:${shown.depth}:${shown.key}")
+                        .testTag(LibraryPageTag)
                         .padding(padding)
                         .windowInsetsPadding(
                             WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal),
@@ -527,7 +528,7 @@ fun LibraryContent(
                     }
                     // Hidden with nothing to show, while selecting and on an artist or album page.
                     if (view != null && tracks.isNotEmpty() && !selection.active && shown.depth == 0) {
-                        SideEffect { chipsWereShown = true }
+                        SideEffect { chipsWereShown[0] = true }
                         MusicViewChips(
                             selected = view,
                             onSelect = { picked ->
@@ -776,6 +777,9 @@ internal fun SongColumn(
 
 /** Test tag of the Songs list's fast-scroll thumb. */
 internal const val SongFastScrollerTag = "song_fast_scroller"
+
+/** The root of the list or the open page, whichever [PageSlide] shows. */
+internal const val LibraryPageTag = "library_page"
 
 /**
  * Fast scroll for the Songs list, by its sort: busy weeks of date added (as on Videos), letters

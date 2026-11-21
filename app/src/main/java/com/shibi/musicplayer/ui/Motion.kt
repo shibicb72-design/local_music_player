@@ -1,6 +1,7 @@
 package com.shibi.musicplayer.ui
 
 import android.provider.Settings
+import androidx.annotation.VisibleForTesting
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.EnterTransition
@@ -25,6 +26,7 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableIntState
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
@@ -141,8 +143,6 @@ internal class FadeThroughState<T>(initial: T, initialKey: Any? = initial) {
         }
     }
 
-    suspend fun show(target: T, key: Any? = target, snap: Boolean = false) = showLatest(key, snap) { target }
-
     /** [latest] is read at the swap, so data that landed during the fade-out is not lost. */
     suspend fun showLatest(key: Any?, snap: Boolean = false, latest: () -> T) {
         targetKey = key
@@ -170,13 +170,14 @@ internal class FadeThroughState<T>(initial: T, initialKey: Any? = initial) {
 internal fun <T> rememberFadeThrough(
     target: T,
     key: Any? = target,
-    animate: Boolean = true,
+    /** Asked once per key change, so a plain flag (not snapshot state) can back it. */
+    animate: () -> Boolean = { true },
 ): FadeThroughState<T> {
     val state = remember { FadeThroughState(target, key) }
     val reduced = rememberReduceMotion()
     val latest by rememberUpdatedState(target)
     // Capture eligibility at the key change, before this frame can first show the chips.
-    val animateKey = remember(key) { animate }
+    val animateKey = remember(key) { animate() }
     val snap = reduced || !animateKey
     // Like rememberUpdatedState: publish same-key data, and snaps, before the body reads them.
     state.update(target, key, snap)
@@ -206,10 +207,15 @@ internal fun <T> FadeThrough(
     modifier: Modifier = Modifier,
     content: @Composable (T) -> Unit,
 ) {
+    LocalFadeThroughProbe.current?.let { probe -> SideEffect { probe(state) } }
     Box(modifier.fadeThrough(state)) {
         key(state.shownKey) { content(state.value) }
     }
 }
+
+/** Tests only: hears each [FadeThrough]'s state, so a screen test can read its alpha. */
+@VisibleForTesting
+internal val LocalFadeThroughProbe = staticCompositionLocalOf<((FadeThroughState<*>) -> Unit)?> { null }
 
 /** Retains an outgoing page's scroll and season even after navigation clears its open key. */
 internal data class PageMotionTarget(
@@ -225,7 +231,11 @@ internal fun PageSlide(
     modifier: Modifier = Modifier,
     content: @Composable (PageMotionTarget) -> Unit,
 ) {
-    val reduced = rememberReduceMotion()
+    if (rememberReduceMotion()) {
+        // A snap: one page on every frame, the old one gone on the frame the new one appears.
+        Box(modifier) { key(target.depth to target.key) { content(target) } }
+        return
+    }
     val distance = with(LocalDensity.current) { PageDistance.roundToPx() }
     AnimatedContent(
         targetState = target,
@@ -234,13 +244,11 @@ internal fun PageSlide(
         transitionSpec = {
             val deeper = targetState.depth >= initialState.depth
             val enter = when {
-                reduced -> EnterTransition.None
                 deeper -> fadeIn(tween(PageMillis)) +
                     slideInHorizontally(tween(PageMillis, easing = LinearOutSlowInEasing)) { distance }
                 else -> fadeIn(tween(PageMillis))
             }
             val exit = when {
-                reduced -> ExitTransition.None
                 deeper -> fadeOut(tween(PageUnderOutMillis))
                 else -> fadeOut(tween(PageMillis)) +
                     slideOutHorizontally(tween(PageMillis, easing = LinearOutSlowInEasing)) { distance }

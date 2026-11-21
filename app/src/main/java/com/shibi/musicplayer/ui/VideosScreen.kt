@@ -299,15 +299,16 @@ internal fun VideosContent(
         if (openShow == null) PageMotionTarget(null, 0, listState)
         else PageMotionTarget(openShow.key, 1, showPageListState, chosenSeason)
     }
-    var chipsWereShown by remember { mutableStateOf(false) }
-    val filterFade = rememberFadeThrough(state, key = state.filter, animate = chipsWereShown)
+    // Not snapshot state: its first flip must not recompose this whole screen.
+    val chipsWereShown = remember { BooleanArray(1) }
+    val filterFade = rememberFadeThrough(state, key = state.filter, animate = { chipsWereShown[0] })
     // Hidden until the stored filter loaded, with nothing to filter, while selecting and on a show page.
     val chips: (@Composable () -> Unit)? =
         if (state.isReady && state.access != VideoAccess.Denied && !selection.active &&
             !(state.counts.all == 0 && state.videos.isEmpty())
         ) {
             {
-                SideEffect { chipsWereShown = true }
+                SideEffect { chipsWereShown[0] = true }
                 VideoFilterChips(
                     selected = state.filter,
                     // Under All the counts arrive after the list: until they match it, labels only.
