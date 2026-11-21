@@ -7,6 +7,7 @@ import com.shibi.musicplayer.domain.SortGroup
 import com.shibi.musicplayer.domain.SortRun
 import com.shibi.musicplayer.domain.Track
 import com.shibi.musicplayer.domain.UnknownNames
+import com.shibi.musicplayer.domain.albumTrackArtist
 import java.text.Collator
 import java.util.Locale
 import org.junit.Assert.assertEquals
@@ -74,6 +75,39 @@ class MusicCatalogTest {
         MusicView.entries.forEach { assertEquals(it, MusicView.fromKey(it.key)) }
         assertEquals(MusicView.Songs, MusicView.fromKey(null))
         assertEquals(MusicView.Songs, MusicView.fromKey("genres"))
+    }
+
+    @Test
+    fun anAlbumSortKeyReadsBackAndAnUnknownOneIsTitle() {
+        assertEquals(listOf("title", "artist", "year_newest"), AlbumSort.entries.map { it.key })
+        AlbumSort.entries.forEach { assertEquals(it, AlbumSort.fromKey(it.key)) }
+        assertEquals(AlbumSort.Title, AlbumSort.fromKey(null))
+        assertEquals(AlbumSort.Title, AlbumSort.fromKey("genre"))
+    }
+
+    @Test
+    fun hasAlbumFindsEachKeptAlbumOnly() {
+        val catalog = catalog()
+        catalog.albums(AlbumSort.Title).forEach { assertTrue(catalog.hasAlbum(it.key)) }
+        assertFalse(catalog.hasAlbum("missing"))
+    }
+
+    @Test
+    fun anAlbumTrackNamesItsArtistOnlyWhenItIsAGuest() {
+        val taxman = track("Taxman", "Beatles", "Revolver", "The Beatles", 3, year = 1966)
+        val tracks = library() + taxman
+        val catalog = catalog(tracks)
+        fun shown(title: String): String? {
+            val track = tracks.first { it.title == title }
+            return albumTrackArtist(track, catalog.albumOf(track)!!)
+        }
+        assertEquals("Zedd feat. Guest Singer", shown("Stay"))
+        assertNull(shown("Clarity"))
+        // "ABBA" on ABBA's album, and "Beatles" on The Beatles' album, are the album's own artist.
+        assertNull(shown("Waterloo"))
+        assertNull(shown("Taxman"))
+        // A compilation names every track's artist.
+        assertEquals("Zedd", shown("Club Zedd"))
     }
 
     @Test

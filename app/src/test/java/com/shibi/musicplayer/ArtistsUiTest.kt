@@ -135,8 +135,9 @@ class ArtistsUiTest {
         compose.onNodeWithContentDescription("Back").assertIsDisplayed()
         compose.onNodeWithText("The Beatles").assertIsDisplayed()
         compose.onNodeWithText("2 albums · 3 songs").assertIsDisplayed()
-        compose.onNodeWithText("1966 · 2 songs").assertIsDisplayed()
-        compose.onNodeWithText("1969 · 1 song").assertIsDisplayed()
+        // Each card reads as one: its title, then its year and songs.
+        compose.onNodeWithContentDescription("Revolver, 1966 · 2 songs").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Abbey Road, 1969 · 1 song").assertIsDisplayed()
         compose.onNodeWithText("Appears on").assertDoesNotExist()
         // The chips give way to the page.
         chip("Artists").assertDoesNotExist()
@@ -150,8 +151,8 @@ class ArtistsUiTest {
     fun anArtistPagesSongsShowTheirKeptAlbumAndNeverAFolderName() {
         show()
         openArtist("The Beatles")
-        // The album card and the two Revolver songs' detail lines; the artist is not repeated.
-        compose.onAllNodesWithText("Revolver").assertCountEquals(3)
+        // The two Revolver songs' detail lines (the card reads as one description); the artist is not repeated.
+        compose.onAllNodesWithText("Revolver").assertCountEquals(2)
         compose.onAllNodesWithText("The Beatles").assertCountEquals(1)
         compose.onNodeWithText("The Beatles · Revolver").assertDoesNotExist()
 
@@ -186,9 +187,9 @@ class ArtistsUiTest {
         openArtist("Daft Punk")
         compose.onNodeWithText("1 album · 2 songs").assertIsDisplayed()
         compose.onNodeWithText("Albums").assertIsDisplayed()
-        compose.onNodeWithText("2001 · 1 song").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Album One, 2001 · 1 song").assertIsDisplayed()
         compose.onNodeWithText("Appears on").assertIsDisplayed()
-        compose.onNodeWithText("2010 · 2 songs").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Club Mix, 2010 · 2 songs").assertIsDisplayed()
         assertEquals(listOf("One A", "Club DP"), shownTitles(listOf("Club DP", "One A")))
     }
 
@@ -253,13 +254,35 @@ class ArtistsUiTest {
     }
 
     @Test
-    fun albumsShowsThePlaceholder() {
+    fun albumsShowsTheGridOfAlbums() {
         show()
         chip("Albums").performClick()
         settle()
         chip("Albums").assertIsSelected()
-        compose.onNodeWithText("Albums are coming in the next update.").assertIsDisplayed()
+        compose.onNodeWithText("5 albums · Album A–Z").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Abbey Road, The Beatles · 1969").assertIsDisplayed()
         compose.onNodeWithText("Revolver One").assertDoesNotExist()
+    }
+
+    @Test
+    fun anAlbumCardOnAnArtistPageOpensTheAlbumAndBackReturnsToTheArtistThenTheList() {
+        show()
+        openArtist("The Beatles")
+        compose.onNodeWithContentDescription("Revolver, 1966 · 2 songs").performClick()
+        settle()
+        compose.onNodeWithText("The Beatles · 1966").assertIsDisplayed()
+        compose.onNodeWithText("2 songs · 6 min").assertIsDisplayed()
+        compose.onNodeWithText("Abbey One").assertDoesNotExist()
+
+        pressBack()
+        compose.onNodeWithText("2 albums · 3 songs").assertIsDisplayed()
+        compose.onNodeWithText("Abbey One").assertIsDisplayed()
+
+        pressBack()
+        compose.onNodeWithContentDescription("Back").assertDoesNotExist()
+        compose.onNodeWithText("4 artists").assertIsDisplayed()
+        chip("Artists").assertIsSelected()
+        assertEquals(0, outerBacks)
     }
 
     private fun openArtist(name: String) {

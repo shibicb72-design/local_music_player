@@ -179,6 +179,102 @@ class MusicCatalogViewModelTest {
         assertEquals(MusicView.Artists, viewModel.uiState.value.view)
     }
 
+    // --- The album sort and the open album page ---
+
+    @Test
+    fun setAlbumSortIsStoredForTheNextStart() {
+        val prefs = InMemorySortPrefs()
+        val viewModel = newViewModel(prefs)
+        idle()
+        assertEquals(AlbumSort.Title, viewModel.uiState.value.albumSort)
+
+        viewModel.setAlbumSort(AlbumSort.YearNewest)
+        idle()
+
+        assertEquals(AlbumSort.YearNewest, viewModel.uiState.value.albumSort)
+        assertEquals(AlbumSort.YearNewest, prefs.albumSort.value)
+        val next = newViewModel(prefs)
+        idle()
+        assertEquals(AlbumSort.YearNewest, next.uiState.value.albumSort)
+    }
+
+    @Test
+    fun anAlbumSortPickedWhileTheStoreReadsWins() {
+        val prefs = SlowAlbumSortPrefs()
+        provider.rows += row(1L, "One", "Queen", "Opera")
+        val viewModel = newViewModel(prefs)
+        viewModel.refresh()
+        idle()
+        // The stored sort is read before anything is published.
+        assertFalse(viewModel.uiState.value.isReady)
+
+        viewModel.setAlbumSort(AlbumSort.Artist)
+        prefs.sort.value = AlbumSort.YearNewest
+        idle()
+
+        assertTrue(viewModel.uiState.value.isReady)
+        assertEquals(AlbumSort.Artist, viewModel.uiState.value.albumSort)
+    }
+
+    @Test
+    fun closePageClosesTheAlbumFirstThenTheArtist() {
+        val viewModel = loaded()
+        val gold = albumKey(viewModel, "Gold")
+        viewModel.setView(MusicView.Artists)
+        viewModel.openArtist("abba")
+        viewModel.openAlbum(gold)
+        assertEquals(gold, viewModel.uiState.value.openAlbumKey)
+
+        viewModel.closePage()
+        assertNull(viewModel.uiState.value.openAlbumKey)
+        assertEquals(OpenArtist("abba"), viewModel.uiState.value.openArtistKey)
+
+        viewModel.closePage()
+        assertNull(viewModel.uiState.value.openArtistKey)
+    }
+
+    @Test
+    fun changingTheViewClosesTheAlbumAndTheArtist() {
+        val viewModel = loaded()
+        viewModel.setView(MusicView.Artists)
+        viewModel.openArtist("abba")
+        viewModel.openAlbum(albumKey(viewModel, "Gold"))
+        viewModel.setView(MusicView.Albums)
+        idle()
+        assertNull(viewModel.uiState.value.openAlbumKey)
+        assertNull(viewModel.uiState.value.openArtistKey)
+    }
+
+    @Test
+    fun aRescanWithoutTheOpenAlbumClosesItAndKeepsTheArtist() {
+        provider.rows += row(3L, "Three", "Abba", "Arrival")
+        val viewModel = loaded()
+        viewModel.setView(MusicView.Artists)
+        viewModel.openArtist("abba")
+        val arrival = albumKey(viewModel, "Arrival")
+        viewModel.openAlbum(arrival)
+        // A rescan that keeps the album keeps the page.
+        viewModel.refresh()
+        idle()
+        assertEquals(arrival, viewModel.uiState.value.openAlbumKey)
+
+        provider.rows.removeAll { it[0] == 3L }
+        viewModel.refresh()
+        idle()
+
+        assertNull(viewModel.uiState.value.openAlbumKey)
+        assertEquals(OpenArtist("abba"), viewModel.uiState.value.openArtistKey)
+    }
+
+    private fun albumKey(viewModel: LibraryViewModel, title: String): String =
+        viewModel.uiState.value.catalog!!.albums(AlbumSort.Title).first { it.title == title }.key
+
+    /** A store whose album sort has not answered yet; [sort] stays null until the test sets it. */
+    private class SlowAlbumSortPrefs : SortPrefs by InMemorySortPrefs() {
+        val sort = MutableStateFlow<AlbumSort?>(null)
+        override val albumSort = sort.filterNotNull()
+    }
+
     /** Queen and Abba, loaded. */
     private fun loaded(): LibraryViewModel {
         provider.rows += row(1L, "One", "Queen", "Opera")

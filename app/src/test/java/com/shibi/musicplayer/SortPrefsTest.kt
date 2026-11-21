@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.shibi.musicplayer.domain.AlbumSort
 import com.shibi.musicplayer.domain.LibrarySorts
 import com.shibi.musicplayer.domain.MusicView
 import com.shibi.musicplayer.domain.SortField
@@ -253,6 +254,37 @@ class SortPrefsTest {
             scope.cancel()
             file.delete()
         }
+    }
+
+    @Test
+    fun theStoreKeepsTheAlbumSortAndReadsAnUnknownOneAsTitle() = runBlocking {
+        val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+        val file = File(application.filesDir, "album_sort_prefs_test.preferences_pb").apply { delete() }
+        val store = PreferenceDataStoreFactory.create(scope = scope, produceFile = { file })
+        try {
+            val prefs = DataStoreSortPrefs(store)
+            assertEquals(AlbumSort.Title, prefs.albumSort.first())
+
+            prefs.setAlbumSort(AlbumSort.YearNewest)
+            assertEquals(AlbumSort.YearNewest, prefs.albumSort.first())
+            assertEquals("year_newest", store.data.first()[stringPreferencesKey("album_sort")])
+            // The view is its own pref.
+            assertEquals(MusicView.Songs, prefs.musicView.first())
+
+            store.edit { it[stringPreferencesKey("album_sort")] = "genre" }
+            assertEquals(AlbumSort.Title, prefs.albumSort.first())
+        } finally {
+            scope.cancel()
+            file.delete()
+        }
+    }
+
+    @Test
+    fun theInMemoryStoreKeepsTheAlbumSort() = runBlocking {
+        val prefs = InMemorySortPrefs(albumSort = AlbumSort.Artist)
+        assertEquals(AlbumSort.Artist, prefs.albumSort.first())
+        prefs.setAlbumSort(AlbumSort.YearNewest)
+        assertEquals(AlbumSort.YearNewest, prefs.albumSort.first())
     }
 
     @Test
