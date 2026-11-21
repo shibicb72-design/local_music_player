@@ -19,6 +19,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
@@ -136,11 +137,14 @@ class LibraryViewModel internal constructor(
         // The catalog does not depend on the sort: it is built once per scan, beside the sort.
         val (sorted, catalog) = coroutineScope {
             val catalog = async(sortDispatcher) {
+                ensureActive()
                 scan.catalog ?: MusicCatalog.build(scan.tracks, unknown, Collator.getInstance()).also { scan.catalog = it }
             }
             val sorted = withContext(sortDispatcher) {
                 LibrarySorter.tracks(scan.tracks, sort, Collator.getInstance(), ZoneId.systemDefault(), unknown)
             }
+            // A newer scan cancels this one here, not after the catalog has also finished.
+            ensureActive()
             sorted to catalog.await()
         }
         _uiState.update { it.copy(songs = sorted, catalog = catalog) }

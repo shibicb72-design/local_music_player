@@ -11,7 +11,14 @@ enum class AlbumSort { Title, Artist, YearNewest }
  * UI supplies its label). [songCount] is the artist page's song count; [albumCount] counts only
  * the artist's own albums.
  */
-data class ArtistEntry(val key: String?, val name: String?, val albumCount: Int, val songCount: Int)
+data class ArtistEntry(
+    val key: String?,
+    val name: String?,
+    val albumCount: Int,
+    val songCount: Int,
+    /** The art of the artist's first own album (in page order) that has one; null if none. */
+    val artUri: String? = null,
+)
 
 /** One album: the tracks that share [key]. [artistName] is the owning artist's name, null when unknown. */
 data class AlbumEntry(
@@ -39,7 +46,7 @@ data class AlbumPage(val album: AlbumEntry, val discs: List<AlbumDisc>)
 
 /**
  * The library grouped as artists and albums, with the data an artist page and an album page need.
- * Built once per library scan; every lookup afterwards reads a map and sorts at most one page.
+ * Built once per library scan; every lookup afterwards reads a map and sorts one page by plain numbers, with no collation.
  */
 class MusicCatalog private constructor(
     /** Ordered like the letter groups of [LibrarySorter]: `#` first, then A-Z, unknown last. */
@@ -49,11 +56,10 @@ class MusicCatalog private constructor(
     private val albumLists: Map<AlbumSort, List<AlbumEntry>>,
     private val artistByKey: Map<String?, ArtistEntry>,
     private val albumByKey: Map<String, AlbumEntry>,
-    private val albumTracks: Map<String, List<Track>>,
+    private val albumTracks: Map<String, List<Row>>,
     private val ownAlbums: Map<String?, List<AlbumEntry>>,
     private val appearsOnAlbums: Map<String, List<AlbumEntry>>,
     private val songsByArtist: Map<String?, List<Row>>,
-    private val collator: Collator,
 ) {
     /** The albums in [sort] order; precomputed, so this never sorts. */
     fun albums(sort: AlbumSort): List<AlbumEntry> = albumLists.getValue(sort)
@@ -63,44 +69,33 @@ class MusicCatalog private constructor(
         val artist = artistByKey[key] ?: return null
         val songs = songsByArtist[key].orEmpty()
         if (key == null) {
-            val keyed = songs.map { it.track to collator.getCollationKey(it.track.title) }
-            val byTitle = compareBy<Pair<Track, CollationKey>> { it.second }.thenBy { it.first.id }
-            return ArtistPage(artist, emptyList(), emptyList(), keyed.sortedWith(byTitle).map { it.first })
+            return ArtistPage(artist, emptyList(), emptyList(), songs.sortedBy { it.titleRank }.map { it.track })
         }
         val own = ownAlbums[key].orEmpty()
         val guest = appearsOnAlbums[key].orEmpty()
         val rank = HashMap<String, Int>()
         (own + guest).forEachIndexed { index, album -> rank.putIfAbsent(album.key, index) }
-        val none = Int.MAX_VALUE
-        val ordered = songs.map { Triple(it.track, it.albumKey?.let(rank::get) ?: none, collator.getCollationKey(it.track.title)) }
-            .sortedWith(
-                compareBy<Triple<Track, Int, CollationKey>> { it.second }
-                    .thenBy { it.first.discNumber ?: 1 }
-                    .thenBy { it.first.trackNumber ?: Int.MAX_VALUE }
-                    .thenBy { it.third }
-                    .thenBy { it.first.id },
-            )
-        return ArtistPage(artist, own, guest, ordered.map { it.first })
+        val ordered = songs.sortedWith(
+            compareBy<Row> { it.albumKey?.let(rank::get) ?: Int.MAX_VALUE }
+                .thenBy { it.track.discNumber ?: 1 }
+                .thenBy { it.track.trackNumber ?: Int.MAX_VALUE }
+                .thenBy { it.titleRank },
+        )
+        return ArtistPage(artist, own, guest, ordered.map { it.track })
     }
 
     /** The page of the album with [key], or null when there is none. */
     fun albumPage(key: String): AlbumPage? {
         val album = albumByKey[key] ?: return null
         val discs = albumTracks[key].orEmpty()
-            .groupBy { it.discNumber ?: 1 }
+            .groupBy { it.track.discNumber ?: 1 }
             .toSortedMap()
-            .map { (number, tracks) -> AlbumDisc(number, byTrackThenTitle(tracks)) }
+            .map { (number, rows) ->
+                val ordered = rows.sortedWith(compareBy<Row> { it.track.trackNumber ?: Int.MAX_VALUE }.thenBy { it.titleRank })
+                AlbumDisc(number, ordered.map { it.track })
+            }
         return AlbumPage(album, discs)
     }
-
-    private fun byTrackThenTitle(tracks: List<Track>): List<Track> =
-        tracks.map { it to collator.getCollationKey(it.title) }
-            .sortedWith(
-                compareBy<Pair<Track, CollationKey>> { it.first.trackNumber ?: Int.MAX_VALUE }
-                    .thenBy { it.second }
-                    .thenBy { it.first.id },
-            )
-            .map { it.first }
 
     /** A track with the names the catalog groups it by. */
     private class Row(
@@ -110,7 +105,10 @@ class MusicCatalog private constructor(
         val perfKey: String?,
         val albumTitle: String?,
         val albumKey: String?,
-    )
+    ) {
+        /** Position of the track's title in the library's title order; unique, so it breaks every tie. */
+        var titleRank: Int = 0
+    }
 
     /** An album with the keys it is ordered by. */
     private class AlbumSortKeys(val entry: AlbumEntry, val title: CollationKey, val artist: CollationKey?)
@@ -131,6 +129,11 @@ class MusicCatalog private constructor(
                 val title = ArtistNames.album(track.album, unknown)?.takeUnless { isFolderName(track, it, unknown) }
                 Row(track, lib, libKey, perfKey, title, title?.let { (libKey ?: "") + SEP + key(it) })
             }
+
+            // One collation of all titles, so pages compare plain numbers and never touch the collator.
+            val titleKeys = rows.map { collator.getCollationKey(it.track.title) }
+            rows.indices.sortedWith(compareBy<Int> { titleKeys[it] }.thenBy { rows[it].track.id })
+                .forEachIndexed { rank, index -> rows[index].titleRank = rank }
 
             // Albums.
             val byAlbum = LinkedHashMap<String, MutableList<Row>>()
@@ -180,6 +183,8 @@ class MusicCatalog private constructor(
             val ownAlbums = pageSorted.groupBy { it.artistKey }
 
             // Artists: appears-on albums and song lists.
+            val albumPosition = HashMap<String, Int>()
+            pageSorted.forEachIndexed { index, album -> albumPosition[album.key] = index }
             val guestAlbumKeys = HashMap<String, MutableSet<String>>()
             val songsByArtist = LinkedHashMap<String?, MutableList<Row>>()
             rows.forEach { row ->
@@ -191,7 +196,9 @@ class MusicCatalog private constructor(
                 }
             }
             val albumByKey = albumEntries.associateBy { it.key }
-            val appearsOn = guestAlbumKeys.mapValues { (_, albumKeys) -> pageSorted.filter { it.key in albumKeys } }
+            val appearsOn = guestAlbumKeys.mapValues { (_, albumKeys) ->
+                albumKeys.sortedBy { albumPosition.getValue(it) }.map { albumByKey.getValue(it) }
+            }
 
             val entries = byArtist.keys.map { artistKey ->
                 ArtistEntry(
@@ -200,6 +207,7 @@ class MusicCatalog private constructor(
                     // The unknown entry has no albums of its own, though its tracks may share one.
                     albumCount = if (artistKey == null) 0 else ownAlbums[artistKey]?.size ?: 0,
                     songCount = songsByArtist[artistKey]?.size ?: 0,
+                    artUri = if (artistKey == null) null else ownAlbums[artistKey]?.firstNotNullOfOrNull { it.albumArtUri },
                 )
             }
             val ordered = orderArtists(entries, collator)
@@ -211,11 +219,10 @@ class MusicCatalog private constructor(
                 albumLists = albumLists,
                 artistByKey = entries.associateBy { it.key },
                 albumByKey = albumByKey,
-                albumTracks = byAlbum.mapValues { (_, group) -> group.map { it.track } },
+                albumTracks = byAlbum,
                 ownAlbums = ownAlbums,
                 appearsOnAlbums = appearsOn,
                 songsByArtist = songsByArtist,
-                collator = collator,
             )
         }
 

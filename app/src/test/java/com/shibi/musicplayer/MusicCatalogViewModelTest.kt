@@ -49,7 +49,11 @@ class MusicCatalogViewModelTest {
         val state = viewModel.uiState.value
         assertNotNull(state.songs)
         assertEquals(listOf("abba", "queen"), state.catalog!!.artists.map { it.key })
-        assertEquals(2, state.catalog!!.albums(AlbumSort.Title).size)
+        assertEquals(2, state.catalog.albums(AlbumSort.Title).size)
+        // The songs and the catalog come from the same scan.
+        val catalog = state.catalog
+        val catalogIds = catalog.artists.flatMap { catalog.artistPage(it.key)!!.songs }.map { it.id }.toSet()
+        assertEquals(state.songs!!.items.map { it.id }.toSet(), catalogIds)
     }
 
     @Test

@@ -283,18 +283,84 @@ class MusicCatalogTest {
     }
 
     @Test
+    fun anArtistsOwnAlbumsRunByYearNotTitle() {
+        val page = catalog().artistPage("beatles")!!
+        assertEquals(listOf("Revolver", "Abbey Road"), page.albums.map { it.title })
+        assertEquals(
+            listOf("Revolver One", "Revolver Two", "Abbey One", "Abbey Two"),
+            page.songs.map { it.title },
+        )
+    }
+
+    @Test
+    fun aTieBetweenArtistSpellingsTakesTheOneThatSortsFirst() {
+        val tracks = listOf(
+            track("A", "ABBA", "Gold", "ABBA"),
+            track("B", "Abba", "Gold", "Abba"),
+        )
+        val artist = catalog(tracks).artists.single()
+        assertEquals("abba", artist.key)
+        assertEquals("Abba", artist.name)
+    }
+
+    @Test
+    fun anArtistOnSeveralAlbumsListsThemByYearAndSongsFollowThatOrder() {
+        val tracks = listOf(
+            track("Own", "Guest", "G LP", "Guest", 1, year = 1995),
+            track("Late", "Guest", "Alpha Hits", "Various Artists", 1, year = 2010),
+            track("Early", "Guest", "Zeta Hits", "Various Artists", 2, year = 2000),
+            track("Other", "Someone", "Zeta Hits", "Various Artists", 3, year = 2000),
+        )
+        val page = catalog(tracks).artistPage("guest")!!
+        assertEquals(listOf("G LP"), page.albums.map { it.title })
+        assertEquals(listOf("Zeta Hits", "Alpha Hits"), page.appearsOn.map { it.title })
+        assertEquals(listOf("Own", "Early", "Late"), page.songs.map { it.title })
+    }
+
+    @Test
+    fun songsWithNoAlbumFollowTheAlbumSongs() {
+        val tracks = listOf(
+            track("Mango", "Solo", "Unknown album", "Solo"),
+            track("Zzz", "Solo", "Unknown album", "Solo", 5),
+            track("Zed", "Solo", "LP", "Solo", 1),
+        )
+        val page = catalog(tracks).artistPage("solo")!!
+        assertEquals(listOf("LP"), page.albums.map { it.title })
+        assertEquals(listOf("Zed", "Zzz", "Mango"), page.songs.map { it.title })
+    }
+
+    @Test
+    fun theArtistArtIsTheFirstOwnAlbumInPageOrderThatHasArt() {
+        val tracks = listOf(
+            track("A", "Band", "Early", "Band", year = 1990),
+            track("B", "Band", "Later", "Band", year = 2010, art = "art://later"),
+            track("C", "Band", "Late", "Band", year = 2000, art = "art://late"),
+            track("D", "Mute", "Quiet", "Mute", year = 2000),
+            track("E", "Unknown artist", "Loose", art = "art://loose"),
+        )
+        val artists = catalog(tracks).artists.associateBy { it.key }
+        assertEquals("art://late", artists.getValue("band").artUri)
+        assertNull(artists.getValue("mute").artUri)
+        assertNull(artists.getValue(null).artUri)
+    }
+
+    @Test
     fun buildOnTwentyThousandTracksIsFast() {
         fun many(count: Int) = (0 until count).map { i ->
             val artist = "Artist ${i % 2_000}"
             track("Song $i", artist, "Album ${(i / 5) % 4}", artist, number = i % 12, year = 1990 + i % 30)
         }
-        MusicCatalog.build(many(2_000), unknown, collator)
-        val tracks = many(20_000)
+        // Compilations whose tracks each have their own guest performer.
+        fun compilations(count: Int) = (0 until count).map { i ->
+            track("Comp $i", "Guest $i", "Comp ${i % 20}", "Various Artists", number = i, year = 2000 + i % 20)
+        }
+        MusicCatalog.build(many(2_000) + compilations(200), unknown, collator)
+        val tracks = many(20_000) + compilations(2_000)
         val start = System.nanoTime()
         val catalog = MusicCatalog.build(tracks, unknown, collator)
         val ms = (System.nanoTime() - start) / 1_000_000
         println("MusicCatalog.build(20000 tracks) took $ms ms")
-        assertEquals(2_000, catalog.artists.size)
+        assertEquals(2_001, catalog.artists.size)
         assertTrue("build took $ms ms", ms < 2_000)
     }
 }
