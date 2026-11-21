@@ -43,7 +43,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -247,12 +246,6 @@ internal fun VideosContent(
     }
     // The same for a filter chip: the new filter's list starts at the top, not where the last one was.
     var jumpToTopForFilter by remember { mutableStateOf<VideoFilter?>(null) }
-    if (jumpToTopForFilter != null && jumpToTopForFilter == state.filter) {
-        SideEffect {
-            listState.requestScrollToItem(0)
-            jumpToTopForFilter = null
-        }
-    }
     val pickFilter: (VideoFilter) -> Unit = { filter ->
         jumpToTopForFilter = filter
         onFilterChange(filter)
@@ -299,20 +292,23 @@ internal fun VideosContent(
     // The page's scroll and season live here, keyed by the show, not in the page: compact
     // layout composes the page in another place when the inline player opens or closes.
     val showPageListState = rememberSaveable(openShow?.key, saver = LazyListState.Saver) { LazyListState() }
-    var chosenSeason by rememberSaveable(openShow?.key) {
+    val chosenSeason = rememberSaveable(openShow?.key) {
         mutableIntStateOf(openShow?.let { show -> (state.continueByShow[show.key] ?: show.episodes.first()).season } ?: 0)
     }
-    val showHeader: (@Composable () -> Unit)? = if (openShow != null) {
-        { TvShowHeader(name = openShow.name, onBack = onCloseShow) }
-    } else {
-        null
+    val pageTarget = remember(openShow?.key) {
+        if (openShow == null) PageMotionTarget(null, 0, listState)
+        else PageMotionTarget(openShow.key, 1, showPageListState, chosenSeason)
     }
+    // Not snapshot state: its first flip must not recompose this whole screen.
+    val chipsWereShown = remember { BooleanArray(1) }
+    val filterFade = rememberFadeThrough(state, key = state.filter, animate = { chipsWereShown[0] })
     // Hidden until the stored filter loaded, with nothing to filter, while selecting and on a show page.
     val chips: (@Composable () -> Unit)? =
-        if (state.isReady && state.access != VideoAccess.Denied && !selection.active && openShow == null &&
+        if (state.isReady && state.access != VideoAccess.Denied && !selection.active &&
             !(state.counts.all == 0 && state.videos.isEmpty())
         ) {
             {
+                SideEffect { chipsWereShown[0] = true }
                 VideoFilterChips(
                     selected = state.filter,
                     // Under All the counts arrive after the list: until they match it, labels only.
@@ -323,65 +319,80 @@ internal fun VideosContent(
         } else {
             null
         }
-    // Tv draws its shows, or one show's page, and never the video list.
-    val body: @Composable (Modifier, Dp) -> Unit = { bodyModifier, topPadding ->
-        if (state.filter == VideoFilter.Tv) {
-            when {
-                openShow != null -> {
-                    // Composed only while the page is open, so it is newer than MusicApp's
-                    // two-pane close-video handler and Back closes the page first.
-                    AppBackHandler { onCloseShow() }
-                    TvShowPage(
-                        show = openShow,
-                        next = state.continueByShow[openShow.key],
-                        playingVideoId = playingVideoId,
-                        savedProgress = savedProgress,
-                        onVideoClick = onVideoClick,
-                        onTrashVideo = trashVideo,
-                        listState = showPageListState,
-                        chosenSeason = chosenSeason,
-                        onChooseSeason = { chosenSeason = it },
-                        contentBottomPadding = contentBottomPadding,
-                        topPadding = topPadding,
-                        modifier = bodyModifier,
-                    )
-                }
-                state.shows.isEmpty() && state.isLoading -> Box(modifier = bodyModifier, contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
-                }
-                state.shows.isEmpty() -> VideosMessage(
-                    icon = Icons.Rounded.VideoLibrary,
-                    message = stringResource(if (state.hasError) R.string.video_library_error else R.string.tv_shows_empty),
-                    modifier = bodyModifier.padding(bottom = contentBottomPadding),
-                )
-                else -> TvShowList(
-                    shows = state.shows,
-                    continueByShow = state.continueByShow,
+    // Only the list branch fades through; pages own distinct retained scroll states.
+    val body: @Composable (PageMotionTarget, Modifier, Dp, Boolean) -> Unit = { shown, bodyModifier, topPadding, playAll ->
+        if (shown.depth == 1) {
+            val show = state.shows.firstOrNull { it.key == shown.key }
+            if (show != null) {
+                TvShowPage(
+                    show = show,
+                    next = state.continueByShow[show.key],
+                    playingVideoId = playingVideoId,
                     savedProgress = savedProgress,
-                    listState = listState,
-                    onOpenShow = onOpenShow,
+                    onVideoClick = onVideoClick,
+                    onTrashVideo = trashVideo,
+                    listState = shown.listState,
+                    chosenSeason = requireNotNull(shown.season).intValue,
+                    onChooseSeason = { requireNotNull(shown.season).intValue = it },
                     contentBottomPadding = contentBottomPadding,
                     topPadding = topPadding,
                     modifier = bodyModifier,
                 )
             }
         } else {
-            // Keyed by filter, so a switch swaps the list instead of animating rows between lists.
-            key(state.filter) {
-                VideoList(
-                    state = state,
-                    onVideoClick = onVideoClick,
-                    onTrashVideo = trashVideo,
-                    contentBottomPadding = contentBottomPadding,
-                    playingVideoId = playingVideoId,
-                    savedProgress = savedProgress,
-                    listState = listState,
-                    selection = selection,
-                    onSelectionChange = { selection = it },
-                    topPadding = topPadding,
-                    fastScrollDragFraction = fastScrollDragFraction,
-                    modifier = bodyModifier,
-                )
+            FadeThrough(filterFade, bodyModifier) { held ->
+                if (jumpToTopForFilter != null && jumpToTopForFilter == held.filter) {
+                    SideEffect {
+                        listState.requestScrollToItem(0)
+                        jumpToTopForFilter = null
+                    }
+                }
+                Column(Modifier.fillMaxSize()) {
+                    if (playAll && held.videos.isNotEmpty() && held.filter != VideoFilter.Tv) {
+                        ListPlayAll(
+                            onPlayAll = { onVideoClick(held.videos.first()) },
+                            enabled = !selection.active,
+                        )
+                    }
+                    val listModifier = Modifier.weight(1f).fillMaxWidth()
+                    if (held.filter == VideoFilter.Tv) {
+                        when {
+                            held.shows.isEmpty() && held.isLoading -> Box(modifier = listModifier, contentAlignment = Alignment.Center) {
+                                CircularProgressIndicator()
+                            }
+                            held.shows.isEmpty() -> VideosMessage(
+                                icon = Icons.Rounded.VideoLibrary,
+                                message = stringResource(if (held.hasError) R.string.video_library_error else R.string.tv_shows_empty),
+                                modifier = listModifier.padding(bottom = contentBottomPadding),
+                            )
+                            else -> TvShowList(
+                                shows = held.shows,
+                                continueByShow = held.continueByShow,
+                                savedProgress = savedProgress,
+                                listState = listState,
+                                onOpenShow = onOpenShow,
+                                contentBottomPadding = contentBottomPadding,
+                                topPadding = topPadding,
+                                modifier = listModifier,
+                            )
+                        }
+                    } else {
+                        VideoList(
+                            state = held,
+                            onVideoClick = onVideoClick,
+                            onTrashVideo = trashVideo,
+                            contentBottomPadding = contentBottomPadding,
+                            playingVideoId = playingVideoId,
+                            savedProgress = savedProgress,
+                            listState = listState,
+                            selection = selection,
+                            onSelectionChange = { selection = it },
+                            topPadding = topPadding,
+                            fastScrollDragFraction = fastScrollDragFraction,
+                            modifier = listModifier,
+                        )
+                    }
+                }
             }
         }
     }
@@ -390,11 +401,17 @@ internal fun VideosContent(
             player = player,
             modifier = modifier,
         ) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                selectionBar?.invoke()
-                chips?.invoke()
-                showHeader?.invoke()
-                body(Modifier.weight(1f).fillMaxWidth(), 8.dp)
+            if (openShow != null) AppBackHandler { onCloseShow() }
+            PageSlide(pageTarget, Modifier.fillMaxSize()) { shown ->
+                val show = if (shown.depth == 1) state.shows.firstOrNull { it.key == shown.key } else null
+                if (shown.depth == 0 || show != null) {
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        selectionBar?.invoke()
+                        if (shown.depth == 0) chips?.invoke()
+                        if (show != null) TvShowHeader(name = show.name, onBack = onCloseShow)
+                        body(shown, Modifier.weight(1f).fillMaxWidth(), 8.dp, false)
+                    }
+                }
             }
         }
         return
@@ -413,65 +430,63 @@ internal fun VideosContent(
     }
     val count = pluralStringResource(countPlural, state.videos.size, state.videos.size)
     val showCount = pluralStringResource(R.plurals.show_count, state.shows.size, state.shows.size)
-    VideosFrame(
-        subtitle = when {
-            !showLibrary -> ""
-            state.filter == VideoFilter.Tv -> "$showCount · $count"
-            state.videos.isEmpty() -> count
-            else -> sortSubtitle(count, state.sort)
-        },
-        selectionBar = selectionBar,
-        titleRow = showHeader,
-        modifier = modifier,
-        // Hidden with the title row while selecting, with nothing to sort, and under Tv.
-        sortButton = if (state.videos.isNotEmpty() && state.filter != VideoFilter.Tv) {
-            {
-                SortButton(
-                    sort = state.sort,
-                    options = LibrarySorts.VideoOptions,
-                    onSortChange = pickSort,
-                    initialOpen = initialSortMenuOpen,
-                )
-            }
-        } else {
-            null
-        },
-    ) {
-        when {
-            showLibrary -> {
-                chips?.invoke()
-                if (state.access == VideoAccess.Partial) {
-                    VideoPartialBanner(
-                        onAllowAll = onRequestAccess,
-                        onPickMore = onRequestAccess,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(start = 8.dp, end = 8.dp, bottom = 8.dp),
-                    )
-                }
-                if (state.videos.isNotEmpty() && state.filter != VideoFilter.Tv) {
-                    ListPlayAll(
-                        // Videos never auto-advance (see MusicApp), so this opens the first in the sort.
-                        onPlayAll = { onVideoClick(state.videos.first()) },
-                        enabled = !selection.active,
-                    )
-                }
-                body(Modifier.weight(1f).fillMaxWidth(), 0.dp)
-            }
-            !checked -> Unit
-            else -> Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
-                contentAlignment = Alignment.Center,
+    if (openShow != null) AppBackHandler { onCloseShow() }
+    PageSlide(pageTarget, modifier) { shown ->
+        val show = if (shown.depth == 1) state.shows.firstOrNull { it.key == shown.key } else null
+        if (shown.depth == 0 || show != null) {
+            VideosFrame(
+                subtitle = when {
+                    !showLibrary -> ""
+                    state.filter == VideoFilter.Tv -> "$showCount · $count"
+                    state.videos.isEmpty() -> count
+                    else -> sortSubtitle(count, state.sort)
+                },
+                selectionBar = selectionBar,
+                titleRow = show?.let { { TvShowHeader(name = it.name, onBack = onCloseShow) } },
+                // Hidden with the title row while selecting, with nothing to sort, and under Tv.
+                sortButton = if (state.videos.isNotEmpty() && state.filter != VideoFilter.Tv) {
+                    {
+                        SortButton(
+                            sort = state.sort,
+                            options = LibrarySorts.VideoOptions,
+                            onSortChange = pickSort,
+                            initialOpen = initialSortMenuOpen,
+                        )
+                    }
+                } else {
+                    null
+                },
             ) {
-                VideoPermissionPrompt(
-                    onGrant = onRequestAccess,
-                    onOpenSettings = onOpenSettings,
-                    modifier = Modifier
-                        .verticalScroll(rememberScrollState())
-                        .padding(start = 20.dp, end = 20.dp, bottom = contentBottomPadding),
-                )
+                when {
+                    showLibrary -> {
+                        if (shown.depth == 0) chips?.invoke()
+                        if (state.access == VideoAccess.Partial) {
+                            VideoPartialBanner(
+                                onAllowAll = onRequestAccess,
+                                onPickMore = onRequestAccess,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(start = 8.dp, end = 8.dp, bottom = 8.dp),
+                            )
+                        }
+                        body(shown, Modifier.weight(1f).fillMaxWidth(), 0.dp, true)
+                    }
+                    !checked -> Unit
+                    else -> Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth(),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        VideoPermissionPrompt(
+                            onGrant = onRequestAccess,
+                            onOpenSettings = onOpenSettings,
+                            modifier = Modifier
+                                .verticalScroll(rememberScrollState())
+                                .padding(start = 20.dp, end = 20.dp, bottom = contentBottomPadding),
+                        )
+                    }
+                }
             }
         }
     }

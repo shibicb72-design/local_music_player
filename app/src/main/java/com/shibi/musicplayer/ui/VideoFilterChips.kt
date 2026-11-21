@@ -1,7 +1,8 @@
 package com.shibi.musicplayer.ui
 
 import androidx.annotation.StringRes
-import androidx.compose.foundation.background
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,11 +16,11 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -107,6 +108,9 @@ internal fun FilterChipItem(
     val colors = MaterialTheme.colorScheme
     val fill = if (chosen) colors.primary else colors.surfaceVariant
     val roles = rememberSurfaceRoles(fill)
+    val shownFill = animateColorAsState(fill, highlightSpec(), label = "chipFill")
+    val shownText = animateColorAsState(roles.onSurfaceArgb.toComposeColor(), highlightSpec(), label = "chipText")
+    val shownCount = animateColorAsState(roles.onVariantArgb.toComposeColor(), highlightSpec(), label = "chipCount")
     Box(
         modifier = Modifier
             .heightIn(min = 48.dp)
@@ -119,24 +123,24 @@ internal fun FilterChipItem(
             modifier = Modifier
                 .heightIn(min = 40.dp)
                 .clip(RoundedCornerShape(20.dp))
-                .background(fill)
+                .drawBehind { drawRect(shownFill.value) }
                 .padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
+            BasicText(
                 text = label,
                 style = MaterialTheme.typography.labelLarge,
-                color = roles.onSurfaceArgb.toComposeColor(),
+                color = { shownText.value },
                 maxLines = 1,
                 // The chip's description speaks the label and the count; the texts add nothing.
                 modifier = Modifier.clearAndSetSemantics {},
             )
             if (count != null) {
                 Spacer(Modifier.width(6.dp))
-                Text(
+                BasicText(
                     text = count.toString(),
                     style = MaterialTheme.typography.labelMedium,
-                    color = roles.onVariantArgb.toComposeColor(),
+                    color = { shownCount.value },
                     maxLines = 1,
                     modifier = Modifier.clearAndSetSemantics {},
                 )
