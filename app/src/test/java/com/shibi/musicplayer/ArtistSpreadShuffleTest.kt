@@ -165,12 +165,10 @@ class ArtistSpreadShuffleTest {
                 }
             }
         }
-        // Fair would be 500 / 2000 = 25%. The fix-round target was 0.15..0.35; the specified rules
-        // give about 0.145 (one untagged play makes the whole group recent for the next four), so
-        // the floor here is the measured level, pending a decision on the untagged recency rule.
+        // Fair would be 500 / 2000 = 25%.
         val share = untagged.toDouble() / picks
         println("ArtistSpread skew (a) untagged share of the first 100 picks: $share, longest untagged run $longestRun")
-        assertTrue("untagged share $share", share in 0.13..0.35)
+        assertTrue("untagged share $share", share in 0.15..0.35)
         assertTrue("longest untagged run $longestRun", longestRun <= 6)
     }
 

@@ -47,6 +47,7 @@ object LikeShuffleTuning {
      * Weight multiplier for a song whose artist played in the last [ARTIST_WINDOW] songs, so
      * one artist's songs spread across the pass (the idea of Spotify's 2014 shuffle and Martin
      * Fiedler's balanced shuffle). Applied once, however many of those songs were by the artist.
+     * Untagged songs count as recent only when at least two of those songs were untagged.
      */
     const val ARTIST_RECENT_FACTOR = 0.15
 
@@ -88,7 +89,8 @@ object LikeShuffleTuning {
 /**
  * What the shuffle spreads apart: [artist] is the primary artist's sort key, [album] the album's
  * sort key under that artist. Null means unknown and never matches another song, except that
- * untagged artists count as one group for recency and balance.
+ * untagged songs count as recent once at least two of the latest plays were untagged. Untagged
+ * songs get no balance factor.
  */
 data class SpreadKey(val artist: String?, val album: String?)
 
@@ -174,7 +176,8 @@ class LikeShufflePicker(
         val fresh = unplayed.filter(otherArtist).ifEmpty { unplayed.toList() }
         val returning = returningSongs().filter(otherArtist)
         val recentArtists = recent.mapNotNullTo(HashSet()) { it.artist }
-        val untaggedRecent = recent.any { it.artist == null }
+        // Untagged songs are many artists in one group: one untagged play must not hold them all back.
+        val untaggedRecent = recent.count { it.artist == null } >= 2
         val left: Map<String?, Int> =
             if (distinctArtists > 0) unplayed.groupingBy { spread.getValue(it).artist }.eachCount() else emptyMap()
         val spreadWeight = { id: Long ->
