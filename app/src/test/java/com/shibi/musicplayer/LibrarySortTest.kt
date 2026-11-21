@@ -59,7 +59,14 @@ class LibrarySortTest {
         duration: Long = 200_000L,
         addedSeconds: Long = 0L,
         size: Long? = null,
-    ) = Track(id, title, artist, album, duration, "content://a/$id", null, addedSeconds, size)
+        albumArtist: String? = null,
+        disc: Int? = null,
+        number: Int? = null,
+        fileName: String? = null,
+    ) = Track(
+        id, title, artist, album, duration, "content://a/$id", null, addedSeconds, size,
+        albumArtist = albumArtist, discNumber = disc, trackNumber = number, fileName = fileName,
+    )
 
     private fun sortVideos(videos: List<Video>, field: SortField, ascending: Boolean): SortedList<Video> =
         LibrarySorter.videos(videos, SortSpec(field, ascending), collator, utc, unknown.title)
@@ -310,6 +317,83 @@ class LibrarySortTest {
         assertEquals(listOf("Alpha", "Zulu", "Mid"), sortTracks(tracks, SortField.Artist, true).titles())
         assertEquals(listOf("Alpha", "Zulu", "Mid"), sortTracks(tracks, SortField.Album, true).titles())
         assertTrue(sortTracks(tracks, SortField.Album, false).runs.last().group.isUnknown)
+    }
+
+    @Test
+    fun anAlbumReadsByDiscThenTrackAndAMissingTrackComesLast() {
+        val tracks = listOf(
+            track(1, "NoNumber", artist = "Abba", album = "Gold"),
+            track(2, "D2T1", artist = "Abba", album = "Gold", disc = 2, number = 1),
+            track(3, "D1T2", artist = "Abba", album = "Gold", number = 2),
+            track(4, "D1T1", artist = "Abba", album = "Gold", disc = 1, number = 1),
+        )
+        val expected = listOf("D1T1", "D1T2", "NoNumber", "D2T1")
+        // A missing disc counts as 1, so the unnumbered song sits at the end of disc 1.
+        assertEquals(expected, sortTracks(tracks, SortField.Album, true).titles())
+        assertEquals(expected, sortTracks(tracks, SortField.Artist, true).titles())
+        assertEquals(expected.reversed(), sortTracks(tracks, SortField.Album, false).titles())
+    }
+
+    @Test
+    fun twoAlbumsWithTheSameNameDoNotInterleave() {
+        val tracks = listOf(
+            track(1, "B1", artist = "Beta", album = "Greatest Hits", number = 1),
+            track(2, "A1", artist = "Alpha", album = "Greatest Hits", number = 1),
+            track(3, "B2", artist = "Beta", album = "Greatest Hits", number = 2),
+            track(4, "A2", artist = "Alpha", album = "Greatest Hits", number = 2),
+        )
+        assertEquals(listOf("A1", "A2", "B1", "B2"), sortTracks(tracks, SortField.Album, true).titles())
+    }
+
+    @Test
+    fun theArtistSortGroupsByAlbumArtistAndTheStripsTheFromHeaders() {
+        val tracks = listOf(
+            track(1, "Zed", artist = "Zed", albumArtist = "The Beatles"),
+            track(2, "Ac", artist = "Acme"),
+            track(3, "Be", artist = "Beyonc\u00e9"),
+            track(4, "Bu", artist = "Beyonce"),
+            track(5, "Co", artist = "Unknown artist", fileName = "01 Coldplay - Yellow.mp3"),
+            track(6, "Un", artist = "Unknown artist"),
+        )
+        val sorted = sortTracks(tracks, SortField.Artist, true)
+        assertEquals(listOf("Ac", "Zed", "Be", "Bu", "Co", "Un"), sorted.titles())
+        assertEquals(listOf("A", "B", "C", null), sorted.runs.map { (it.group as SortGroup.Letter).letter })
+        // Z-A is the exact reverse of the known songs; the unknown one still comes last.
+        assertEquals(listOf("Co", "Bu", "Be", "Zed", "Ac", "Un"), sortTracks(tracks, SortField.Artist, false).titles())
+    }
+
+    @Test
+    fun aMissingAlbumSortsAfterTheRealAlbumsInsideAnArtist() {
+        val tracks = listOf(
+            track(1, "NoAlbum", artist = "Abba", album = "Unknown album"),
+            track(2, "Gold", artist = "Abba", album = "Gold"),
+            track(3, "Arrival", artist = "Abba", album = "Arrival"),
+        )
+        assertEquals(listOf("Arrival", "Gold", "NoAlbum"), sortTracks(tracks, SortField.Artist, true).titles())
+        assertEquals(listOf("NoAlbum", "Gold", "Arrival"), sortTracks(tracks, SortField.Artist, false).titles())
+    }
+
+    @Test
+    fun tamilAndKoreanArtistsKeepTheirOwnHeaders() {
+        val tracks = listOf(
+            track(1, "Tamil", artist = "ஔவை"),
+            track(2, "Korean", artist = "가나"),
+            track(3, "Latin", artist = "Abba"),
+        )
+        val letters = sortTracks(tracks, SortField.Artist, true).runs.map { (it.group as SortGroup.Letter).letter }
+        assertEquals(setOf("A", "ஔ", "가"), letters.toSet())
+    }
+
+    @Test
+    fun theAlbumSortHeadersStripTheToo() {
+        val tracks = listOf(
+            track(1, "One", album = "The Wall"),
+            track(2, "Two", album = "Abbey Road"),
+            track(3, "Three", album = "Nevermind"),
+        )
+        val sorted = sortTracks(tracks, SortField.Album, true)
+        assertEquals(listOf("Two", "Three", "One"), sorted.titles())
+        assertEquals(listOf("A", "N", "W"), sorted.runs.map { (it.group as SortGroup.Letter).letter })
     }
 
     // --- Size and length ---
