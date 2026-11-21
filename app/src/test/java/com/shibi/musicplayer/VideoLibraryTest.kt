@@ -284,28 +284,34 @@ class VideoLibraryTest {
     @Test
     fun anEpisodeLabelLeadsWithItsNumberThenItsTitle() {
         val pilot = TvEpisode(video(1L, "Lost S01E03.mkv"), season = 1, episode = 3, lastEpisode = null, title = "Pilot")
-        assertEquals("E03 · Pilot", episodeLabel(pilot) { "Episode $it" })
+        assertEquals("E03 · Pilot", episodeLabel(pilot, "Episode 3"))
         assertEquals("S01E03", episodeCode(pilot))
     }
 
     @Test
     fun aMultiEpisodeFileNamesItsRange() {
         val double = TvEpisode(video(1L, "Lost S02E10E11.mkv"), season = 2, episode = 10, lastEpisode = 11, title = "Finale")
-        assertEquals("E10–E11 · Finale", episodeLabel(double) { "Episode $it" })
+        assertEquals("E10–E11 · Finale", episodeLabel(double, "Episodes 10–11"))
         assertEquals("S02E10–E11", episodeCode(double))
+    }
+
+    @Test
+    fun anUntitledMultiEpisodeFileTakesTheRangeFallback() {
+        val double = TvEpisode(video(1L, "Lost S02E10E11.mkv"), season = 2, episode = 10, lastEpisode = 11, title = null)
+        assertEquals("E10–E11 · Episodes 10–11", episodeLabel(double, "Episodes 10–11"))
     }
 
     @Test
     fun anUntitledEpisodeTakesTheFallbackForItsNumber() {
         val plain = TvEpisode(video(1L, "Lost S01E07.mkv"), season = 1, episode = 7, lastEpisode = null, title = null)
-        assertEquals("E07 · Episode 7", episodeLabel(plain) { "Episode $it" })
+        assertEquals("E07 · Episode 7", episodeLabel(plain, "Episode 7"))
     }
 
     @Test
     fun aSpecialIsSeasonZero() {
         val special = TvEpisode(video(1L, "Lost S00E01.mkv"), season = 0, episode = 1, lastEpisode = null, title = null)
         assertEquals("S00E01", episodeCode(special))
-        assertEquals("E01 · Episode 1", episodeLabel(special) { "Episode $it" })
+        assertEquals("E01 · Episode 1", episodeLabel(special, "Episode 1"))
     }
 
     @Test

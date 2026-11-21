@@ -26,10 +26,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -78,7 +74,7 @@ internal fun TvShowList(
             TvShowRow(
                 show = show,
                 next = continueByShow[show.key],
-                savedProgress = savedProgress,
+                saved = continueByShow[show.key]?.let { savedProgress[it.video.contentUri] },
                 onClick = { onOpenShow(show.key) },
             )
         }
@@ -87,13 +83,14 @@ internal fun TvShowList(
 
 /**
  * A show: its first episode's frame, its name, its season and episode counts, and, when it has
- * an episode to continue ([next]), the accent line "Continue S01E03 · 12 min left". No ⋮.
+ * an episode to continue ([next], saved at [saved]), the accent line "Continue S01E03 · 12 min
+ * left". No ⋮.
  */
 @Composable
 internal fun TvShowRow(
     show: TvShow,
     next: TvEpisode?,
-    savedProgress: Map<String, VideoProgress>,
+    saved: VideoProgress?,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -106,7 +103,7 @@ internal fun TvShowRow(
         onLongClick = null,
         art = { VideoThumbnail(video = show.episodes.first().video, modifier = Modifier.size(ListThumbnailSize)) },
         modifier = modifier,
-        accentLine = next?.let { continueLine(it, savedProgress[it.video.contentUri]) },
+        accentLine = next?.let { continueLine(it, saved) },
     )
 }
 
@@ -139,8 +136,9 @@ internal fun TvShowHeader(name: String, onBack: () -> Unit, modifier: Modifier =
 
 /**
  * A show's page under its [TvShowHeader]: the counts, one button that continues [next] (else
- * plays the first episode), the season chips (none for one season) and the chosen season's
- * episodes. The season and the scroll position are kept per show.
+ * plays the first episode), the season chips (none for one season) and the [chosenSeason]'s
+ * episodes. The caller holds [listState] and the season, per show, above the layouts that
+ * compose this page in different places, so neither resets when the inline player opens.
  */
 @Composable
 internal fun TvShowPage(
@@ -150,15 +148,16 @@ internal fun TvShowPage(
     savedProgress: Map<String, VideoProgress>,
     onVideoClick: (Video) -> Unit,
     onTrashVideo: ((Video) -> Unit)?,
+    listState: LazyListState,
+    chosenSeason: Int,
+    onChooseSeason: (Int) -> Unit,
     contentBottomPadding: Dp,
     modifier: Modifier = Modifier,
     topPadding: Dp = 0.dp,
 ) {
-    val listState = rememberSaveable(show.key, saver = LazyListState.Saver) { LazyListState() }
     val start = next ?: show.episodes.first()
-    var chosen by rememberSaveable(show.key) { mutableIntStateOf(start.season) }
     // A rescan can drop the chosen season: fall back to the first.
-    val season = show.seasons.firstOrNull { it.number == chosen } ?: show.seasons.first()
+    val season = show.seasons.firstOrNull { it.number == chosenSeason } ?: show.seasons.first()
     LazyColumn(
         modifier = modifier,
         state = listState,
@@ -187,19 +186,24 @@ internal fun TvShowPage(
         }
         if (show.seasons.size > 1) {
             item(key = "seasons", contentType = "seasons") {
-                SeasonChips(seasons = show.seasons, chosen = season.number, onSelect = { chosen = it })
+                SeasonChips(seasons = show.seasons, chosen = season.number, onSelect = onChooseSeason)
             }
         }
         items(season.episodes, key = { it.video.id }, contentType = { "video" }) { episode ->
             val video = episode.video
-            val untitled = stringResource(R.string.tv_episode_untitled, episode.episode)
+            val last = episode.lastEpisode
+            val untitled = if (last != null) {
+                stringResource(R.string.tv_episodes_untitled, episode.episode, last)
+            } else {
+                stringResource(R.string.tv_episode_untitled, episode.episode)
+            }
             VideoRow(
                 video = video,
                 isPlaying = video.id == playingVideoId,
                 onClick = { onVideoClick(video) },
                 onTrash = onTrashVideo?.let { trash -> { trash(video) } },
                 saved = savedProgress[video.contentUri],
-                title = episodeLabel(episode) { untitled },
+                title = episodeLabel(episode, untitled),
                 subtitle = videoSubtitle(video, tail = null),
             )
         }

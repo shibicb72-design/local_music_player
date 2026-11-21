@@ -6,6 +6,12 @@ import android.provider.MediaStore
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
@@ -25,6 +31,7 @@ import com.shibi.musicplayer.library.InMemorySortPrefs
 import com.shibi.musicplayer.library.VideoLibraryViewModel
 import com.shibi.musicplayer.library.VideoRepository
 import com.shibi.musicplayer.ui.AppBackHandler
+import com.shibi.musicplayer.ui.VideosContent
 import com.shibi.musicplayer.ui.VideosScreen
 import com.shibi.musicplayer.ui.theme.MusicPlayerTheme
 import kotlinx.coroutines.Dispatchers
@@ -180,6 +187,44 @@ class TvShowsUiTest {
         assertNull(viewModel.uiState.value.openShowKey)
         pressBack()
         assertEquals(1, outerBacks)
+    }
+
+    @Test
+    fun theChosenSeasonSurvivesTheInlinePlayerOpening() {
+        var playerOpen by mutableStateOf(false)
+        viewModel.refresh()
+        compose.setContent {
+            MusicPlayerTheme {
+                val state by viewModel.uiState.collectAsState()
+                VideosContent(
+                    state = state,
+                    onVideoClick = { video: Video -> clicked += video.id },
+                    onRequestAccess = {},
+                    onOpenSettings = {},
+                    contentBottomPadding = 0.dp,
+                    onFilterChange = viewModel::setFilter,
+                    onOpenShow = viewModel::openShow,
+                    onCloseShow = viewModel::closeShow,
+                    // Compact layout composes the page in another place while a player is open.
+                    player = if (playerOpen) {
+                        { _ -> Box(Modifier.fillMaxWidth().height(200.dp)) }
+                    } else {
+                        null
+                    },
+                )
+            }
+        }
+        settle()
+        openLost()
+        compose.onNodeWithContentDescription("Season 2").performClick()
+        settle()
+        playerOpen = true
+        settle()
+        compose.onNodeWithContentDescription("Back").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Season 2").assertIsSelected()
+        compose.onNodeWithText("E01 · Episode 1").performClick()
+        settle()
+        assertEquals(listOf(3L), clicked)
     }
 
     private fun openLost() {

@@ -63,6 +63,7 @@
     <string name="tv_specials">Specials</string>
     <string name="tv_seasons_label">Seasons</string>
     <string name="tv_episode_untitled">Episode %d</string>
+    <string name="tv_episodes_untitled">Episodes %1$d–%2$d</string>
     <string name="video_filters_label">Video filters</string>
     <string name="video_filter_all">All</string>
     <string name="video_filter_movies">Movies</string>

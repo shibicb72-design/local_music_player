@@ -181,7 +181,7 @@ class TvShowsScreenshotTest {
                             TvShowRow(
                                 show = severance,
                                 next = continueByShow[severance.key],
-                                savedProgress = progress,
+                                saved = progress[files[1].video.contentUri],
                                 onClick = {},
                             )
                             ListRow(

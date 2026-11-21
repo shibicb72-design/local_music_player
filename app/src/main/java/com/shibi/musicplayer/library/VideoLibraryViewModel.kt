@@ -314,6 +314,8 @@ class VideoLibraryViewModel internal constructor(
                     sort = list.spec,
                     runs = list.runs,
                     filter = filter,
+                    // A show page belongs to Tv: any other list closes it.
+                    openShowKey = next.openShowKey.takeIf { filter == VideoFilter.Tv },
                     isReady = true,
                     isLoading = false,
                     hasError = false,

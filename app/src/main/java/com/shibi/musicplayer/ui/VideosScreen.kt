@@ -44,6 +44,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -295,6 +296,12 @@ internal fun VideosContent(
     }
     // Under Tv, the page of the show the view model has open; null shows the show list.
     val openShow = if (state.filter == VideoFilter.Tv) state.shows.firstOrNull { it.key == state.openShowKey } else null
+    // The page's scroll and season live here, keyed by the show, not in the page: compact
+    // layout composes the page in another place when the inline player opens or closes.
+    val showPageListState = rememberSaveable(openShow?.key, saver = LazyListState.Saver) { LazyListState() }
+    var chosenSeason by rememberSaveable(openShow?.key) {
+        mutableIntStateOf(openShow?.let { show -> (state.continueByShow[show.key] ?: show.episodes.first()).season } ?: 0)
+    }
     val showHeader: (@Composable () -> Unit)? = if (openShow != null) {
         { TvShowHeader(name = openShow.name, onBack = onCloseShow) }
     } else {
@@ -331,6 +338,9 @@ internal fun VideosContent(
                         savedProgress = savedProgress,
                         onVideoClick = onVideoClick,
                         onTrashVideo = trashVideo,
+                        listState = showPageListState,
+                        chosenSeason = chosenSeason,
+                        onChooseSeason = { chosenSeason = it },
                         contentBottomPadding = contentBottomPadding,
                         topPadding = topPadding,
                         modifier = bodyModifier,

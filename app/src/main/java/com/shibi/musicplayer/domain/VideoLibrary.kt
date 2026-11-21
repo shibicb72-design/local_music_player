@@ -173,9 +173,9 @@ fun episodeNumbers(episode: TvEpisode): String =
 /** `S01E03`; a special reads `S00E01`, a multi-episode file `S02E10–E11`. */
 fun episodeCode(episode: TvEpisode): String = "S%02d".format(Locale.ROOT, episode.season) + episodeNumbers(episode)
 
-/** A show page row's title: `E03 · Pilot`, or [untitled] of the number when the file names none. */
-fun episodeLabel(episode: TvEpisode, untitled: (Int) -> String): String =
-    "${episodeNumbers(episode)} · ${episode.title ?: untitled(episode.episode)}"
+/** A show page row's title: `E03 · Pilot`, or `E03 · ` [untitled] when the file names none. */
+fun episodeLabel(episode: TvEpisode, untitled: String): String =
+    "${episodeNumbers(episode)} · ${episode.title ?: untitled}"
 
 /**
  * Whole minutes left in [video] after [saved], rounded up; the length is the one the row shows
