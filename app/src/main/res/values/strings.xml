@@ -341,8 +341,30 @@
     <string name="trash_unsupported">Moving to trash needs Android 11 or later</string>
     <string name="trash_failed_more">and %d more</string>
     <string name="ok">OK</string>
+    <string name="music_views_label">Music views</string>
+    <string name="music_view_songs">Songs</string>
+    <string name="music_view_artists">Artists</string>
+    <string name="music_view_albums">Albums</string>
+    <string name="artist_albums">Albums</string>
+    <string name="artist_appears_on">Appears on</string>
+    <string name="artist_songs">Songs</string>
+    <string name="albums_empty">No albums found</string>
+    <string name="album_disc">Disc %d</string>
+    <string name="track_number_missing">—</string>
+    <plurals name="album_minutes">
+        <item quantity="one">%d min</item>
+        <item quantity="other">%d min</item>
+    </plurals>
     <string name="selected">Selected</string>
     <string name="not_selected">Not selected</string>
+    <plurals name="album_count">
+        <item quantity="one">%d album</item>
+        <item quantity="other">%d albums</item>
+    </plurals>
+    <plurals name="artist_count">
+        <item quantity="one">%d artist</item>
+        <item quantity="other">%d artists</item>
+    </plurals>
     <plurals name="song_count">
         <item quantity="one">%d song</item>
         <item quantity="other">%d songs</item>

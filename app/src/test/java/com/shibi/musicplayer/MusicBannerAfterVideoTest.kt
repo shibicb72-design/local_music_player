@@ -72,10 +72,14 @@ class MusicBannerAfterVideoTest {
         // finger), so Videos, three tiles to the left, is reached one neighbour at a time.
         // Unfolded, the song plays in the right pane: Songs stays in front, Videos beside it.
         val tabs = if (twoPane) listOf("Videos") else listOf("Playlists", "Songs", "Videos")
+        // The Songs screen's view chips are tabs too, one of them "Songs": only the carousel's count.
+        val carouselTab = { tab: String ->
+            compose.onNode(hasContentDescription(tab).and(IsTab).and(!hasAnyAncestor(hasContentDescription("Music views"))))
+        }
         for (tab in tabs) {
-            compose.onNode(hasContentDescription(tab).and(IsTab)).performClick()
+            carouselTab(tab).performClick()
             settle()
-            compose.onNode(hasContentDescription(tab).and(IsTab)).assertIsSelected()
+            carouselTab(tab).assertIsSelected()
         }
         assertTextShown("Beach day")
         compose.onAllNodesWithText("Beach day")[0].performClick()

@@ -3,8 +3,38 @@ package com.shibi.musicplayer.domain
 import java.text.CollationKey
 import java.text.Collator
 
-/** How [MusicCatalog.albums] orders the albums. */
-enum class AlbumSort { Title, Artist, YearNewest }
+/** Which part of the music library the Songs screen shows. [key] is what the store keeps. */
+enum class MusicView(val key: String) {
+    Songs("songs"),
+    Artists("artists"),
+    Albums("albums"),
+    ;
+
+    companion object {
+        /** An unknown or missing value (an old build, a corrupt file) reads as [Songs]. */
+        fun fromKey(raw: String?): MusicView = entries.firstOrNull { it.key == raw } ?: Songs
+    }
+}
+
+/** How [MusicCatalog.albums] orders the albums. [key] is what the store keeps. */
+enum class AlbumSort(val key: String) {
+    Title("title"),
+    Artist("artist"),
+    YearNewest("year_newest"),
+    ;
+
+    companion object {
+        /** An unknown or missing value (an old build, a corrupt file) reads as [Title]. */
+        fun fromKey(raw: String?): AlbumSort = entries.firstOrNull { it.key == raw } ?: Title
+    }
+}
+
+/**
+ * The artist an album page names on [track]'s row: its own artist only when that is not the
+ * album's ("Zedd feat. Guest Singer" on Zedd's album), else null.
+ */
+fun albumTrackArtist(track: Track, album: AlbumEntry): String? =
+    TrackDisplay.artist(track.artist)?.takeIf { ArtistNames.sortKey(it) != album.artistKey }
 
 /**
  * One artist, grouped by the library artist. [key] and [name] are null for the unknown entry (the
@@ -60,9 +90,22 @@ class MusicCatalog private constructor(
     private val ownAlbums: Map<String?, List<AlbumEntry>>,
     private val appearsOnAlbums: Map<String, List<AlbumEntry>>,
     private val songsByArtist: Map<String?, List<Row>>,
+    private val albumKeyByTrack: Map<Long, String>,
 ) {
     /** The albums in [sort] order; precomputed, so this never sorts. */
     fun albums(sort: AlbumSort): List<AlbumEntry> = albumLists.getValue(sort)
+
+    /**
+     * The album the catalog keeps [track] under, or null: no album tag, or only its folder's
+     * name (which the catalog leaves out of the albums).
+     */
+    fun albumOf(track: Track): AlbumEntry? = albumKeyByTrack[track.id]?.let(albumByKey::get)
+
+    /** Whether the catalog has an artist with [key] (null: the unknown entry). A map lookup. */
+    fun hasArtist(key: String?): Boolean = artistByKey.containsKey(key)
+
+    /** Whether the catalog has an album with [key]. A map lookup. */
+    fun hasAlbum(key: String): Boolean = albumByKey.containsKey(key)
 
     /** The page of the artist with [key] (null: the unknown entry), or null when there is none. */
     fun artistPage(key: String?): ArtistPage? {
@@ -223,6 +266,7 @@ class MusicCatalog private constructor(
                 ownAlbums = ownAlbums,
                 appearsOnAlbums = appearsOn,
                 songsByArtist = songsByArtist,
+                albumKeyByTrack = rows.mapNotNull { row -> row.albumKey?.let { row.track.id to it } }.toMap(),
             )
         }
 

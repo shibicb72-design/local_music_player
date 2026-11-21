@@ -18,6 +18,7 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
@@ -425,8 +426,9 @@ class TwoPaneNavigationTest {
         }
     }
 
+    /** A carousel tab; the Songs screen's view chips are tabs too, and one is also "Songs". */
     private fun tab(label: String): SemanticsNodeInteraction =
-        compose.onNode(hasContentDescription(label).and(IsTab))
+        compose.onNode(hasContentDescription(label).and(IsTab).and(!hasAnyAncestor(hasContentDescription("Music views"))))
 
     private fun select(label: String) {
         tab(label).performSemanticsAction(SemanticsActions.OnClick)

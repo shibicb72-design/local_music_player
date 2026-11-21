@@ -2,13 +2,16 @@ package com.shibi.musicplayer
 
 import com.shibi.musicplayer.domain.AlbumSort
 import com.shibi.musicplayer.domain.MusicCatalog
+import com.shibi.musicplayer.domain.MusicView
 import com.shibi.musicplayer.domain.SortGroup
 import com.shibi.musicplayer.domain.SortRun
 import com.shibi.musicplayer.domain.Track
 import com.shibi.musicplayer.domain.UnknownNames
+import com.shibi.musicplayer.domain.albumTrackArtist
 import java.text.Collator
 import java.util.Locale
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
@@ -65,6 +68,68 @@ class MusicCatalogTest {
     )
 
     private fun catalog(tracks: List<Track> = library()) = MusicCatalog.build(tracks, unknown, collator)
+
+    @Test
+    fun aMusicViewKeyReadsBackAndAnUnknownOneIsSongs() {
+        assertEquals(listOf("songs", "artists", "albums"), MusicView.entries.map { it.key })
+        MusicView.entries.forEach { assertEquals(it, MusicView.fromKey(it.key)) }
+        assertEquals(MusicView.Songs, MusicView.fromKey(null))
+        assertEquals(MusicView.Songs, MusicView.fromKey("genres"))
+    }
+
+    @Test
+    fun anAlbumSortKeyReadsBackAndAnUnknownOneIsTitle() {
+        assertEquals(listOf("title", "artist", "year_newest"), AlbumSort.entries.map { it.key })
+        AlbumSort.entries.forEach { assertEquals(it, AlbumSort.fromKey(it.key)) }
+        assertEquals(AlbumSort.Title, AlbumSort.fromKey(null))
+        assertEquals(AlbumSort.Title, AlbumSort.fromKey("genre"))
+    }
+
+    @Test
+    fun hasAlbumFindsEachKeptAlbumOnly() {
+        val catalog = catalog()
+        catalog.albums(AlbumSort.Title).forEach { assertTrue(catalog.hasAlbum(it.key)) }
+        assertFalse(catalog.hasAlbum("missing"))
+    }
+
+    @Test
+    fun anAlbumTrackNamesItsArtistOnlyWhenItIsAGuest() {
+        val taxman = track("Taxman", "Beatles", "Revolver", "The Beatles", 3, year = 1966)
+        val tracks = library() + taxman
+        val catalog = catalog(tracks)
+        fun shown(title: String): String? {
+            val track = tracks.first { it.title == title }
+            return albumTrackArtist(track, catalog.albumOf(track)!!)
+        }
+        assertEquals("Zedd feat. Guest Singer", shown("Stay"))
+        assertNull(shown("Clarity"))
+        // "ABBA" on ABBA's album, and "Beatles" on The Beatles' album, are the album's own artist.
+        assertNull(shown("Waterloo"))
+        assertNull(shown("Taxman"))
+        // A compilation names every track's artist.
+        assertEquals("Zedd", shown("Club Zedd"))
+    }
+
+    @Test
+    fun hasArtistFindsEachEntryIncludingTheUnknownOne() {
+        val catalog = catalog()
+        assertTrue(catalog.hasArtist("beatles"))
+        assertTrue(catalog.hasArtist(null))
+        assertFalse(catalog.hasArtist("nobody"))
+        assertFalse(catalog(library().filter { it.artist != "Unknown artist" }).hasArtist(null))
+    }
+
+    @Test
+    fun albumOfIsTheKeptAlbumAndNeverAFolderName() {
+        val tracks = library()
+        val catalog = catalog(tracks)
+        assertEquals("Revolver", catalog.albumOf(tracks.first { it.title == "Revolver One" })?.title)
+        // A guest's track is kept under the album it is on.
+        assertEquals("Club Mix", catalog.albumOf(tracks.first { it.title == "Club Zedd" })?.title)
+        // Untagged, with its folder's name as the album: the catalog kept no album for it.
+        assertNull(catalog.albumOf(tracks.first { it.title == "Zeta" }))
+        assertNull(catalog.albumOf(tracks.first { it.title == "Alpha" }))
+    }
 
     @Test
     fun artistsAreOrderedHashFirstThenByLetterWithUnknownLast() {
