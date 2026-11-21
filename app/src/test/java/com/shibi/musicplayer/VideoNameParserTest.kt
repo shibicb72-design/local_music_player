@@ -1,7 +1,7 @@
 package com.shibi.musicplayer
 
-import com.shibi.musicplayer.domain.CameraSource
 import com.shibi.musicplayer.domain.VideoIdentity
+import com.shibi.musicplayer.domain.VideoIdentity.CameraSource
 import com.shibi.musicplayer.domain.VideoIdentity.Episode
 import com.shibi.musicplayer.domain.VideoIdentity.Movie
 import com.shibi.musicplayer.domain.VideoIdentity.Other
@@ -10,6 +10,7 @@ import com.shibi.musicplayer.domain.VideoNameParser
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.time.Year
 
 class VideoNameParserTest {
     private fun parse(fileName: String, folder: String? = null): VideoIdentity =
@@ -279,8 +280,62 @@ class VideoNameParserTest {
     }
 
     @Test
+    fun other_emptyNamesStillGetATitle() {
+        assertEquals(Other(VideoNameParser.UNTITLED), parse(""))
+        assertEquals(Other(".mp4"), parse(".mp4"))
+    }
+
+    @Test
+    fun movie_nextTokenSkipsWhatCleaningDrops() {
+        assertEquals(Movie("Inception", 2010), parse("Inception 2010 [YTS.MX].mkv"))
+        assertEquals(Movie("Movie Name", 2019), parse("Movie.Name.2019-GRP.mkv"))
+        assertEquals(Movie("Movie Name", 2010), parse("Movie Name 2010 (1).mp4"))
+    }
+
+    @Test
+    fun movie_joinedJunkKeepsItsDot() {
+        assertEquals(Movie("Some Film", null), parse("Some.Film.H.264.mkv"))
+        assertEquals(Movie("Concert 5.1", 2019), parse("Concert.5.1.2019.mkv"))
+    }
+
+    @Test
+    fun movieWithoutYear_cutNeverLeavesAnOpenBracket() {
+        assertEquals(Movie("Some Film", null), parse("Some Film [1080p].mkv"))
+        assertEquals(
+            Episode("Show", 1, 1, null, "Pilot"),
+            parse("Show S01E01 Pilot (Remastered 1080p).mkv"),
+        )
+    }
+
+    @Test
+    fun movie_dashOnlyNamesUseDashAsSeparator() {
+        assertEquals(Movie("Movie Name", 2010), parse("Movie-Name-2010-1080p.mkv"))
+        assertEquals(Movie("Spider-Man", 2002), parse("Spider-Man.2002.mkv"))
+        assertEquals(Movie("Ant-Man", 2015), parse("Ant-Man (2015).mkv"))
+    }
+
+    @Test
+    fun episode_anyNumberOfExtraEpisodesKeepsTheLast() {
+        assertEquals(Episode("Show", 1, 1, 3, null), parse("Show.S01E01E02E03.mkv"))
+    }
+
+    @Test
+    fun episode_folderShowIsCutAtJunkAndDropsCompleteAndSize() {
+        assertEquals(Episode("The Big Bang Theory", 1, 3, null, null), parse("S01E03.mkv", bigBangFolder))
+        assertEquals(Episode("Lost", 2, 1, null, null), parse("S02E01.mkv", "Lost Complete Series 4.5 GB"))
+        assertEquals(Episode("Lost", 2, 1, null, null), parse("S02E01.mkv", "Lost.Complete"))
+    }
+
+    @Test
+    fun episode_singleLetterAcronymStaysJoined() {
+        assertEquals(Episode("S.W.A.T. 2017", 1, 1, null, null), parse("S.W.A.T.2017.S01E01.720p.mkv"))
+        assertEquals(Other("S.W.A.T"), parse("S.W.A.T.mkv"))
+    }
+
+    @Test
     fun twoArgumentParseUsesTheClock() {
-        assertEquals(Movie("Inception", 2010), VideoNameParser.parse("Inception (2010).mkv", null))
+        val nextYear = Year.now().value + 1
+        assertEquals(Movie("Future", nextYear), VideoNameParser.parse("Future.$nextYear.mkv", null))
     }
 
     @Test
