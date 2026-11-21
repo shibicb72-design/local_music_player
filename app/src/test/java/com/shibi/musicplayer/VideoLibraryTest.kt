@@ -17,6 +17,9 @@ import com.shibi.musicplayer.domain.VideoProgress
 import com.shibi.musicplayer.domain.continueEpisode
 import com.shibi.musicplayer.domain.countsOf
 import com.shibi.musicplayer.domain.displayVideo
+import com.shibi.musicplayer.domain.episodeCode
+import com.shibi.musicplayer.domain.episodeLabel
+import com.shibi.musicplayer.domain.minutesLeft
 import com.shibi.musicplayer.domain.filterOf
 import com.shibi.musicplayer.domain.shows
 import java.text.Collator
@@ -274,6 +277,63 @@ class VideoLibraryTest {
         val show = shows(listOf(episode(1L, "Lost", 1, 3), episode(2L, "Lost", 2, 1), episode(3L, "Lost", 1, 2)), collator).single()
         val progress = mapOf(uri(1L) to VideoProgress(0L, 2_000_000L, updatedAtMs = 100L))
         assertEquals(2L, continueEpisode(show, progress)?.video?.id)
+    }
+
+    // --- Episode labels and minutes left ---
+
+    @Test
+    fun anEpisodeLabelLeadsWithItsNumberThenItsTitle() {
+        val pilot = TvEpisode(video(1L, "Lost S01E03.mkv"), season = 1, episode = 3, lastEpisode = null, title = "Pilot")
+        assertEquals("E03 · Pilot", episodeLabel(pilot) { "Episode $it" })
+        assertEquals("S01E03", episodeCode(pilot))
+    }
+
+    @Test
+    fun aMultiEpisodeFileNamesItsRange() {
+        val double = TvEpisode(video(1L, "Lost S02E10E11.mkv"), season = 2, episode = 10, lastEpisode = 11, title = "Finale")
+        assertEquals("E10–E11 · Finale", episodeLabel(double) { "Episode $it" })
+        assertEquals("S02E10–E11", episodeCode(double))
+    }
+
+    @Test
+    fun anUntitledEpisodeTakesTheFallbackForItsNumber() {
+        val plain = TvEpisode(video(1L, "Lost S01E07.mkv"), season = 1, episode = 7, lastEpisode = null, title = null)
+        assertEquals("E07 · Episode 7", episodeLabel(plain) { "Episode $it" })
+    }
+
+    @Test
+    fun aSpecialIsSeasonZero() {
+        val special = TvEpisode(video(1L, "Lost S00E01.mkv"), season = 0, episode = 1, lastEpisode = null, title = null)
+        assertEquals("S00E01", episodeCode(special))
+        assertEquals("E01 · Episode 1", episodeLabel(special) { "Episode $it" })
+    }
+
+    @Test
+    fun minutesLeftRoundUp() {
+        // 2,000 s long, stopped at 1,339 s: 661 s (11 min 1 s) left reads 12.
+        val video = video(1L, "Lost S01E01.mkv")
+        assertEquals(12, minutesLeft(video, VideoProgress(1_339_000L, 2_000_000L, updatedAtMs = 10L)))
+        // Exactly 10 minutes left stays 10.
+        assertEquals(10, minutesLeft(video, VideoProgress(1_400_000L, 2_000_000L, updatedAtMs = 10L)))
+    }
+
+    @Test
+    fun minutesLeftUseTheSavedLengthWhenMediaStoreHasNone() {
+        val video = video(1L, "Lost S01E01.mkv").copy(durationMs = null)
+        assertEquals(5, minutesLeft(video, VideoProgress(600_000L, 900_000L, updatedAtMs = 10L)))
+    }
+
+    @Test
+    fun minutesLeftAreUnknownWithoutALength() {
+        val video = video(1L, "Lost S01E01.mkv").copy(durationMs = null)
+        assertNull(minutesLeft(video, VideoProgress(600_000L, 0L, updatedAtMs = 10L)))
+    }
+
+    @Test
+    fun minutesLeftAreUnknownBeforeTheVideoStartedOrWithNoSave() {
+        val video = video(1L, "Lost S01E01.mkv")
+        assertNull(minutesLeft(video, VideoProgress(3_000L, 2_000_000L, updatedAtMs = 10L)))
+        assertNull(minutesLeft(video, null))
     }
 
     private fun lost(): TvShow =
